@@ -179,7 +179,7 @@ function KpiCard({ title, value, description, trend, tooltip }: KpiCardProps) {
                 <TooltipTrigger asChild>
                   <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                 </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-[250px] text-xs bg-[#1a1a2e] text-slate-200 border border-border">
+                <TooltipContent side="bottom" className="max-w-[250px] text-xs bg-background-secondary text-foreground border border-border">
                   <p>{tooltip}</p>
                 </TooltipContent>
               </Tooltip>
@@ -266,6 +266,17 @@ export default function SalesDashboard() {
   const repsQuery = useSalesReps()
   const budgetsQuery = useSalesBudgets(budgetYear)
   const holidaysQuery = useHolidays(startDate, endDate)
+
+  // Seasonality: full prior-year data for projection model
+  const viewingCurrentYear = period === "ytd" || period === "this-month" ||
+    (period === "custom" && year === currentYear)
+  const seasonalityY1Query = useSalesSummary(
+    `${currentYear - 1}-01-01`, `${currentYear}-01-01`, "monthly", activeRep
+  )
+  const seasonalityY2Query = useSalesSummary(
+    `${currentYear - 2}-01-01`, `${currentYear - 1}-01-01`, "monthly", activeRep
+  )
+
   const holidayDates = useMemo(() => {
     const set = new Set<string>()
     for (const h of holidaysQuery.data?.data ?? []) set.add(h.holidayDate)
@@ -400,6 +411,61 @@ export default function SalesDashboard() {
     return map
   }, [budgets, selectedMonth, granularity])
 
+  // Seasonality indices for projection model (ratio-to-annual)
+  const seasonalityIndices = useMemo(() => {
+    const y1Data = seasonalityY1Query.data?.data ?? []
+    const y2Data = seasonalityY2Query.data?.data ?? []
+
+    const computeIndices = (data: typeof y1Data) => {
+      const total = data.reduce((s, m) => s + m.totalSales, 0)
+      if (total <= 0) return null
+      const map = new Map<number, number>()
+      for (const m of data) {
+        const month = parseInt(m.period.split("-")[1], 10)
+        map.set(month, m.totalSales / total)
+      }
+      return map
+    }
+
+    const y1Indices = computeIndices(y1Data)
+    const y2Indices = computeIndices(y2Data)
+
+    // Multi-year average (best signal)
+    if (y1Indices && y2Indices) {
+      const averaged = new Map<number, number>()
+      for (let m = 1; m <= 12; m++) {
+        averaged.set(m, ((y1Indices.get(m) ?? 0) + (y2Indices.get(m) ?? 0)) / 2)
+      }
+      return { source: "actuals" as const, indices: averaged, years: 2 }
+    }
+
+    // Single prior year
+    if (y1Indices) {
+      return { source: "actuals" as const, indices: y1Indices, years: 1 }
+    }
+
+    // Budget fallback — use monthly budget distribution as proxy for seasonality
+    const budgetMonthly = new Map<number, number>()
+    for (const b of budgets) {
+      if (repFilter !== "all" && b.salesRep !== repFilter) continue
+      const month = parseInt(b.month.substring(5, 7), 10)
+      budgetMonthly.set(month, (budgetMonthly.get(month) ?? 0) + b.budgetedDollars)
+    }
+    const budgetTotal = Array.from(budgetMonthly.values()).reduce((s, v) => s + v, 0)
+    if (budgetTotal > 0) {
+      const map = new Map<number, number>()
+      for (const [month, val] of budgetMonthly) {
+        map.set(month, val / budgetTotal)
+      }
+      return { source: "budget" as const, indices: map, years: 0 }
+    }
+
+    // Uniform fallback (1/12 per month)
+    const uniform = new Map<number, number>()
+    for (let m = 1; m <= 12; m++) uniform.set(m, 1 / 12)
+    return { source: "uniform" as const, indices: uniform, years: 0 }
+  }, [seasonalityY1Query.data, seasonalityY2Query.data, budgets, repFilter])
+
   // Filter summary data by quarter (only applies to monthly/weekly)
   const filteredSummary = useMemo(() => {
     if (quarter === "all" || granularity === "yearly") return summaryData
@@ -465,6 +531,46 @@ export default function SalesDashboard() {
     })
   }, [filteredSummary, budgetByPeriod, priorYearByPeriod, granularity])
 
+  // Projection chart data: 12 months with actuals + forecast
+  const projectionChartData = useMemo(() => {
+    if (!viewingCurrentYear || granularity !== "monthly") return []
+    const currentMonth = new Date().getMonth() + 1
+    const completed = summaryData.filter((m) => {
+      const monthNum = parseInt(m.period.split("-")[1], 10)
+      return monthNum < currentMonth
+    })
+    const sumActuals = completed.reduce((s, m) => s + m.totalSales, 0)
+    const sumIdx = completed.reduce((s, m) => {
+      const month = parseInt(m.period.split("-")[1], 10)
+      return s + (seasonalityIndices.indices.get(month) ?? 1 / 12)
+    }, 0)
+    const impliedAnnual = sumIdx > 0 ? sumActuals / sumIdx : 0
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+    return Array.from({ length: 12 }, (_, i) => {
+      const m = i + 1
+      const monthKey = `${year}-${String(m).padStart(2, "0")}`
+      const actual = summaryData.find((d) => d.period === monthKey)
+      const isCompleted = m < currentMonth
+      const projected = impliedAnnual * (seasonalityIndices.indices.get(m) ?? 1 / 12)
+      const budget = budgetByPeriod.get(monthKey)
+      const pyKey = String(m).padStart(2, "0")
+      const py = priorYearByPeriod.get(pyKey)
+
+      return {
+        label: months[i],
+        periodKey: monthKey,
+        actual: isCompleted ? (actual?.totalSales ?? 0) : null,
+        // Bridge: last completed month gets both actual and projected so lines connect
+        projected: m === currentMonth - 1
+          ? (actual?.totalSales ?? 0)
+          : !isCompleted ? projected : null,
+        budget: budget?.dollars ?? 0,
+        priorYear: py?.totalSales ?? 0,
+      }
+    })
+  }, [viewingCurrentYear, granularity, summaryData, seasonalityIndices, year, budgetByPeriod, priorYearByPeriod])
+
   // KPI calculations (react to selectedMonth)
   const kpis = useMemo(() => {
     const periods = selectedMonth
@@ -492,9 +598,26 @@ export default function SalesDashboard() {
       }
     }
 
-    // Projected annual (extrapolate from periods with data)
+    // Projected annual — seasonality-adjusted when viewing current year
     const periodsWithData = filteredSummary.length
-    const projectedAnnual = periodsWithData > 0 ? (totalSales / periodsWithData) * 12 : 0
+    let projectedAnnual: number
+    if (viewingCurrentYear && granularity === "monthly") {
+      const cm = new Date().getMonth() + 1
+      const completed = summaryData.filter((m) => {
+        const monthNum = parseInt(m.period.split("-")[1], 10)
+        return monthNum < cm
+      })
+      const sumActuals = completed.reduce((s, m) => s + m.totalSales, 0)
+      const sumIdx = completed.reduce((s, m) => {
+        const month = parseInt(m.period.split("-")[1], 10)
+        return s + (seasonalityIndices.indices.get(month) ?? 1 / 12)
+      }, 0)
+      projectedAnnual = (sumIdx > 0 && completed.length > 0)
+        ? sumActuals / sumIdx
+        : (periodsWithData > 0 ? (totalSales / periodsWithData) * 12 : 0)
+    } else {
+      projectedAnnual = periodsWithData > 0 ? (totalSales / periodsWithData) * 12 : 0
+    }
 
     // Work days calculation — scoped to detail range (selected period or full range)
     const wdStart = new Date(detailStart)
@@ -558,7 +681,7 @@ export default function SalesDashboard() {
       perMsfToBudgetPct: budgetedPerMSF > 0 ? (salesPerMSF / budgetedPerMSF) * 100 : 0,
       contPerMsfToBudgetPct: budgetedContPerMSF > 0 ? (contPerMSF / budgetedContPerMSF) * 100 : 0,
     }
-  }, [filteredSummary, budgetByPeriod, selectedMonth, detailStart, detailEnd, holidayDates])
+  }, [filteredSummary, summaryData, budgetByPeriod, selectedMonth, detailStart, detailEnd, holidayDates, viewingCurrentYear, granularity, seasonalityIndices])
 
   // Filter customer data by rep
   const filteredCustomerData = useMemo(() => {
@@ -667,7 +790,7 @@ export default function SalesDashboard() {
       const { x, y, value, index } = props
       const anchor = index === 0 ? "start" : index === total - 1 ? "end" : "middle"
       return (
-        <text x={x} y={y - 10} fill="#e2e8f0" fontSize={11} textAnchor={anchor}>
+        <text x={x} y={y - 10} fill="var(--color-text)" fontSize={11} textAnchor={anchor}>
           {formatter(value)}
         </text>
       )
@@ -687,7 +810,7 @@ export default function SalesDashboard() {
     }
   }, [needsScroll, chartData.length])
 
-  const chartLoading = summaryQuery.isLoading || priorYearQuery.isLoading
+  const chartLoading = summaryQuery.isLoading || priorYearQuery.isLoading || seasonalityY1Query.isLoading || seasonalityY2Query.isLoading
   const repLoading = byRepQuery.isLoading
   const isLoading = chartLoading || repLoading || byCustomerQuery.isLoading
 
@@ -795,7 +918,22 @@ export default function SalesDashboard() {
         <KpiCard
           title="Projected Annual"
           value={formatCurrency(kpis.projectedAnnual)}
-          tooltip="(Total sales / months with data) x 12. Extrapolates the average monthly sales to a full year."
+          description={(() => {
+            if (!viewingCurrentYear || granularity !== "monthly") return undefined
+            const cm = new Date().getMonth() // completed months count (0-indexed month = count of complete months)
+            if (cm >= 6 && seasonalityIndices.source === "actuals") return "High confidence"
+            if (cm >= 3 && seasonalityIndices.source !== "uniform") return "Medium confidence"
+            return "Low confidence"
+          })()}
+          tooltip={
+            viewingCurrentYear && granularity === "monthly"
+              ? seasonalityIndices.source === "actuals"
+                ? `Seasonality-adjusted using ${seasonalityIndices.years} prior year${seasonalityIndices.years > 1 ? "s" : ""} of sales patterns. ${new Date().getMonth()} completed month${new Date().getMonth() !== 1 ? "s" : ""}.`
+                : seasonalityIndices.source === "budget"
+                ? `Seasonality-adjusted using budget allocations. ${new Date().getMonth()} completed months.`
+                : "Simple average (total / months x 12). No prior year data for seasonal adjustment."
+              : "(Total sales / months with data) x 12. Extrapolates the average monthly sales to a full year."
+          }
         />
       </div>
 
@@ -844,6 +982,9 @@ export default function SalesDashboard() {
                   <TabsTrigger value="msf">MSF</TabsTrigger>
                   <TabsTrigger value="contribution">Contribution</TabsTrigger>
                   <TabsTrigger value="permsf">$/MSF</TabsTrigger>
+                  {viewingCurrentYear && granularity === "monthly" && (
+                    <TabsTrigger value="projection">Projection</TabsTrigger>
+                  )}
                 </TabsList>
               </div>
             </CardHeader>
@@ -880,15 +1021,15 @@ export default function SalesDashboard() {
                         <RechartsTooltip
                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           formatter={((value: number, name: string) => [formatCurrencyFull(value), name]) as any}
-                          contentStyle={{ backgroundColor: "#1a1a2e", borderColor: "var(--border)", borderRadius: 8 }}
-                          labelStyle={{ color: "#e2e8f0", fontWeight: 600 }}
-                          itemStyle={{ color: "#e2e8f0" }}
+                          contentStyle={{ backgroundColor: "var(--color-bg-secondary)", borderColor: "var(--border)", borderRadius: 8 }}
+                          labelStyle={{ color: "var(--color-text)", fontWeight: 600 }}
+                          itemStyle={{ color: "var(--color-text)" }}
                         />
                         <Legend />
                         {dimRegions?.left && <ReferenceArea x1={dimRegions.left.x1} x2={dimRegions.left.x2} fill="#000" fillOpacity={0.35} ifOverflow="visible" />}
                         {dimRegions?.right && <ReferenceArea x1={dimRegions.right.x1} x2={dimRegions.right.x2} fill="#000" fillOpacity={0.35} ifOverflow="visible" />}
                         <Area type="monotone" dataKey={compSales} name={compLabel} stroke="#a78bfa" fill="url(#gradBudget)" strokeWidth={2} strokeDasharray="5 3" isAnimationActive={false} />
-                        <Area type="monotone" dataKey="totalSales" name="Actual" stroke="#6366f1" fill="url(#gradActual)" strokeWidth={2.5} dot={{ r: 4, fill: "#6366f1", stroke: "#fff", strokeWidth: 2 }} isAnimationActive={false}>
+                        <Area type="monotone" dataKey="totalSales" name="Actual" stroke="#6366f1" fill="url(#gradActual)" strokeWidth={2.5} dot={{ r: 4, fill: "#6366f1", stroke: "var(--color-bg)", strokeWidth: 2 }} isAnimationActive={false}>
                           <LabelList dataKey="totalSales" content={renderAreaLabel(formatCurrency)} />
                         </Area>
                       </AreaChart>
@@ -913,15 +1054,15 @@ export default function SalesDashboard() {
                         <RechartsTooltip
                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           formatter={((value: number, name: string) => [formatNumber(value, 0), name]) as any}
-                          contentStyle={{ backgroundColor: "#1a1a2e", borderColor: "var(--border)", borderRadius: 8 }}
-                          labelStyle={{ color: "#e2e8f0", fontWeight: 600 }}
-                          itemStyle={{ color: "#e2e8f0" }}
+                          contentStyle={{ backgroundColor: "var(--color-bg-secondary)", borderColor: "var(--border)", borderRadius: 8 }}
+                          labelStyle={{ color: "var(--color-text)", fontWeight: 600 }}
+                          itemStyle={{ color: "var(--color-text)" }}
                         />
                         <Legend />
                         {dimRegions?.left && <ReferenceArea x1={dimRegions.left.x1} x2={dimRegions.left.x2} fill="#000" fillOpacity={0.35} ifOverflow="visible" />}
                         {dimRegions?.right && <ReferenceArea x1={dimRegions.right.x1} x2={dimRegions.right.x2} fill="#000" fillOpacity={0.35} ifOverflow="visible" />}
                         <Area type="monotone" dataKey={compMSF} name={compLabel} stroke="#a78bfa" fill="url(#gradBudgetMSF)" strokeWidth={2} strokeDasharray="5 3" isAnimationActive={false} />
-                        <Area type="monotone" dataKey="totalMSF" name="Actual" stroke="#6366f1" fill="url(#gradActualMSF)" strokeWidth={2.5} dot={{ r: 4, fill: "#6366f1", stroke: "#fff", strokeWidth: 2 }} isAnimationActive={false}>
+                        <Area type="monotone" dataKey="totalMSF" name="Actual" stroke="#6366f1" fill="url(#gradActualMSF)" strokeWidth={2.5} dot={{ r: 4, fill: "#6366f1", stroke: "var(--color-bg)", strokeWidth: 2 }} isAnimationActive={false}>
                           <LabelList dataKey="totalMSF" content={renderAreaLabel((v) => formatNumber(v, 0))} />
                         </Area>
                       </AreaChart>
@@ -946,15 +1087,15 @@ export default function SalesDashboard() {
                         <RechartsTooltip
                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           formatter={((value: number, name: string) => [formatCurrencyFull(value), name]) as any}
-                          contentStyle={{ backgroundColor: "#1a1a2e", borderColor: "var(--border)", borderRadius: 8 }}
-                          labelStyle={{ color: "#e2e8f0", fontWeight: 600 }}
-                          itemStyle={{ color: "#e2e8f0" }}
+                          contentStyle={{ backgroundColor: "var(--color-bg-secondary)", borderColor: "var(--border)", borderRadius: 8 }}
+                          labelStyle={{ color: "var(--color-text)", fontWeight: 600 }}
+                          itemStyle={{ color: "var(--color-text)" }}
                         />
                         <Legend />
                         {dimRegions?.left && <ReferenceArea x1={dimRegions.left.x1} x2={dimRegions.left.x2} fill="#000" fillOpacity={0.35} ifOverflow="visible" />}
                         {dimRegions?.right && <ReferenceArea x1={dimRegions.right.x1} x2={dimRegions.right.x2} fill="#000" fillOpacity={0.35} ifOverflow="visible" />}
                         <Area type="monotone" dataKey={compContribution} name={compLabel} stroke="#a78bfa" fill="url(#gradBudgetCont)" strokeWidth={2} strokeDasharray="5 3" isAnimationActive={false} />
-                        <Area type="monotone" dataKey="contribution" name="Actual" stroke="#6366f1" fill="url(#gradActualCont)" strokeWidth={2.5} dot={{ r: 4, fill: "#6366f1", stroke: "#fff", strokeWidth: 2 }} isAnimationActive={false}>
+                        <Area type="monotone" dataKey="contribution" name="Actual" stroke="#6366f1" fill="url(#gradActualCont)" strokeWidth={2.5} dot={{ r: 4, fill: "#6366f1", stroke: "var(--color-bg)", strokeWidth: 2 }} isAnimationActive={false}>
                           <LabelList dataKey="contribution" content={renderAreaLabel(formatCurrency)} />
                         </Area>
                       </AreaChart>
@@ -979,15 +1120,15 @@ export default function SalesDashboard() {
                         <RechartsTooltip
                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           formatter={((value: number, name: string) => [`$${formatNumber(value, 2)}`, name]) as any}
-                          contentStyle={{ backgroundColor: "#1a1a2e", borderColor: "var(--border)", borderRadius: 8 }}
-                          labelStyle={{ color: "#e2e8f0", fontWeight: 600 }}
-                          itemStyle={{ color: "#e2e8f0" }}
+                          contentStyle={{ backgroundColor: "var(--color-bg-secondary)", borderColor: "var(--border)", borderRadius: 8 }}
+                          labelStyle={{ color: "var(--color-text)", fontWeight: 600 }}
+                          itemStyle={{ color: "var(--color-text)" }}
                         />
                         <Legend />
                         {dimRegions?.left && <ReferenceArea x1={dimRegions.left.x1} x2={dimRegions.left.x2} fill="#000" fillOpacity={0.35} ifOverflow="visible" />}
                         {dimRegions?.right && <ReferenceArea x1={dimRegions.right.x1} x2={dimRegions.right.x2} fill="#000" fillOpacity={0.35} ifOverflow="visible" />}
                         <Area type="monotone" dataKey={compPerMSF} name={compLabel} stroke="#a78bfa" fill="url(#gradBudgetPMSF)" strokeWidth={2} strokeDasharray="5 3" isAnimationActive={false} />
-                        <Area type="monotone" dataKey="salesPerMSF" name="Actual" stroke="#6366f1" fill="url(#gradActualPMSF)" strokeWidth={2.5} dot={{ r: 4, fill: "#6366f1", stroke: "#fff", strokeWidth: 2 }} isAnimationActive={false}>
+                        <Area type="monotone" dataKey="salesPerMSF" name="Actual" stroke="#6366f1" fill="url(#gradActualPMSF)" strokeWidth={2.5} dot={{ r: 4, fill: "#6366f1", stroke: "var(--color-bg)", strokeWidth: 2 }} isAnimationActive={false}>
                           <LabelList dataKey="salesPerMSF" content={renderAreaLabel((v) => `$${formatNumber(v, 2)}`)} />
                         </Area>
                       </AreaChart>
@@ -997,6 +1138,42 @@ export default function SalesDashboard() {
                 </div>
                 )
               })()}
+              {/* Projection tab — rendered outside the IIFE since it uses its own dataset */}
+              {viewingCurrentYear && granularity === "monthly" && (
+                <TabsContent value="projection" className="mt-0">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={projectionChartData} margin={{ top: 20, left: 20, right: 30, bottom: 5 }}>
+                      <defs>
+                        <linearGradient id="gradProjActual" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
+                        </linearGradient>
+                        <linearGradient id="gradProjForecast" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#22d3ee" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="label" className="text-xs" tickLine={false} />
+                      <YAxis tickFormatter={(v) => formatCurrency(v)} className="text-xs" />
+                      <RechartsTooltip
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        formatter={((value: number, name: string) => [formatCurrencyFull(value), name]) as any}
+                        contentStyle={{ backgroundColor: "var(--color-bg-secondary)", borderColor: "var(--border)", borderRadius: 8 }}
+                        labelStyle={{ color: "var(--color-text)", fontWeight: 600 }}
+                        itemStyle={{ color: "var(--color-text)" }}
+                      />
+                      <Legend />
+                      <Area type="monotone" dataKey="priorYear" name="Prior Year" stroke="#64748b" fill="none" strokeWidth={1.5} strokeDasharray="3 3" isAnimationActive={false} dot={false} />
+                      <Area type="monotone" dataKey="budget" name="Budget" stroke="#a78bfa" fill="none" strokeWidth={2} strokeDasharray="5 3" isAnimationActive={false} dot={false} />
+                      <Area type="monotone" dataKey="projected" name="Projected" stroke="#22d3ee" fill="url(#gradProjForecast)" strokeWidth={2} strokeDasharray="6 3" isAnimationActive={false} dot={{ r: 3, fill: "#22d3ee", stroke: "var(--color-bg)", strokeWidth: 1.5 }} />
+                      <Area type="monotone" dataKey="actual" name="Actual" stroke="#6366f1" fill="url(#gradProjActual)" strokeWidth={2.5} isAnimationActive={false} dot={{ r: 4, fill: "#6366f1", stroke: "var(--color-bg)", strokeWidth: 2 }}>
+                        <LabelList dataKey="actual" content={renderAreaLabel(formatCurrency)} />
+                      </Area>
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </TabsContent>
+              )}
             </CardContent>
           </Tabs>
         </Card>
@@ -1044,10 +1221,10 @@ export default function SalesDashboard() {
                       <RechartsTooltip
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         formatter={((value: number, name: string) => [formatCurrencyFull(value), name]) as any}
-                        contentStyle={{ backgroundColor: "#1a1a2e", borderColor: "var(--border)", borderRadius: 8 }}
-                        labelStyle={{ color: "#e2e8f0", fontWeight: 600 }}
-                          itemStyle={{ color: "#e2e8f0" }}
-                        cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                        contentStyle={{ backgroundColor: "var(--color-bg-secondary)", borderColor: "var(--border)", borderRadius: 8 }}
+                        labelStyle={{ color: "var(--color-text)", fontWeight: 600 }}
+                          itemStyle={{ color: "var(--color-text)" }}
+                        cursor={{ fill: "var(--color-bg-hover)" }}
                       />
                       <Bar dataKey="budget" name="Budget" radius={[0, 2, 2, 0]} isAnimationActive={false}>
                         {repBarData.map((d, i) => (
@@ -1058,7 +1235,7 @@ export default function SalesDashboard() {
                         {repBarData.map((d, i) => (
                           <Cell key={i} fill={repFilter !== "all" && d.name !== repFilter ? "#6366f133" : "#6366f1"} />
                         ))}
-                        <LabelList dataKey="actual" position="right" fill="#e2e8f0" fontSize={11} formatter={((v: number) => formatCurrency(v)) as any} />
+                        <LabelList dataKey="actual" position="right" fill="var(--color-text)" fontSize={11} formatter={((v: number) => formatCurrency(v)) as any} />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -1165,7 +1342,7 @@ export default function SalesDashboard() {
                               <Info className="h-3.5 w-3.5 text-muted-foreground" />
                             </span>
                           </TooltipTrigger>
-                          <TooltipContent side="bottom" className="max-w-[250px] text-xs bg-[#1a1a2e] text-slate-200 border border-border">
+                          <TooltipContent side="bottom" className="max-w-[250px] text-xs bg-background-secondary text-foreground border border-border">
                             <p>Actual / months elapsed in period. Extrapolates the current run rate to a full month.</p>
                           </TooltipContent>
                         </Tooltip>
