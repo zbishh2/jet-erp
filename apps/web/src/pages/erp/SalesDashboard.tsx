@@ -783,8 +783,8 @@ export default function SalesDashboard() {
   }, [selectedMonth, chartData])
 
   // Smart area chart label — shifts first label right, last label left
-  const renderAreaLabel = useCallback((formatter: (v: number) => string) => {
-    const total = chartData.length
+  const renderAreaLabel = useCallback((formatter: (v: number) => string, totalOverride?: number) => {
+    const total = totalOverride ?? chartData.length
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (props: any) => {
       const { x, y, value, index } = props
@@ -1145,13 +1145,13 @@ export default function SalesDashboard() {
                   <ResponsiveContainer width="100%" height={300}>
                     <AreaChart data={projectionChartData} margin={{ top: 20, left: 20, right: 30, bottom: 5 }}>
                       <defs>
-                        <linearGradient id="gradProjActual" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id="gradProjYTD" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
                           <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
                         </linearGradient>
                         <linearGradient id="gradProjForecast" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.2} />
-                          <stop offset="95%" stopColor="#22d3ee" stopOpacity={0.02} />
+                          <stop offset="5%" stopColor="#a78bfa" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#a78bfa" stopOpacity={0.02} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border" />
@@ -1166,10 +1166,11 @@ export default function SalesDashboard() {
                       />
                       <Legend />
                       <Area type="monotone" dataKey="priorYear" name="Prior Year" stroke="#64748b" fill="none" strokeWidth={1.5} strokeDasharray="3 3" isAnimationActive={false} dot={false} />
-                      <Area type="monotone" dataKey="budget" name="Budget" stroke="#a78bfa" fill="none" strokeWidth={2} strokeDasharray="5 3" isAnimationActive={false} dot={false} />
-                      <Area type="monotone" dataKey="projected" name="Projected" stroke="#22d3ee" fill="url(#gradProjForecast)" strokeWidth={2} strokeDasharray="6 3" isAnimationActive={false} dot={{ r: 3, fill: "#22d3ee", stroke: "var(--color-bg)", strokeWidth: 1.5 }} />
-                      <Area type="monotone" dataKey="actual" name="Actual" stroke="#6366f1" fill="url(#gradProjActual)" strokeWidth={2.5} isAnimationActive={false} dot={{ r: 4, fill: "#6366f1", stroke: "var(--color-bg)", strokeWidth: 2 }}>
-                        <LabelList dataKey="actual" content={renderAreaLabel(formatCurrency)} />
+                      <Area type="monotone" dataKey="projected" name="Projected" stroke="#a78bfa" fill="url(#gradProjForecast)" strokeWidth={2} strokeDasharray="5 3" isAnimationActive={false} dot={{ r: 3, fill: "#a78bfa", stroke: "var(--color-bg)", strokeWidth: 1.5 }}>
+                        <LabelList dataKey="projected" content={renderAreaLabel(formatCurrency, 12)} />
+                      </Area>
+                      <Area type="monotone" dataKey="actual" name="YTD Sales" stroke="#6366f1" fill="url(#gradProjYTD)" strokeWidth={2.5} isAnimationActive={false} dot={{ r: 4, fill: "#6366f1", stroke: "var(--color-bg)", strokeWidth: 2 }}>
+                        <LabelList dataKey="actual" content={renderAreaLabel(formatCurrency, 12)} />
                       </Area>
                     </AreaChart>
                   </ResponsiveContainer>
