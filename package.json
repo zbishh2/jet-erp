@@ -1,0 +1,41 @@
+{
+  "name": "jet-erp",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Jet Container ERP - Corrugated estimating & Kiwiplan integration",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run build:shared && concurrently -n web,api,shared -c blue,green,yellow \"npm run dev:web\" \"npm run dev:api\" \"npm run dev:shared\"",
+    "dev:web": "npm run dev -w apps/web",
+    "dev:api": "npm run dev -w apps/api",
+    "dev:shared": "npm run dev -w packages/shared",
+    "build": "npm run build:shared && npm run build --workspaces --if-present",
+    "build:shared": "npm run build -w packages/shared",
+    "build:web": "npm run build -w apps/web",
+    "build:api": "npm run build -w apps/api",
+    "deploy": "npm run build:shared && npm run deploy:api && npm run deploy:web",
+    "deploy:api": "npm run deploy -w apps/api",
+    "deploy:web": "npm run build:web && npm run deploy -w apps/web",
+    "lint": "npm run lint --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present && rimraf node_modules"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.1"
+  },
+  "devDependencies": {
+    "@esbuild/win32-x64": "^0.21.5",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.57.0",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.3.3",
+    "xlsx": "^0.18.5"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

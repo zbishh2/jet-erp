@@ -1,0 +1,45 @@
+name = "jet-erp-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "jet-erp-db"
+database_id = "8e00d30d-ad73-40fe-9e65-ea02388ad70c"
+migrations_dir = "drizzle/migrations"
+
+# KV Namespaces
+[[kv_namespaces]]
+binding = "AUTH_CACHE"
+id = "e44e1e66043e48afb921f52cfa87e998"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "9b109efe45c948c6aa5a99f3d26de877"
+
+# R2 Bucket
+[[r2_buckets]]
+binding = "ATTACHMENTS"
+bucket_name = "jet-erp-attachments"
+
+# Environment Variables (secrets set via: wrangler secret put SECRET_NAME)
+# RESEND_API_KEY - set via: wrangler secret put RESEND_API_KEY
+# KIWIPLAN_SERVICE_TOKEN - set via: wrangler secret put KIWIPLAN_SERVICE_TOKEN
+[vars]
+ENVIRONMENT = "production"
+ALLOW_DEV_AUTH = "true"
+AZURE_CLIENT_ID = "00000000-0000-0000-0000-000000000000"
+CORS_ALLOWED_ORIGINS = "https://jet-erp-web.pages.dev,https://3267599e.jet-erp-web.pages.dev,https://95092e50.jet-erp-web.pages.dev"
+KIWIPLAN_GATEWAY_URL = "https://kiwiplan.leangoapp.com"
+
+# Local development
+[dev]
+port = 3001
+local_protocol = "http"
+
+# Local dev environment overrides
+[env.dev.vars]
+ENVIRONMENT = "development"
+ALLOW_DEV_AUTH = "true"

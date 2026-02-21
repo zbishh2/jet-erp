@@ -1,0 +1,36 @@
+name = "jet-erp-api-dev"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 Database (local)
+[[d1_databases]]
+binding = "DB"
+database_name = "jet-erp-db-local"
+database_id = "local"
+migrations_dir = "drizzle/migrations"
+
+# KV Namespaces (local)
+[[kv_namespaces]]
+binding = "AUTH_CACHE"
+id = "local-auth-cache"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "local-rate-limit"
+
+# R2 Bucket (local)
+[[r2_buckets]]
+binding = "ATTACHMENTS"
+bucket_name = "jet-erp-attachments-local"
+
+# Environment Variables
+[vars]
+ENVIRONMENT = "development"
+ALLOW_DEV_AUTH = "true"
+AZURE_CLIENT_ID = "4d374ffd-c592-459c-9e17-59ca450c1e9f"
+
+# Local development
+[dev]
+port = 3001
+local_protocol = "http"

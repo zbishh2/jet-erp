@@ -1,0 +1,211 @@
+/* Import Inter font */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.recharts-wrapper *:focus,
+.recharts-wrapper *:focus-visible,
+.recharts-wrapper:focus,
+.recharts-wrapper:focus-visible {
+  outline: none !important;
+}
+
+@layer base {
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+
+  input[type="date"] {
+    color-scheme: light;
+  }
+
+  .dark input[type="date"] {
+    color-scheme: dark;
+  }
+  /* Light mode (default) - Linear-inspired clean light theme */
+  :root {
+    --color-bg: #ffffff;
+    --color-bg-secondary: #f9fafb;
+    --color-bg-tertiary: #f3f4f6;
+    --color-bg-hover: #f3f4f6;
+    --color-bg-selected: #eff6ff;
+    --color-text: #111827;
+    --color-text-secondary: #6b7280;
+    --color-text-tertiary: #9ca3af;
+    --color-border: #e5e7eb;
+    --color-border-secondary: #f3f4f6;
+    --color-accent: #3b82f6;
+    --color-accent-hover: #2563eb;
+
+    /* Status colors - light mode */
+    --color-status-draft: #6b7280;
+    --color-status-draft-bg: #f3f4f6;
+    --color-status-submitted: #3b82f6;
+    --color-status-submitted-bg: #eff6ff;
+    --color-status-reviewed: #f59e0b;
+    --color-status-reviewed-bg: #fffbeb;
+    --color-status-rca: #8b5cf6;
+    --color-status-rca-bg: #f5f3ff;
+    --color-status-corrective: #06b6d4;
+    --color-status-corrective-bg: #ecfeff;
+    --color-status-closed: #10b981;
+    --color-status-closed-bg: #ecfdf5;
+    --color-status-cancelled: #ef4444;
+    --color-status-cancelled-bg: #fef2f2;
+
+    /* Severity colors - light mode */
+    --color-severity-critical: #ef4444;
+    --color-severity-critical-bg: #fef2f2;
+    --color-severity-high: #f97316;
+    --color-severity-high-bg: #fff7ed;
+    --color-severity-medium: #eab308;
+    --color-severity-medium-bg: #fefce8;
+    --color-severity-low: #6b7280;
+    --color-severity-low-bg: #f9fafb;
+  }
+
+  /* Dark mode - Linear-style dark theme */
+  .dark {
+    --color-bg: #0f1115;
+    --color-bg-secondary: #1a1d23;
+    --color-bg-tertiary: #22262e;
+    --color-bg-hover: #1e2128;
+    --color-bg-selected: #1e293b;
+    --color-text: #f3f4f6;
+    --color-text-secondary: #9ca3af;
+    --color-text-tertiary: #6b7280;
+    --color-border: rgba(255, 255, 255, 0.08);
+    --color-border-secondary: rgba(255, 255, 255, 0.04);
+    --color-accent: #6366f1;
+    --color-accent-hover: #818cf8;
+
+    /* Status colors - dark mode (muted, understated) */
+    --color-status-draft: #9ca3af;
+    --color-status-draft-bg: rgba(156, 163, 175, 0.1);
+    --color-status-submitted: #60a5fa;
+    --color-status-submitted-bg: rgba(96, 165, 250, 0.1);
+    --color-status-reviewed: #fbbf24;
+    --color-status-reviewed-bg: rgba(251, 191, 36, 0.1);
+    --color-status-rca: #a78bfa;
+    --color-status-rca-bg: rgba(167, 139, 250, 0.1);
+    --color-status-corrective: #22d3ee;
+    --color-status-corrective-bg: rgba(34, 211, 238, 0.1);
+    --color-status-closed: #34d399;
+    --color-status-closed-bg: rgba(52, 211, 153, 0.1);
+    --color-status-cancelled: #f87171;
+    --color-status-cancelled-bg: rgba(248, 113, 113, 0.1);
+
+    /* Severity colors - dark mode */
+    --color-severity-critical: #f87171;
+    --color-severity-critical-bg: rgba(248, 113, 113, 0.1);
+    --color-severity-high: #fb923c;
+    --color-severity-high-bg: rgba(251, 146, 60, 0.1);
+    --color-severity-medium: #facc15;
+    --color-severity-medium-bg: rgba(250, 204, 21, 0.1);
+    --color-severity-low: #9ca3af;
+    --color-severity-low-bg: rgba(156, 163, 175, 0.1);
+  }
+
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Themed scrollbar - use .themed-scrollbar class or apply globally */
+  .sidebar-scroll,
+  .themed-scrollbar {
+    scrollbar-color: var(--color-text-tertiary) transparent;
+    scrollbar-width: thin;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar,
+  .themed-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-track,
+  .themed-scrollbar::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-thumb,
+  .themed-scrollbar::-webkit-scrollbar-thumb {
+    background-color: var(--color-text-tertiary);
+    border-radius: 9999px;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-thumb:hover,
+  .themed-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-text-secondary);
+  }
+
+  /* Apply themed scrollbar globally to common scrollable elements */
+  [class*="overflow-auto"],
+  [class*="overflow-y-auto"],
+  [class*="overflow-x-auto"] {
+    scrollbar-color: var(--color-text-tertiary) transparent;
+    scrollbar-width: thin;
+  }
+
+  [class*="overflow-auto"]::-webkit-scrollbar,
+  [class*="overflow-y-auto"]::-webkit-scrollbar,
+  [class*="overflow-x-auto"]::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  [class*="overflow-auto"]::-webkit-scrollbar-track,
+  [class*="overflow-y-auto"]::-webkit-scrollbar-track,
+  [class*="overflow-x-auto"]::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+
+  [class*="overflow-auto"]::-webkit-scrollbar-thumb,
+  [class*="overflow-y-auto"]::-webkit-scrollbar-thumb,
+  [class*="overflow-x-auto"]::-webkit-scrollbar-thumb {
+    background-color: var(--color-text-tertiary);
+    border-radius: 9999px;
+  }
+
+  [class*="overflow-auto"]::-webkit-scrollbar-thumb:hover,
+  [class*="overflow-y-auto"]::-webkit-scrollbar-thumb:hover,
+  [class*="overflow-x-auto"]::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-text-secondary);
+  }
+}
+
+@layer components {
+  /* Linear-style focus ring */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-0;
+  }
+
+  /* Linear-style row hover */
+  .row-hover {
+    @apply transition-colors duration-75;
+  }
+
+  .row-hover:hover {
+    background-color: var(--color-bg-hover);
+  }
+
+  /* Remove focus outlines and borders from recharts */
+  .recharts-wrapper,
+  .recharts-wrapper *,
+  .recharts-surface {
+    outline: none !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    border-color: transparent !important;
+  }
+}
