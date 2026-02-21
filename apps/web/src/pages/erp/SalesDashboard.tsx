@@ -788,6 +788,7 @@ export default function SalesDashboard() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (props: any) => {
       const { x, y, value, index } = props
+      if (value == null || !isFinite(x) || !isFinite(y)) return null
       const anchor = index === 0 ? "start" : index === total - 1 ? "end" : "middle"
       return (
         <text x={x} y={y - 10} fill="var(--color-text)" fontSize={11} textAnchor={anchor}>
@@ -1139,7 +1140,7 @@ export default function SalesDashboard() {
                 )
               })()}
               {/* Projection tab — rendered outside the IIFE since it uses its own dataset */}
-              {viewingCurrentYear && granularity === "monthly" && (
+              {!chartLoading && viewingCurrentYear && granularity === "monthly" && (
                 <TabsContent value="projection" className="mt-0">
                   <ResponsiveContainer width="100%" height={300}>
                     <AreaChart data={projectionChartData} margin={{ top: 20, left: 20, right: 30, bottom: 5 }}>
