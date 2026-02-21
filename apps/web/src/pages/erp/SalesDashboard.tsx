@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react"
+import { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   BarChart,
@@ -34,10 +34,17 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   ArrowLeft,
   TrendingUp,
   TrendingDown,
   RotateCcw,
+  Info,
 } from "lucide-react"
 import {
   useSalesSummary,
@@ -142,10 +149,9 @@ function getDateRange(period: TimePeriod, year: number): { startDate: string; en
 function getPeriodLabel(period: string, granularity: string): string {
   if (granularity === "yearly") return period // "2025"
   if (granularity === "weekly") {
-    // period is "2025-03-10" → "Mar 10"
+    // period is "2025-03-10" → "3/10"
     const [, mm, dd] = period.split("-")
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    return `${months[parseInt(mm, 10) - 1]} ${parseInt(dd, 10)}`
+    return `${parseInt(mm, 10)}/${parseInt(dd, 10)}`
   }
   // monthly: "2025-03" → "Mar"
   const [, mm] = period.split("-")
@@ -158,13 +164,28 @@ interface KpiCardProps {
   value: string
   description?: string
   trend?: { value: number; isPositive: boolean }
+  tooltip?: string
 }
 
-function KpiCard({ title, value, description, trend }: KpiCardProps) {
+function KpiCard({ title, value, description, trend, tooltip }: KpiCardProps) {
   return (
     <Card className="bg-background-secondary">
       <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center">
-        <p className="text-sm font-medium text-muted-foreground">{title}</p>
+        <p className="text-sm font-medium text-muted-foreground inline-flex items-center gap-1">
+          {title}
+          {tooltip && (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[250px] text-xs bg-[#1a1a2e] text-slate-200 border border-border">
+                  <p>{tooltip}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </p>
         <div className="flex items-baseline gap-2">
           <p className="text-2xl font-bold">{value}</p>
           {trend && (
@@ -277,6 +298,15 @@ export default function SalesDashboard() {
   const customerData = byCustomerQuery.data?.data ?? []
   const reps = repsQuery.data?.data ?? []
   const budgets = budgetsQuery.data?.data ?? []
+
+  // Reps sorted by sales (repData is already sorted by totalSales DESC)
+  const sortedReps = useMemo(() => {
+    const repSalesOrder = repData.map((r) => r.repName).filter(Boolean) as string[]
+    const repSet = new Set(repSalesOrder)
+    // Append any reps from the full list that had no sales in this period
+    const remaining = reps.filter((r) => !repSet.has(r.repName)).map((r) => r.repName)
+    return [...repSalesOrder, ...remaining]
+  }, [repData, reps])
 
   // Build budget lookup keyed by period
   const budgetByPeriod = useMemo(() => {
@@ -644,6 +674,19 @@ export default function SalesDashboard() {
     }
   }, [chartData.length])
 
+  // Scrollable chart for weekly view
+  const chartScrollRef = useRef<HTMLDivElement>(null)
+  const maxVisiblePoints = 16
+  const needsScroll = granularity === "weekly" && chartData.length > maxVisiblePoints
+  const chartWidth = needsScroll ? chartData.length * 70 : undefined // 70px per week
+
+  // Auto-scroll to the right (most recent) when data changes
+  useEffect(() => {
+    if (needsScroll && chartScrollRef.current) {
+      chartScrollRef.current.scrollLeft = chartScrollRef.current.scrollWidth
+    }
+  }, [needsScroll, chartData.length])
+
   const chartLoading = summaryQuery.isLoading || priorYearQuery.isLoading
   const repLoading = byRepQuery.isLoading
   const isLoading = chartLoading || repLoading || byCustomerQuery.isLoading
@@ -686,9 +729,9 @@ export default function SalesDashboard() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Reps</SelectItem>
-              {reps.map((r) => (
-                <SelectItem key={r.contactId} value={r.repName}>
-                  {r.repName}
+              {sortedReps.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -752,6 +795,7 @@ export default function SalesDashboard() {
         <KpiCard
           title="Projected Annual"
           value={formatCurrency(kpis.projectedAnnual)}
+          tooltip="(Total sales / months with data) x 12. Extrapolates the average monthly sales to a full year."
         />
       </div>
 
@@ -815,7 +859,8 @@ export default function SalesDashboard() {
                 const compContribution = chartMode === "yoy" ? "pyContribution" : "budgetContribution"
                 const compPerMSF = chartMode === "yoy" ? "pyPerMSF" : "budgetPerMSF"
                 return (
-                <>
+                <div ref={chartScrollRef} className={needsScroll ? "overflow-x-auto" : ""}>
+                <div style={needsScroll ? { width: chartWidth } : undefined}>
                   <TabsContent value="sales" className="mt-0">
                     <ResponsiveContainer width="100%" height={300}>
                       <AreaChart data={chartData} margin={{ top: 20, left: 20, right: 30, bottom: 5 }} onClick={handleChartClick} style={{ cursor: "pointer" }}>
@@ -948,7 +993,8 @@ export default function SalesDashboard() {
                       </AreaChart>
                     </ResponsiveContainer>
                   </TabsContent>
-                </>
+                </div>
+                </div>
                 )
               })()}
             </CardContent>
@@ -1055,54 +1101,80 @@ export default function SalesDashboard() {
               </Button>
             </div>
             {tableTab === "budget" && (
-              <Select
-                value={selectedMonth ?? "all"}
-                onValueChange={(v) => setSelectedMonth(v === "all" ? null : v)}
-              >
-                <SelectTrigger className="w-[130px] h-7 text-xs">
-                  <SelectValue placeholder="All Months" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Months</SelectItem>
-                  {Array.from({ length: 12 }, (_, i) => {
-                    const m = String(i + 1).padStart(2, "0")
-                    const key = `${year}-${m}`
-                    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-                    return (
-                      <SelectItem key={key} value={key}>
-                        {months[i]} {year}
+              <>
+                <Select
+                  value={selectedMonth ?? "all"}
+                  onValueChange={(v) => setSelectedMonth(v === "all" ? null : v)}
+                >
+                  <SelectTrigger className="w-[130px] h-7 text-xs">
+                    <SelectValue placeholder="All Months" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Months</SelectItem>
+                    {Array.from({ length: 12 }, (_, i) => {
+                      const m = String(i + 1).padStart(2, "0")
+                      const key = `${year}-${m}`
+                      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+                      return (
+                        <SelectItem key={key} value={key}>
+                          {months[i]} {year}
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+                <Select value={repFilter} onValueChange={setRepFilter}>
+                  <SelectTrigger className="w-[150px] h-7 text-xs">
+                    <SelectValue placeholder="All Reps" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Reps</SelectItem>
+                    {sortedReps.map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
                       </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
             )}
           </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto max-h-[400px] overflow-y-auto [&_td]:py-1.5 [&_th]:py-1.5">
             {tableTab === "budget" ? (
+              <>
+              <div className="flex items-center gap-6 text-sm px-4 py-2 border-b border-border">
+                <span className="text-muted-foreground">Work Days: <strong className="text-foreground">{kpis.totalWorkDays}</strong></span>
+                <span className="text-muted-foreground">Completed: <strong className="text-foreground">{kpis.daysCompleted}</strong></span>
+                <span className="text-muted-foreground">$/Day: <strong className="text-foreground">{formatCurrencyFull(kpis.salesPerDay)}</strong></span>
+                <span className="text-muted-foreground">$/Day Needed: <strong className="text-foreground">{formatCurrencyFull(kpis.salesPerDayNeeded)}</strong></span>
+              </div>
               <Table>
                 <TableHeader className="sticky top-0 z-10 [&_th]:bg-[var(--color-bg-secondary)]">
                   <TableRow>
                     <TableHead>Metric</TableHead>
                     <TableHead className="text-right">Budget</TableHead>
                     <TableHead className="text-right">Actual</TableHead>
-                    <TableHead className="text-right">Proj. Monthly</TableHead>
+                    <TableHead className="text-right">
+                      <TooltipProvider delayDuration={0}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center gap-1 cursor-help">
+                              Proj. Monthly
+                              <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-[250px] text-xs bg-[#1a1a2e] text-slate-200 border border-border">
+                            <p>Actual / months elapsed in period. Extrapolates the current run rate to a full month.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </TableHead>
                     <TableHead className="text-right">% to Budget</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <TableRow className="border-b-2 border-border">
-                    <TableCell className="font-medium" colSpan={5}>
-                      <div className="flex items-center gap-6 text-sm">
-                        <span>Work Days: <strong>{kpis.totalWorkDays}</strong></span>
-                        <span>Days Completed: <strong>{kpis.daysCompleted}</strong></span>
-                        <span>Sales/Day: <strong>{formatCurrencyFull(kpis.salesPerDay)}</strong></span>
-                        <span>Sales/Day Needed: <strong>{formatCurrencyFull(kpis.salesPerDayNeeded)}</strong></span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
                   {[
                     { label: "Sales ($)", budget: kpis.budgetDollars, actual: kpis.totalSales, projected: kpis.projectedMonthlySales, pct: kpis.toBudgetPct, fmt: formatCurrencyFull },
                     { label: "Contribution ($)", budget: kpis.budgetContribution, actual: kpis.contribution, projected: kpis.projectedMonthlyCont, pct: kpis.contToBudgetPct, fmt: formatCurrencyFull },
@@ -1124,6 +1196,7 @@ export default function SalesDashboard() {
                   ))}
                 </TableBody>
               </Table>
+              </>
             ) : tableTab === "customer" ? (
               <Table>
                 <TableHeader className="sticky top-0 z-10 [&_th]:bg-[var(--color-bg-secondary)]">
