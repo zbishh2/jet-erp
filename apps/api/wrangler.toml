@@ -29,9 +29,9 @@ bucket_name = "jet-erp-attachments"
 # KIWIPLAN_SERVICE_TOKEN - set via: wrangler secret put KIWIPLAN_SERVICE_TOKEN
 [vars]
 ENVIRONMENT = "production"
-ALLOW_DEV_AUTH = "true"
-AZURE_CLIENT_ID = "00000000-0000-0000-0000-000000000000"
-CORS_ALLOWED_ORIGINS = "https://jet-erp-web.pages.dev,https://3267599e.jet-erp-web.pages.dev,https://95092e50.jet-erp-web.pages.dev"
+ALLOW_DEV_AUTH = "false"
+AZURE_CLIENT_ID = "f6b315ff-d6d4-4565-ac0e-a4464b32d557"
+CORS_ALLOWED_ORIGINS = "https://jet-erp-web.pages.dev,https://3267599e.jet-erp-web.pages.dev,https://95092e50.jet-erp-web.pages.dev,https://jetcontainer.com"
 KIWIPLAN_GATEWAY_URL = "https://kiwiplan.leangoapp.com"
 
 # Local development

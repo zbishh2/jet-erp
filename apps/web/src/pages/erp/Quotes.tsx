@@ -191,7 +191,7 @@ export default function Quotes() {
             </div>
             <div className="text-right">
               <h1 className="text-xl font-semibold">Quotes</h1>
-              <p className="text-sm text-muted-foreground">ERP Estimating</p>
+              <p className="text-sm text-muted-foreground">Estimating</p>
             </div>
           </div>
         </div>

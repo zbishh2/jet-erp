@@ -28,7 +28,9 @@ bucket_name = "jet-erp-attachments-local"
 [vars]
 ENVIRONMENT = "development"
 ALLOW_DEV_AUTH = "true"
-AZURE_CLIENT_ID = "4d374ffd-c592-459c-9e17-59ca450c1e9f"
+# AZURE_CLIENT_ID should be set via `wrangler secret put AZURE_CLIENT_ID`
+# or as a local-only .dev.vars file, not committed to source control
+KIWIPLAN_GATEWAY_URL = "https://kiwiplan.leangoapp.com"
 
 # Local development
 [dev]
