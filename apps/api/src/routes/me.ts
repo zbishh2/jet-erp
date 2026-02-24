@@ -165,6 +165,7 @@ meRoutes.get('/organizations', async (c) => {
             name: m.moduleName,
             icon: m.moduleIcon,
             role: userMod.length > 0 ? userMod[0].role : null,
+            roles: userMod.map(um => um.role),
           }
         })
       )
@@ -217,6 +218,7 @@ meRoutes.get('/modules', async (c) => {
       return {
         ...m,
         role: userMod.length > 0 ? userMod[0].role : null,
+        roles: userMod.map(um => um.role),
       }
     })
   )
@@ -233,14 +235,25 @@ meRoutes.get('/permissions', async (c) => {
   // Get module code from header, default to 'qms' for backward compat
   const moduleCode = c.req.header('X-Module-Code') || 'qms'
 
-  // If module context is already set (from module middleware), use that role
+  // If module context is already set (from module middleware), use those roles
+  if (auth.moduleRoles && auth.moduleRoles.length > 0) {
+    const permissions = derivePermissions(auth.moduleRoles as UserRole[])
+    return c.json({
+      data: {
+        moduleCode: auth.moduleCode,
+        role: auth.moduleRoles[0],
+        roles: auth.moduleRoles,
+        permissions,
+      }
+    })
+  }
   if (auth.moduleRole) {
     const permissions = derivePermissions([auth.moduleRole as UserRole])
     return c.json({
       data: {
         moduleCode: auth.moduleCode,
         role: auth.moduleRole,
-        roles: [auth.moduleRole], // Backward compat
+        roles: [auth.moduleRole],
         permissions,
       }
     })
@@ -275,15 +288,15 @@ meRoutes.get('/permissions', async (c) => {
       eq(userOrganizationModule.isActive, true)
     ))
 
-  const moduleRole = userMod.length > 0 ? userMod[0].role : null
-  const effectiveRoles = moduleRole ? [moduleRole as UserRole] : auth.roles
+  const moduleRoles = userMod.map(um => um.role)
+  const effectiveRoles = moduleRoles.length > 0 ? (moduleRoles as UserRole[]) : auth.roles
   const permissions = derivePermissions(effectiveRoles)
 
   return c.json({
     data: {
       moduleCode,
-      role: moduleRole,
-      roles: effectiveRoles, // Backward compat
+      role: moduleRoles[0] ?? null,
+      roles: effectiveRoles,
       permissions,
     }
   })

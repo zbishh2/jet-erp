@@ -183,7 +183,7 @@ export const ModuleRoles = {
   qms:         ['ADMIN', 'QUALITY', 'PROCESS_OWNER', 'APPROVER', 'REPORTER'],
   maintenance: ['ADMIN', 'TECHNICIAN', 'PLANNER', 'VIEWER'],
   ci:          ['ADMIN', 'FACILITATOR', 'CONTRIBUTOR', 'VIEWER'],
-  erp:         ['ADMIN', 'ESTIMATOR', 'VIEWER'],
+  erp:         ['ADMIN', 'FINANCE', 'ESTIMATOR', 'VIEWER'],
   pr:          ['ADMIN', 'REPORTER'],
 } as const;
 
@@ -209,8 +209,9 @@ export const ModuleRoleDescriptions: Record<string, Record<string, string>> = {
   },
   erp: {
     ADMIN: 'Full access to ERP module',
-    ESTIMATOR: 'Create and manage quotes',
-    VIEWER: 'View-only access',
+    FINANCE: 'Access financial dashboards (Sales, Contribution, Cost Variance)',
+    ESTIMATOR: 'Create and manage quotes and customers',
+    VIEWER: 'Access production dashboards (Production, Sq Ft)',
   },
   pr: {
     ADMIN: 'Full access including invoicing and CRM',

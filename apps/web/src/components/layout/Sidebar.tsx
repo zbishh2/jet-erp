@@ -8,8 +8,13 @@ import {
   PanelLeft,
   FileSpreadsheet,
   Factory,
-  BarChart3,
+  TrendingUp,
+  DollarSign,
+  ArrowLeftRight,
+  Activity,
+  Ruler,
   Terminal,
+  Users,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -31,17 +36,29 @@ interface NavItem {
 interface NavGroup {
   label: string
   items: NavItem[]
+  requiredRoles?: string[]
 }
 
 const navGroups: NavGroup[] = [
   {
-    label: "Sales",
+    label: "Financial",
+    requiredRoles: ["FINANCE", "ADMIN"],
     items: [
-      { label: "Sales Dashboard", href: "/erp/sales", icon: BarChart3 },
+      { label: "Sales Dashboard", href: "/erp/sales", icon: TrendingUp },
+      { label: "Contribution Dashboard", href: "/erp/contribution", icon: DollarSign },
+      { label: "Cost Variance", href: "/erp/cost-variance", icon: ArrowLeftRight },
+    ],
+  },
+  {
+    label: "Production",
+    items: [
+      { label: "OEE Dashboard", href: "/erp/production", icon: Activity },
+      { label: "Sq Ft Dashboard", href: "/erp/sqft", icon: Ruler },
     ],
   },
   {
     label: "Estimating",
+    requiredRoles: ["ESTIMATOR", "ADMIN"],
     items: [
       { label: "Quotes", href: "/erp/quotes", icon: FileSpreadsheet },
       { label: "Customers", href: "/erp/customers", icon: Factory },
@@ -49,15 +66,17 @@ const navGroups: NavGroup[] = [
   },
   {
     label: "Admin",
+    requiredRoles: ["ADMIN"],
     items: [
       { label: "SQL Explorer", href: "/erp/sql-explorer", icon: Terminal },
+      { label: "User Management", href: "/erp/admin/users", icon: Users },
     ],
   },
 ]
 
 export function Sidebar() {
   const navigate = useNavigate()
-  const { user, logout, isLoading } = useAuth()
+  const { user, roles, logout, isLoading } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const [collapsed, setCollapsed] = useState(() => {
     const saved = localStorage.getItem("sidebar-collapsed")
@@ -72,6 +91,13 @@ export function Sidebar() {
     logout()
     navigate('/login')
   }
+
+  // Filter nav groups by role
+  const userRoles = roles.map(r => String(r))
+  const visibleGroups = navGroups.filter((group) => {
+    if (!group.requiredRoles) return userRoles.length > 0
+    return group.requiredRoles.some((r) => userRoles.includes(r))
+  })
 
   const NavItemLink = ({ item }: { item: NavItem }) => {
     const link = (
@@ -117,7 +143,7 @@ export function Sidebar() {
       {/* Header with collapse toggle */}
       <div className={cn("flex items-center border-b border-border", collapsed ? "justify-center p-2" : "justify-between px-3 py-2")}>
         {!collapsed && (
-          <p className="px-2 py-1 text-sm font-semibold text-foreground">Jet Container ERP</p>
+          <p className="px-2 py-1 text-sm font-semibold text-foreground">Jet Container</p>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
@@ -130,7 +156,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="sidebar-scroll flex-1 overflow-y-auto px-2 py-4">
-        {navGroups.map((group, index) => (
+        {visibleGroups.map((group, index) => (
           <div key={group.label} className={index === 0 ? "" : "mt-6 pt-2"}>
             {!collapsed && (
               <p className="px-2 mb-2 text-xs font-semibold text-foreground-tertiary tracking-wider">

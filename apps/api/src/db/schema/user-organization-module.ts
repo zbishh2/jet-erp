@@ -16,7 +16,7 @@ export const userOrganizationModule = sqliteTable('user_organization_module', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 }, (table) => ({
-  userOrgModuleIdx: uniqueIndex('user_org_module_idx').on(table.userId, table.organizationId, table.moduleId),
+  userOrgModuleRoleIdx: uniqueIndex('user_org_module_role_idx').on(table.userId, table.organizationId, table.moduleId, table.role),
   userIdx: index('user_org_module_user_idx').on(table.userId),
   orgIdx: index('user_org_module_org_idx').on(table.organizationId),
   moduleIdx: index('user_org_module_module_idx').on(table.moduleId),

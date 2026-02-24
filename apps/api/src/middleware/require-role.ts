@@ -1,7 +1,7 @@
 import { createMiddleware } from 'hono/factory'
 import type { AuthContext } from '../types/auth'
 import { UserRole } from '@jet-erp/shared'
-import { hasAnyScopedRole } from './role-scope'
+import { hasAnyScopedRole, getScopedRoles } from './role-scope'
 
 // Middleware factory to require specific role(s)
 export function requireRole(...allowedRoles: UserRole[]) {
@@ -34,9 +34,7 @@ export function requireModuleRole(...allowedRoles: string[]) {
       return c.json({ error: 'Unauthorized' }, 401)
     }
 
-    const scopedRoles = auth.isDevRoleOverride
-      ? auth.roles
-      : (auth.moduleRole ? [auth.moduleRole] : [])
+    const scopedRoles = getScopedRoles(auth)
 
     if (!scopedRoles.some((role) => allowedRoles.includes(role))) {
       return c.json({
@@ -73,9 +71,7 @@ export function requireModuleRolePolicy(policy: ModuleRolePolicy) {
       allowedRoles = policy.write ?? policy.read
     }
 
-    const scopedRoles = auth.isDevRoleOverride
-      ? auth.roles
-      : (auth.moduleRole ? [auth.moduleRole] : [])
+    const scopedRoles = getScopedRoles(auth)
 
     if (!scopedRoles.some((role) => allowedRoles.includes(role))) {
       return c.json({

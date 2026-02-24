@@ -27,6 +27,7 @@ export interface AuthContext {
   moduleId?: string
   moduleCode?: string
   moduleRole?: string
+  moduleRoles?: string[]
   isDevRoleOverride?: boolean
 
   // Deprecated: Use moduleRole instead. Kept for backward compat during migration.

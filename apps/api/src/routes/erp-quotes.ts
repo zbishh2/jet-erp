@@ -12,6 +12,9 @@ const erpAdmin = requireModuleRole('ADMIN')
 
 export const erpQuoteRoutes = new Hono<{ Bindings: Env }>()
 
+// Estimating routes require ADMIN or ESTIMATOR role
+erpQuoteRoutes.use('*', requireModuleRole('ADMIN', 'ESTIMATOR'))
+
 // Helper: generate quote number QTE-YYYY-NNNN
 async function generateQuoteNumber(db: ReturnType<typeof createDb>, organizationId: string): Promise<string> {
   const year = new Date().getFullYear()
@@ -61,7 +64,7 @@ erpQuoteRoutes.get('/', async (c) => {
 
   if (search) {
     conditions.push(
-      sql`(${erpQuote.quoteNumber} LIKE ${'%' + search + '%'} OR ${erpQuote.customerName} LIKE ${'%' + search + '%'})`
+      sql`(${erpQuote.quoteNumber} LIKE ${`%${search}%`} OR ${erpQuote.customerName} LIKE ${`%${search}%`})`
     )
   }
 

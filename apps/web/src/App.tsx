@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate, Outlet } from "react-router-dom"
 import { MainLayout } from "@/components/layout"
-import { ErpCustomers, ErpQuotes, ErpQuoteForm, SalesDashboard, SqlExplorer } from "@/pages/erp"
+import { ErpCustomers, ErpQuotes, ErpQuoteForm, SalesDashboard, SqFtDashboard, ContributionDashboard, CostVarianceDashboard, SqlExplorer, ProductionDashboard, UserManagement } from "@/pages/erp"
 import { Login } from "@/pages/Login"
 import { Signup } from "@/pages/Signup"
 import { ForgotPassword } from "@/pages/ForgotPassword"
@@ -46,6 +46,67 @@ function PublicRoute() {
   return <Outlet />
 }
 
+// Role guard component - checks if user has required roles
+function RoleGuard({ requiredRoles, children }: { requiredRoles: string[]; children: React.ReactNode }) {
+  const { roles, isLoading } = useAuth()
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
+  const userRoles = roles.map(r => String(r))
+  const hasAccess = requiredRoles.some(r => userRoles.includes(r))
+
+  if (!hasAccess) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center max-w-md mx-auto px-6">
+          <h2 className="text-lg font-semibold text-foreground mb-2">Access Restricted</h2>
+          <p className="text-sm text-foreground-secondary">
+            You don't have permission to view this page. Contact your administrator to request access.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return <>{children}</>
+}
+
+// No access page for users with zero roles
+function NoAccessPage() {
+  const { roles, isLoading } = useAuth()
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
+  if (roles.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center max-w-md mx-auto px-6">
+          <h2 className="text-lg font-semibold text-foreground mb-2">No Access</h2>
+          <p className="text-sm text-foreground-secondary">
+            Your account has been created but you haven't been assigned any roles yet.
+            Please contact your administrator to get access.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Has roles, redirect to first accessible dashboard
+  return <Navigate to="/erp/production" replace />
+}
+
 function App() {
   return (
     <Routes>
@@ -59,15 +120,27 @@ function App() {
       {/* Protected routes */}
       <Route element={<ProtectedRoute />}>
         <Route element={<MainLayout />}>
-          <Route path="/" element={<Navigate to="/erp/quotes" replace />} />
+          <Route path="/" element={<NoAccessPage />} />
 
-          {/* ERP Module Routes */}
-          <Route path="/erp/quotes" element={<ErpQuotes />} />
-          <Route path="/erp/quotes/new" element={<ErpQuoteForm />} />
-          <Route path="/erp/quotes/:id" element={<ErpQuoteForm />} />
-          <Route path="/erp/customers" element={<ErpCustomers />} />
-          <Route path="/erp/sales" element={<SalesDashboard />} />
-          <Route path="/erp/sql-explorer" element={<SqlExplorer />} />
+          {/* Production — any role */}
+          <Route path="/erp/production" element={<ProductionDashboard />} />
+          <Route path="/erp/sqft" element={<SqFtDashboard />} />
+
+          {/* Estimating — ESTIMATOR or ADMIN */}
+          <Route path="/erp/quotes" element={<RoleGuard requiredRoles={["ESTIMATOR", "ADMIN"]}><ErpQuotes /></RoleGuard>} />
+          <Route path="/erp/quotes/new" element={<RoleGuard requiredRoles={["ESTIMATOR", "ADMIN"]}><ErpQuoteForm /></RoleGuard>} />
+          <Route path="/erp/quotes/:id" element={<RoleGuard requiredRoles={["ESTIMATOR", "ADMIN"]}><ErpQuoteForm /></RoleGuard>} />
+          <Route path="/erp/customers" element={<RoleGuard requiredRoles={["ESTIMATOR", "ADMIN"]}><ErpCustomers /></RoleGuard>} />
+
+          {/* Financial — FINANCE or ADMIN */}
+          <Route path="/erp/sales" element={<RoleGuard requiredRoles={["FINANCE", "ADMIN"]}><SalesDashboard /></RoleGuard>} />
+          <Route path="/erp/contribution" element={<RoleGuard requiredRoles={["FINANCE", "ADMIN"]}><ContributionDashboard /></RoleGuard>} />
+          <Route path="/erp/cost-variance" element={<RoleGuard requiredRoles={["FINANCE", "ADMIN"]}><CostVarianceDashboard /></RoleGuard>} />
+          <Route path="/erp/invoice-cost-variance" element={<Navigate to="/erp/cost-variance" replace />} />
+
+          {/* Admin — ADMIN only */}
+          <Route path="/erp/sql-explorer" element={<RoleGuard requiredRoles={["ADMIN"]}><SqlExplorer /></RoleGuard>} />
+          <Route path="/erp/admin/users" element={<RoleGuard requiredRoles={["ADMIN"]}><UserManagement /></RoleGuard>} />
         </Route>
       </Route>
 

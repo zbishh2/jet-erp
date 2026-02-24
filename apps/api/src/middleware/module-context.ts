@@ -53,16 +53,14 @@ export function moduleContextMiddleware(moduleCode: string) {
         eq(userOrganizationModule.isActive, true)
       ))
 
-    if (userMods.length === 0) {
-      return c.json({ error: 'No access to module' }, 403)
-    }
-
-    // Update auth context with module-scoped role
+    // Update auth context with module-scoped roles (allow zero-role users through; downstream guards will block)
+    const moduleRoles = userMods.map(um => um.role)
     c.set('auth', {
       ...auth,
       moduleId: mod.id,
       moduleCode: mod.code,
-      moduleRole: userMods[0].role,
+      moduleRole: moduleRoles[0] ?? undefined,
+      moduleRoles,
     })
 
     return next()
