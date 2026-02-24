@@ -9,6 +9,12 @@ import { meRoutes } from './routes/me'
 import { erpQuoteRoutes } from './routes/erp-quotes'
 import { kiwiplanRoutes } from './routes/kiwiplan'
 import { salesDashboardRoutes } from './routes/sales-dashboard'
+import { productionDashboardRoutes } from './routes/production-dashboard'
+import { sqFtDashboardRoutes } from './routes/sqft-dashboard'
+import { contributionDashboardRoutes } from './routes/contribution-dashboard'
+import { costVarianceDashboardRoutes } from './routes/cost-variance-dashboard'
+import { invoiceCostVarianceDashboardRoutes } from './routes/invoice-cost-variance-dashboard'
+import { adminRoutes } from './routes/admin'
 import { authMiddleware } from './middleware/auth'
 import { tenantMiddleware } from './middleware/tenant'
 import { moduleContextMiddleware } from './middleware/module-context'
@@ -27,6 +33,17 @@ export function createApp() {
     } else {
       await next()
     }
+  })
+
+  // Security headers middleware
+  app.use('*', async (c, next) => {
+    await next()
+    c.res.headers.set('X-Content-Type-Options', 'nosniff')
+    c.res.headers.set('X-Frame-Options', 'DENY')
+    c.res.headers.set('X-XSS-Protection', '1; mode=block')
+    c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+    c.res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+    c.res.headers.set('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'")
   })
 
   // CORS middleware
@@ -81,8 +98,8 @@ export function createApp() {
   app.use('/erp/*', tenantMiddleware)
   app.use('/erp/*', moduleContextMiddleware('erp'))
   app.use('/erp/*', requireModuleRolePolicy({
-    read: ['ADMIN', 'ESTIMATOR', 'VIEWER'],
-    write: ['ADMIN', 'ESTIMATOR'],
+    read: ['ADMIN', 'FINANCE', 'ESTIMATOR', 'VIEWER'],
+    write: ['ADMIN', 'FINANCE', 'ESTIMATOR', 'VIEWER'],
     del: ['ADMIN'],
   }))
 
@@ -90,6 +107,12 @@ export function createApp() {
   const erpApp = new Hono<{ Bindings: Env }>()
   erpApp.route('/quotes', erpQuoteRoutes)
   erpApp.route('/sales', salesDashboardRoutes)
+  erpApp.route('/production', productionDashboardRoutes)
+  erpApp.route('/sqft', sqFtDashboardRoutes)
+  erpApp.route('/contribution', contributionDashboardRoutes)
+  erpApp.route('/cost-variance', costVarianceDashboardRoutes)
+  erpApp.route('/invoice-cost-variance', invoiceCostVarianceDashboardRoutes)
+  erpApp.route('/admin', adminRoutes)
   erpApp.route('/', kiwiplanRoutes)
   app.route('/erp', erpApp)
 
@@ -101,7 +124,7 @@ export function createApp() {
   // Error handler
   app.onError((err, c) => {
     console.error('Error:', err)
-    return c.json({ error: 'Internal Server Error' }, 500)
+    return c.json({ error: 'Internal server error' }, 500)
   })
 
   return app
