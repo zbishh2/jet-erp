@@ -3,6 +3,7 @@ import { config } from './config.js'
 import { ALLOWED_QUERIES, isUnscopedQuery } from './middleware/validate.js'
 
 let pool: sql.ConnectionPool | null = null
+let kdwPool: sql.ConnectionPool | null = null
 
 export async function getPool(): Promise<sql.ConnectionPool> {
   if (pool) {
@@ -29,11 +30,43 @@ export async function getPool(): Promise<sql.ConnectionPool> {
   return pool
 }
 
+export async function getKdwPool(): Promise<sql.ConnectionPool> {
+  if (kdwPool) {
+    return kdwPool
+  }
+
+  console.log(`[DB] Connecting to ${config.kdwDb.server}/${config.kdwDb.database}...`)
+
+  kdwPool = new sql.ConnectionPool({
+    server: config.kdwDb.server,
+    database: config.kdwDb.database,
+    user: config.kdwDb.user,
+    password: config.kdwDb.password,
+    options: config.kdwDb.options,
+    pool: {
+      max: 10,
+      min: 0,
+      idleTimeoutMillis: 30000,
+    },
+  })
+
+  await kdwPool.connect()
+
+  console.log(`[DB] KDW connected successfully`)
+
+  return kdwPool
+}
+
 export async function closePool(): Promise<void> {
   if (pool) {
     await pool.close()
     pool = null
-    console.log('[DB] Connection closed')
+    console.log('[DB] ESP connection closed')
+  }
+  if (kdwPool) {
+    await kdwPool.close()
+    kdwPool = null
+    console.log('[DB] KDW connection closed')
   }
 }
 

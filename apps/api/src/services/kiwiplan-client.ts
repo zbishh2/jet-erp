@@ -304,15 +304,18 @@ export function createKiwiplanClient(config: KiwiplanClientConfig) {
 
   return {
     /**
-     * Execute a raw SQL query against the ESP database.
+     * Execute a raw SQL query against the ESP or KDW database.
      * The gateway validates that it's a read-only SELECT.
      * Use this for new queries so the gateway never needs redeployment.
+     *
+     * @param database - "esp" (default) for the ESP database, "kdw" for the Kiwiplan Data Warehouse
      */
     async rawQuery<T = Record<string, unknown>>(
       sql: string,
-      params?: Record<string, unknown>
+      params?: Record<string, unknown>,
+      database?: 'esp' | 'kdw'
     ): Promise<{ data: T[] }> {
-      return postRequest<{ data: T[] }>('/query', { sql, params })
+      return postRequest<{ data: T[] }>('/query', { sql, params, database })
     },
 
     /**

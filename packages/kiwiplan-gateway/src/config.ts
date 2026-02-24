@@ -14,8 +14,20 @@ export interface GatewayConfig {
   port: number
   host: string
 
-  // Database connection
+  // Database connection (ESP)
   db: {
+    server: string
+    database: string
+    user: string
+    password: string
+    options: {
+      encrypt: boolean
+      trustServerCertificate: boolean
+    }
+  }
+
+  // KDW database connection (same server, different database)
+  kdwDb: {
     server: string
     database: string
     user: string
@@ -93,8 +105,19 @@ export function loadConfig(): GatewayConfig {
       user: getEnvOrThrow('DB_USER'),
       password: getEnvOrThrow('DB_PASSWORD'),
       options: {
-        encrypt: false,
-        trustServerCertificate: true,
+        encrypt: getEnvOrDefault('DB_ENCRYPT', 'true') === 'true',
+        trustServerCertificate: devMode, // Only trust self-signed certs in dev
+      },
+    },
+
+    kdwDb: {
+      server: getEnvOrThrow('DB_SERVER'),
+      database: getEnvOrDefault('KDW_DATABASE', 'kdw_master'),
+      user: getEnvOrThrow('DB_USER'),
+      password: getEnvOrThrow('DB_PASSWORD'),
+      options: {
+        encrypt: getEnvOrDefault('DB_ENCRYPT', 'true') === 'true',
+        trustServerCertificate: devMode, // Only trust self-signed certs in dev
       },
     },
 

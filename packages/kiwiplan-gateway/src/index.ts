@@ -2,7 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import { config } from './config.js'
-import { getPool, closePool } from './db.js'
+import { getPool, getKdwPool, closePool } from './db.js'
 import { auditMiddleware, getRecentLogs } from './middleware/audit.js'
 import { authMiddleware } from './middleware/auth.js'
 import quotesRouter from './routes/quotes.js'
@@ -36,9 +36,32 @@ app.use(authMiddleware)
 app.use(auditMiddleware)
 
 // Health check (no auth required)
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  let espStatus = 'unknown'
+  let kdwStatus = 'unknown'
+
+  try {
+    await getPool()
+    espStatus = 'connected'
+  } catch {
+    espStatus = 'error'
+  }
+
+  try {
+    await getKdwPool()
+    kdwStatus = 'connected'
+  } catch {
+    kdwStatus = 'error'
+  }
+
+  const overall = espStatus === 'connected' && kdwStatus === 'connected' ? 'ok' : 'degraded'
+
   res.json({
-    status: 'ok',
+    status: overall,
+    databases: {
+      esp: espStatus,
+      kdw: kdwStatus,
+    },
     devMode: config.devMode,
     testCompanyId: config.devMode ? config.testCompanyId : undefined,
     timestamp: new Date().toISOString(),
@@ -85,9 +108,11 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 // Start server
 async function start() {
   try {
-    // Test database connection
-    console.log('[STARTUP] Testing database connection...')
+    // Test database connections
+    console.log('[STARTUP] Testing ESP database connection...')
     await getPool()
+    console.log('[STARTUP] Testing KDW database connection...')
+    await getKdwPool()
 
     // Start HTTP server
     app.listen(config.port, config.host, () => {
@@ -101,7 +126,13 @@ async function start() {
         console.log(`  Test Company:  ${config.testCompanyId}`)
       }
       console.log(`  Auth:          ${config.serviceToken ? 'ENABLED (SERVICE_TOKEN)' : 'DISABLED (private network)'}`)
-      console.log(`  Database:      ${config.db.server}/${config.db.database}`)
+      if (config.devMode) {
+        console.log(`  ESP Database:  ${config.db.server}/${config.db.database}`)
+        console.log(`  KDW Database:  ${config.kdwDb.server}/${config.kdwDb.database}`)
+      } else {
+        console.log(`  ESP Database:  [configured]`)
+        console.log(`  KDW Database:  [configured]`)
+      }
       console.log(`  Log Queries:   ${config.logQueries}`)
       console.log('='.repeat(60))
       console.log('')

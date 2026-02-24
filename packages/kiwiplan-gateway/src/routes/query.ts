@@ -1,7 +1,10 @@
 import { Router, Request, Response } from 'express'
 import sql from 'mssql'
-import { getPool } from '../db.js'
+import { getPool, getKdwPool } from '../db.js'
 import { logOperationStart, logOperationComplete, logOperationError, logOperationRejected } from '../middleware/audit.js'
+
+const VALID_DATABASES = ['esp', 'kdw'] as const
+type DatabaseTarget = typeof VALID_DATABASES[number]
 
 const router = Router()
 
@@ -49,7 +52,7 @@ function isReadOnlySQL(sqlText: string): boolean {
  * from the CF Worker. The DB user is read-only so writes are blocked
  * at both the application and database level.
  *
- * Body: { sql: string, params?: Record<string, unknown> }
+ * Body: { sql: string, params?: Record<string, unknown>, database?: "esp" | "kdw" }
  * Returns: { data: rows[] }
  */
 router.post('/', async (req: Request, res: Response) => {
@@ -57,7 +60,7 @@ router.post('/', async (req: Request, res: Response) => {
   let auditEntry
 
   try {
-    const { sql: sqlText, params = {} } = req.body || {}
+    const { sql: sqlText, params = {}, database = 'esp' } = req.body || {}
 
     if (!sqlText || typeof sqlText !== 'string') {
       res.status(400).json({ error: 'sql is required and must be a string' })
@@ -66,6 +69,12 @@ router.post('/', async (req: Request, res: Response) => {
 
     if (typeof params !== 'object' || Array.isArray(params)) {
       res.status(400).json({ error: 'params must be an object' })
+      return
+    }
+
+    // Validate database target
+    if (!VALID_DATABASES.includes(database as DatabaseTarget)) {
+      res.status(400).json({ error: `database must be one of: ${VALID_DATABASES.join(', ')}` })
       return
     }
 
@@ -78,9 +87,9 @@ router.post('/', async (req: Request, res: Response) => {
 
     // Truncate SQL for audit log (keep first 200 chars)
     const sqlPreview = sqlText.trim().substring(0, 200)
-    auditEntry = logOperationStart('rawQuery', { sqlPreview, ...params }, req)
+    auditEntry = logOperationStart('rawQuery', { sqlPreview, database, ...params }, req)
 
-    const db = await getPool()
+    const db = database === 'kdw' ? await getKdwPool() : await getPool()
     const request = db.request()
 
     // Bind parameters
