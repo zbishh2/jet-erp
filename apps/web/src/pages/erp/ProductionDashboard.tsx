@@ -99,7 +99,7 @@ function usePersistedState<T>(key: string, defaultValue: T): [T, (val: T | ((pre
   return [value, setPersisted]
 }
 
-type TimePeriod = "ytd" | "last-year" | "this-month" | "custom"
+type TimePeriod = "ytd" | "last-year" | "this-month" | "custom" | "last-4w" | "last-12w" | "last-26w" | "weeks-ytd"
 
 function formatNumber(value: number, decimals = 0): string {
   return new Intl.NumberFormat("en-US", {
@@ -110,6 +110,16 @@ function formatNumber(value: number, decimals = 0): string {
 
 function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`
+}
+
+function alignToMonday(date: Date): Date {
+  const d = new Date(date)
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+  return d
+}
+
+function fmtDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
 function getDateRange(period: TimePeriod, year: number): { startDate: string; endDate: string } {
@@ -139,6 +149,24 @@ function getDateRange(period: TimePeriod, year: number): { startDate: string; en
         startDate: `${year}-01-01`,
         endDate: `${year + 1}-01-01`,
       }
+    case "last-4w":
+    case "last-12w":
+    case "last-26w":
+    case "weeks-ytd": {
+      const today = new Date()
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      const end = fmtDate(tomorrow)
+      const monday = alignToMonday(today)
+      if (period === "weeks-ytd") {
+        const jan1 = new Date(today.getFullYear(), 0, 1)
+        return { startDate: fmtDate(alignToMonday(jan1)), endDate: end }
+      }
+      const offset = period === "last-4w" ? 28 : period === "last-12w" ? 84 : 182
+      const start = new Date(monday)
+      start.setDate(start.getDate() - offset)
+      return { startDate: fmtDate(start), endDate: end }
+    }
   }
 }
 
@@ -240,6 +268,18 @@ export default function ProductionDashboard() {
     setSpeedSpecSearch("")
     setSpeedJobSearch("")
   }, [period, year, granularity, machineFilter, shiftFilter, dashboardTab])
+
+  // Switch to weekly presets when granularity is weekly
+  const prevGranularityRef = useRef(granularity)
+  useEffect(() => {
+    if (prevGranularityRef.current === granularity) return
+    prevGranularityRef.current = granularity
+    if (granularity === "weekly") {
+      setPeriod("last-12w")
+    } else {
+      setPeriod("ytd")
+    }
+  }, [granularity, setPeriod])
 
   const { startDate, endDate } = getDateRange(period, year)
 
@@ -1055,10 +1095,21 @@ export default function ProductionDashboard() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ytd">YTD</SelectItem>
-              <SelectItem value="this-month">This Month</SelectItem>
-              <SelectItem value="last-year">Last Year</SelectItem>
-              <SelectItem value="custom">Full Year</SelectItem>
+              {granularity === "weekly" ? (
+                <>
+                  <SelectItem value="last-4w">Last 4W</SelectItem>
+                  <SelectItem value="last-12w">Last 12W</SelectItem>
+                  <SelectItem value="last-26w">Last 26W</SelectItem>
+                  <SelectItem value="weeks-ytd">Weeks YTD</SelectItem>
+                </>
+              ) : (
+                <>
+                  <SelectItem value="ytd">YTD</SelectItem>
+                  <SelectItem value="this-month">This Month</SelectItem>
+                  <SelectItem value="last-year">Last Year</SelectItem>
+                  <SelectItem value="custom">Full Year</SelectItem>
+                </>
+              )}
             </SelectContent>
           </Select>
 

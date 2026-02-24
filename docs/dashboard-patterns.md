@@ -705,6 +705,117 @@ The `<Table>` component (`components/ui/table.tsx`) wraps `<table>` in a `<div c
 <TableRow className={repFilter !== "all" && r.repName !== repFilter ? "opacity-40" : ""}>
 ```
 
+### Group-by dimension toggles
+
+Allow users to collapse detail rows by toggling dimension columns on/off. When a dimension is removed, rows that share the same remaining dimension values are aggregated.
+
+#### State
+
+```tsx
+const [groupByDims, setGroupByDims] = usePersistedState<string[]>(
+  "groupByDims",
+  ["feedbackDate", "jobNumber", "customerName", "specNumber", "lineNumber"]
+)
+
+const groupByDimOptions: [string, string][] = [
+  ["feedbackDate", "Date"],
+  ["jobNumber", "Job #"],
+  ["customerName", "Customer"],
+  ["specNumber", "Spec"],
+  ["lineNumber", "Line"],
+]
+
+const dimLabels: Record<string, string> = {
+  feedbackDate: "Feedback Date",
+  jobNumber: "Job Number",
+  customerName: "Customer Name",
+  specNumber: "Spec",
+  lineNumber: "Line Number",
+}
+```
+
+#### Toggle UI (in card header)
+
+```tsx
+<CardHeader className="pb-2">
+  <div className="flex items-center justify-between flex-wrap gap-2">
+    <CardTitle className="text-base">Detail</CardTitle>
+    <div className="flex items-center gap-1">
+      <span className="text-xs text-muted-foreground mr-1">Group by:</span>
+      {groupByDimOptions.map(([dim, label]) => (
+        <Button
+          key={dim}
+          variant={groupByDims.includes(dim) ? "default" : "outline"}
+          size="sm"
+          className="h-6 px-2 text-[11px]"
+          onClick={() => {
+            setGroupByDims((prev) =>
+              prev.includes(dim)
+                ? prev.length > 0 ? prev.filter((d) => d !== dim) : prev
+                : [...prev, dim]
+            )
+          }}
+        >
+          {label}
+        </Button>
+      ))}
+    </div>
+  </div>
+</CardHeader>
+```
+
+#### Aggregation logic
+
+```tsx
+const groupedDetailRows = useMemo(() => {
+  const allDims = groupByDimOptions.map(([d]) => d)
+  const activeDims = allDims.filter((d) => groupByDims.includes(d))
+  if (activeDims.length === allDims.length) return detailRows // no grouping
+
+  const grouped = new Map<string, typeof detailRows[number]>()
+  for (const row of detailRows) {
+    const key = activeDims.map((d) =>
+      d === "feedbackDate" ? row.feedbackDate : (row as any)[d]
+    ).join("|")
+    const existing = grouped.get(key)
+    if (!existing) {
+      grouped.set(key, {
+        ...row,
+        // Blank out inactive dims
+        ...Object.fromEntries(allDims.filter(d => !activeDims.includes(d)).map(d => [d, ""])),
+      })
+    } else {
+      // Sum additive fields, recompute derived fields
+      existing.additiveField += row.additiveField
+      existing.derivedField = /* recompute from sums */
+    }
+  }
+  return [...grouped.values()]
+}, [detailRows, groupByDims])
+```
+
+Key rules:
+- **Short-circuit**: if all dims are active, return raw `detailRows` (no grouping overhead)
+- **Group key**: pipe-join values of active dims only
+- **First-seen row**: copy row, blank inactive dim fields to `""`
+- **Subsequent rows**: sum additive fields, recompute derived ratios from running sums
+- **Sort `groupedDetailRows`**, not raw `detailRows`
+
+#### Dynamic columns
+
+Only render `<TableHead>` and `<TableCell>` for active dims:
+
+```tsx
+{groupByDimOptions.map(([dim]) =>
+  groupByDims.includes(dim) ? (
+    <TableHead key={dim} ...>{dimLabels[dim]}</TableHead>
+  ) : null
+)}
+{/* Metric columns always shown */}
+```
+
+Totals row uses `colSpan={groupByDims.length}` instead of a fixed number.
+
 ---
 
 ## State Management

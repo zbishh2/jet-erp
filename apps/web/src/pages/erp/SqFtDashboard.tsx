@@ -49,7 +49,7 @@ import {
 } from "@/api/hooks/useSqFtDashboard"
 import type { SqFtGranularity } from "@/api/hooks/useSqFtDashboard"
 
-type TimeWindow = "all-time" | "last-qtr" | "last-year" | "qtd" | "ytd"
+type TimeWindow = "all-time" | "last-qtr" | "last-year" | "qtd" | "ytd" | "last-4w" | "last-12w" | "last-26w" | "weeks-ytd"
 type SqFtChartTab = "calendar" | "area"
 type AreaMetric = "sqFtPerOrderHour" | "sqFtEntry"
 
@@ -121,6 +121,12 @@ function addDays(date: Date, days: number): Date {
   return d
 }
 
+function alignToMonday(date: Date): Date {
+  const d = new Date(date)
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+  return d
+}
+
 function parseISODate(value: string): Date {
   const [y, m, d] = value.split("-").map(Number)
   return new Date(y, (m || 1) - 1, d || 1)
@@ -135,6 +141,15 @@ function startOfQuarter(date: Date): Date {
 function getTimeWindowRange(window: TimeWindow, minDate?: string | null, maxDate?: string | null): { startDate: string; endDate: string } {
   const now = new Date()
   const dataEndExclusive = maxDate ? formatDateISO(addDays(parseISODate(maxDate), 1)) : formatDateISO(addDays(now, 1))
+
+  if (window === "last-4w" || window === "last-12w" || window === "last-26w" || window === "weeks-ytd") {
+    const thisMonday = alignToMonday(now)
+    if (window === "last-4w") return { startDate: formatDateISO(addDays(thisMonday, -28)), endDate: dataEndExclusive }
+    if (window === "last-12w") return { startDate: formatDateISO(addDays(thisMonday, -84)), endDate: dataEndExclusive }
+    if (window === "last-26w") return { startDate: formatDateISO(addDays(thisMonday, -182)), endDate: dataEndExclusive }
+    const jan1 = new Date(now.getFullYear(), 0, 1)
+    return { startDate: formatDateISO(alignToMonday(jan1)), endDate: dataEndExclusive }
+  }
 
   if (window === "all-time") {
     return {
@@ -344,6 +359,19 @@ export default function SqFtDashboard() {
   const [tableSort, setTableSort] = usePersistedState<{ key: string; dir: "asc" | "desc" }>("tableSort", { key: "feedbackDate", dir: "desc" })
   const [groupByDims, setGroupByDims] = usePersistedState<string[]>("groupByDims", ["feedbackDate", "jobNumber", "customerName", "specNumber", "lineNumber"])
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null)
+
+  // Switch to weekly presets when granularity is weekly
+  const prevGranularityRef = useRef(granularity)
+  useEffect(() => {
+    if (prevGranularityRef.current === granularity) return
+    prevGranularityRef.current = granularity
+    if (granularity === "weekly") {
+      setTimeWindow("last-12w")
+    } else {
+      setTimeWindow("ytd")
+    }
+  }, [granularity, setTimeWindow])
+
   const [calendarMonth, setCalendarMonth] = usePersistedState<string>(
     "calendarMonth",
     `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`
@@ -377,7 +405,7 @@ export default function SqFtDashboard() {
   }, [timeWindow, lineFilter, customerFilter, specFilter, granularity, calendarMonth])
 
   const summaryQuery = useSqFtSummary(startDate, endDate, granularity, activeLine, activeCustomer, activeSpec)
-  const byLineQuery = useSqFtByLine(startDate, endDate, activeLine, activeCustomer, activeSpec)
+  const byLineQuery = useSqFtByLine(startDate, endDate, undefined, activeCustomer, activeSpec)
   const detailsQuery = useSqFtDetails(detailStart, detailEnd, activeLine, activeCustomer, activeSpec)
   const filterOptionsQuery = useSqFtFilterOptions(startDate, endDate, activeLine, activeCustomer, activeSpec)
 
@@ -668,13 +696,18 @@ export default function SqFtDashboard() {
         <span className="text-sm font-medium">Sq Ft Dashboard</span>
 
         <div className="flex items-center gap-1 ml-2">
-          {[
+          {(granularity === "weekly" ? [
+            { key: "last-4w", label: "Last 4W" },
+            { key: "last-12w", label: "Last 12W" },
+            { key: "last-26w", label: "Last 26W" },
+            { key: "weeks-ytd", label: "Weeks YTD" },
+          ] : [
             { key: "all-time", label: "All Time" },
             { key: "last-qtr", label: "Last Qtr" },
             { key: "last-year", label: "Last Year" },
             { key: "qtd", label: "QTD" },
             { key: "ytd", label: "YTD" },
-          ].map((option) => (
+          ]).map((option) => (
             <Button
               key={option.key}
               variant={timeWindow === option.key ? "default" : "outline"}

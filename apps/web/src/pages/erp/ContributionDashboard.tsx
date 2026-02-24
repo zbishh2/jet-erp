@@ -49,7 +49,7 @@ import {
 } from "@/api/hooks/useContributionDashboard"
 import type { ContributionGranularity } from "@/api/hooks/useContributionDashboard"
 
-type TimeWindow = "all-time" | "last-qtr" | "last-year" | "qtd" | "ytd"
+type TimeWindow = "all-time" | "last-qtr" | "last-year" | "qtd" | "ytd" | "last-4w" | "last-12w" | "last-26w" | "weeks-ytd"
 type ContributionChartTab = "contributionPerOrderHour" | "contribution"
 
 interface KpiCardProps {
@@ -133,6 +133,12 @@ function addDays(date: Date, days: number): Date {
   return d
 }
 
+function alignToMonday(date: Date): Date {
+  const d = new Date(date)
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+  return d
+}
+
 function parseISODate(value: string): Date {
   const [y, m, d] = value.split("-").map(Number)
   return new Date(y, (m || 1) - 1, d || 1)
@@ -150,6 +156,15 @@ function getTimeWindowRange(window: TimeWindow, minDate?: string | null, maxDate
   const anchorDate = maxDataDate && maxDataDate <= now ? maxDataDate : now
   const dataEndExclusive = maxDate ? formatDateISO(addDays(parseISODate(maxDate), 1)) : formatDateISO(addDays(now, 1))
   const anchorYear = anchorDate.getFullYear()
+
+  if (window === "last-4w" || window === "last-12w" || window === "last-26w" || window === "weeks-ytd") {
+    const thisMonday = alignToMonday(now)
+    if (window === "last-4w") return { startDate: formatDateISO(addDays(thisMonday, -28)), endDate: dataEndExclusive }
+    if (window === "last-12w") return { startDate: formatDateISO(addDays(thisMonday, -84)), endDate: dataEndExclusive }
+    if (window === "last-26w") return { startDate: formatDateISO(addDays(thisMonday, -182)), endDate: dataEndExclusive }
+    const jan1 = new Date(now.getFullYear(), 0, 1)
+    return { startDate: formatDateISO(alignToMonday(jan1)), endDate: dataEndExclusive }
+  }
 
   if (window === "all-time") {
     return {
@@ -277,7 +292,20 @@ export default function ContributionDashboard() {
   const [specFilter, setSpecFilter] = usePersistedState<string>("specFilter", "all")
   const [granularity, setGranularity] = usePersistedState<ContributionGranularity>("granularity", "weekly")
   const [tableSort, setTableSort] = usePersistedState<{ key: string; dir: "asc" | "desc" }>("tableSort", { key: "feedbackDate", dir: "desc" })
+  const [groupByDims, setGroupByDims] = usePersistedState<string[]>("groupByDims", ["feedbackDate", "jobNumber", "customerName", "specNumber", "lineNumber"])
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null)
+
+  // Switch to weekly presets when granularity is weekly
+  const prevGranularityRef = useRef(granularity)
+  useEffect(() => {
+    if (prevGranularityRef.current === granularity) return
+    prevGranularityRef.current = granularity
+    if (granularity === "weekly") {
+      setTimeWindow("last-12w")
+    } else {
+      setTimeWindow("ytd")
+    }
+  }, [granularity, setTimeWindow])
 
   const dateLimits = useContributionDateLimits()
   const limits = dateLimits.data?.data?.[0]
@@ -317,7 +345,7 @@ export default function ContributionDashboard() {
   }, [timeWindow, lineFilter, customerFilter, specFilter, granularity])
 
   const summaryQuery = useContributionSummary(startDate, endDate, granularity, activeLine, activeCustomer, activeSpec)
-  const byLineQuery = useContributionByLine(startDate, endDate, activeLine, activeCustomer, activeSpec)
+  const byLineQuery = useContributionByLine(startDate, endDate, undefined, activeCustomer, activeSpec)
   const detailsQuery = useContributionDetails(detailStart, detailEnd, activeLine, activeCustomer, activeSpec)
   const filterOptionsQuery = useContributionFilterOptions(startDate, endDate, activeLine, activeCustomer, activeSpec)
 
@@ -373,6 +401,22 @@ export default function ContributionDashboard() {
       })
   }, [byLineData])
 
+  const groupByDimOptions: [string, string][] = [
+    ["feedbackDate", "Date"],
+    ["jobNumber", "Job #"],
+    ["customerName", "Customer"],
+    ["specNumber", "Spec"],
+    ["lineNumber", "Line"],
+  ]
+
+  const dimLabels: Record<string, string> = {
+    feedbackDate: "Feedback Date",
+    jobNumber: "Job Number",
+    customerName: "Customer Name",
+    specNumber: "Spec",
+    lineNumber: "Line Number",
+  }
+
   const detailRows = useMemo(() => {
     return detailData.map((row) => {
       const calculatedValue = toNumber(row.calculatedValue)
@@ -399,8 +443,47 @@ export default function ContributionDashboard() {
     })
   }, [detailData])
 
+  const groupedDetailRows = useMemo(() => {
+    const allDims = groupByDimOptions.map(([d]) => d)
+    const activeDims = allDims.filter((d) => groupByDims.includes(d))
+    if (activeDims.length === allDims.length) return detailRows
+
+    const grouped = new Map<string, typeof detailRows[number]>()
+    for (const row of detailRows) {
+      const keyParts = activeDims.map((d) => {
+        if (d === "feedbackDate") return row.feedbackDate
+        return (row as unknown as Record<string, unknown>)[d] as string
+      })
+      const key = keyParts.join("|")
+      const existing = grouped.get(key)
+      if (!existing) {
+        grouped.set(key, {
+          ...row,
+          feedbackDate:     activeDims.includes("feedbackDate")   ? row.feedbackDate     : "",
+          feedbackDateSort: activeDims.includes("feedbackDate")   ? row.feedbackDateSort : "",
+          jobNumber:        activeDims.includes("jobNumber")      ? row.jobNumber        : "",
+          customerName:     activeDims.includes("customerName")   ? row.customerName     : "",
+          specNumber:       activeDims.includes("specNumber")     ? row.specNumber       : "",
+          lineNumber:       activeDims.includes("lineNumber")     ? row.lineNumber       : "",
+        })
+      } else {
+        existing.calculatedValue  += row.calculatedValue
+        existing.estimatedFullCost += row.estimatedFullCost
+        existing.contribution     += row.contribution
+        existing.orderHours       += row.orderHours
+        existing.contributionPerOrderHour = existing.orderHours > 0
+          ? existing.contribution / existing.orderHours
+          : null
+        existing.contributionPct = existing.calculatedValue > 0
+          ? existing.contribution / existing.calculatedValue
+          : null
+      }
+    }
+    return [...grouped.values()]
+  }, [detailRows, groupByDims])
+
   const sortedDetailRows = useMemo(() => {
-    const data = [...detailRows]
+    const data = [...groupedDetailRows]
     const key = tableSort.key as keyof (typeof data)[number]
     data.sort((a, b) => {
       const aVal = key === "feedbackDate" ? a.feedbackDateSort : a[key]
@@ -418,7 +501,7 @@ export default function ContributionDashboard() {
       return tableSort.dir === "asc" ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr)
     })
     return data
-  }, [detailRows, tableSort])
+  }, [groupedDetailRows, tableSort])
 
   const kpis = useMemo(() => {
     const rows = selectedPeriod
@@ -487,8 +570,9 @@ export default function ContributionDashboard() {
     setCustomerFilter("all")
     setSpecFilter("all")
     setTableSort({ key: "feedbackDate", dir: "desc" })
+    setGroupByDims(["feedbackDate", "jobNumber", "customerName", "specNumber", "lineNumber"])
     setSelectedPeriod(null)
-  }, [setCustomerFilter, setGranularity, setLineFilter, setSpecFilter, setTableSort, setTimeWindow])
+  }, [setCustomerFilter, setGranularity, setGroupByDims, setLineFilter, setSpecFilter, setTableSort, setTimeWindow])
 
   const maxVisiblePoints = 16
   const needsScroll = chartData.length > maxVisiblePoints
@@ -543,13 +627,18 @@ export default function ContributionDashboard() {
         <span className="text-sm font-medium">Contribution Dashboard</span>
 
         <div className="flex items-center gap-1 ml-2">
-          {[
+          {(granularity === "weekly" ? [
+            { key: "last-4w", label: "Last 4W" },
+            { key: "last-12w", label: "Last 12W" },
+            { key: "last-26w", label: "Last 26W" },
+            { key: "weeks-ytd", label: "Weeks YTD" },
+          ] : [
             { key: "all-time", label: "All Time" },
             { key: "last-qtr", label: "Last Qtr" },
             { key: "last-year", label: "Last Year" },
             { key: "qtd", label: "QTD" },
             { key: "ytd", label: "YTD" },
-          ].map((option) => (
+          ]).map((option) => (
             <Button
               key={option.key}
               variant={timeWindow === option.key ? "default" : "outline"}
@@ -840,28 +929,42 @@ export default function ContributionDashboard() {
 
       <Card className="bg-background-secondary">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Contribution Detail</CardTitle>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-base">Contribution Detail</CardTitle>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground mr-1">Group by:</span>
+              {groupByDimOptions.map(([dim, label]) => (
+                <Button
+                  key={dim}
+                  variant={groupByDims.includes(dim) ? "default" : "outline"}
+                  size="sm"
+                  className="h-6 px-2 text-[11px]"
+                  onClick={() => {
+                    setGroupByDims((prev) =>
+                      prev.includes(dim)
+                        ? prev.length > 0 ? prev.filter((d) => d !== dim) : prev
+                        : [...prev, dim]
+                    )
+                  }}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="relative overflow-x-auto max-h-[400px] overflow-y-auto [&_td]:py-1.5 [&_th]:py-1.5">
             <Table>
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-[var(--color-bg-secondary)]">
                 <TableRow>
-                  <TableHead className="cursor-pointer hover:text-foreground" onClick={() => handleSort("feedbackDate")}>
-                    Feedback Date {tableSort.key === "feedbackDate" && (tableSort.dir === "asc" ? "^" : "v")}
-                  </TableHead>
-                  <TableHead className="cursor-pointer hover:text-foreground" onClick={() => handleSort("jobNumber")}>
-                    Job Number {tableSort.key === "jobNumber" && (tableSort.dir === "asc" ? "^" : "v")}
-                  </TableHead>
-                  <TableHead className="cursor-pointer hover:text-foreground" onClick={() => handleSort("customerName")}>
-                    Customer Name {tableSort.key === "customerName" && (tableSort.dir === "asc" ? "^" : "v")}
-                  </TableHead>
-                  <TableHead className="cursor-pointer hover:text-foreground" onClick={() => handleSort("specNumber")}>
-                    Spec {tableSort.key === "specNumber" && (tableSort.dir === "asc" ? "^" : "v")}
-                  </TableHead>
-                  <TableHead className="cursor-pointer hover:text-foreground" onClick={() => handleSort("lineNumber")}>
-                    Line Number {tableSort.key === "lineNumber" && (tableSort.dir === "asc" ? "^" : "v")}
-                  </TableHead>
+                  {groupByDimOptions.map(([dim]) =>
+                    groupByDims.includes(dim) ? (
+                      <TableHead key={dim} className="cursor-pointer hover:text-foreground" onClick={() => handleSort(dim)}>
+                        {dimLabels[dim]} {tableSort.key === dim && (tableSort.dir === "asc" ? "^" : "v")}
+                      </TableHead>
+                    ) : null
+                  )}
                   <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("calculatedValue")}>
                     Value {tableSort.key === "calculatedValue" && (tableSort.dir === "asc" ? "^" : "v")}
                   </TableHead>
@@ -885,11 +988,11 @@ export default function ContributionDashboard() {
               <TableBody>
                 {sortedDetailRows.map((row, idx) => (
                   <TableRow key={`${row.feedbackDate}-${row.jobNumber}-${row.lineNumber}-${idx}`}>
-                    <TableCell className="font-medium">{row.feedbackDate}</TableCell>
-                    <TableCell>{row.jobNumber}</TableCell>
-                    <TableCell className="max-w-[220px] truncate">{row.customerName}</TableCell>
-                    <TableCell>{row.specNumber}</TableCell>
-                    <TableCell>{row.lineNumber}</TableCell>
+                    {groupByDims.includes("feedbackDate") && <TableCell className="font-medium">{row.feedbackDate}</TableCell>}
+                    {groupByDims.includes("jobNumber") && <TableCell>{row.jobNumber}</TableCell>}
+                    {groupByDims.includes("customerName") && <TableCell className="max-w-[220px] truncate">{row.customerName}</TableCell>}
+                    {groupByDims.includes("specNumber") && <TableCell>{row.specNumber}</TableCell>}
+                    {groupByDims.includes("lineNumber") && <TableCell>{row.lineNumber}</TableCell>}
                     <TableCell className="text-right">{formatCurrency(row.calculatedValue, 0)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(row.estimatedFullCost, 0)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(row.contribution, 0)}</TableCell>
@@ -904,14 +1007,14 @@ export default function ContributionDashboard() {
                 ))}
                 {sortedDetailRows.length === 0 && !isLoading && (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={groupByDims.length + 6} className="text-center text-muted-foreground py-8">
                       No contribution detail rows for this selection
                     </TableCell>
                   </TableRow>
                 )}
                 {sortedDetailRows.length > 0 && (
                   <TableRow className="font-semibold border-t">
-                    <TableCell colSpan={5}>Total</TableCell>
+                    <TableCell colSpan={groupByDims.length}>Total</TableCell>
                     <TableCell className="text-right">{formatCurrency(detailTotals.calculatedValue, 0)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(detailTotals.estimatedFullCost, 0)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(detailTotals.contribution, 0)}</TableCell>

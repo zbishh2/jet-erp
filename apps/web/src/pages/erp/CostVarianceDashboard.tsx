@@ -51,7 +51,7 @@ import {
 import type { CostVarianceGranularity } from "@/api/hooks/useCostVarianceDashboard"
 
 type DataSource = "production" | "invoice"
-type TimeWindow = "last-7" | "last-14" | "last-30" | "mtd" | "qtd" | "ytd"
+type TimeWindow = "last-7" | "last-14" | "last-30" | "mtd" | "qtd" | "ytd" | "last-4w" | "last-12w" | "last-26w" | "weeks-ytd"
 type ChartTab = "calendar" | "area"
 type CostType = "full" | "material" | "labor" | "freight" | "hours-order" | "hours-uptime"
 type DetailTab = "costs" | "hours"
@@ -135,6 +135,12 @@ function addDays(date: Date, days: number): Date {
   return d
 }
 
+function alignToMonday(date: Date): Date {
+  const d = new Date(date)
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+  return d
+}
+
 function parseISODate(value: string): Date {
   const [y, m, d] = value.split("-").map(Number)
   return new Date(y, (m || 1) - 1, d || 1)
@@ -149,6 +155,14 @@ function startOfQuarter(date: Date): Date {
 function getTimeWindowRange(window: TimeWindow, _minDate?: string | null, maxDate?: string | null): { startDate: string; endDate: string } {
   const now = new Date()
   const dataEndExclusive = maxDate ? formatDateISO(addDays(parseISODate(maxDate), 1)) : formatDateISO(addDays(now, 1))
+  if (window === "last-4w" || window === "last-12w" || window === "last-26w" || window === "weeks-ytd") {
+    const thisMonday = alignToMonday(now)
+    if (window === "last-4w") return { startDate: formatDateISO(addDays(thisMonday, -28)), endDate: dataEndExclusive }
+    if (window === "last-12w") return { startDate: formatDateISO(addDays(thisMonday, -84)), endDate: dataEndExclusive }
+    if (window === "last-26w") return { startDate: formatDateISO(addDays(thisMonday, -182)), endDate: dataEndExclusive }
+    const jan1 = new Date(now.getFullYear(), 0, 1)
+    return { startDate: formatDateISO(alignToMonday(jan1)), endDate: dataEndExclusive }
+  }
   if (window === "last-7") return { startDate: formatDateISO(addDays(now, -7)), endDate: dataEndExclusive }
   if (window === "last-14") return { startDate: formatDateISO(addDays(now, -14)), endDate: dataEndExclusive }
   if (window === "last-30") return { startDate: formatDateISO(addDays(now, -30)), endDate: dataEndExclusive }
@@ -369,6 +383,19 @@ export default function CostVarianceDashboard() {
   const [tableSort, setTableSort] = usePersistedState<{ key: string; dir: "asc" | "desc" }>(cfg.storagePrefix, "tableSort", { key: cfg.defaultSortKey, dir: "desc" })
   const [groupByDims, setGroupByDims] = usePersistedState<string[]>(cfg.storagePrefix, "groupByDims", cfg.defaultGroupByDims)
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null)
+
+  // Switch to weekly presets when granularity is weekly
+  const prevGranularityRef = useRef(granularity)
+  useEffect(() => {
+    if (prevGranularityRef.current === granularity) return
+    prevGranularityRef.current = granularity
+    if (granularity === "weekly") {
+      setTimeWindow("last-12w")
+    } else {
+      setTimeWindow("last-7")
+    }
+  }, [granularity, setTimeWindow])
+
   const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix, "detailTab", "costs")
   const [hoursSort, setHoursSort] = usePersistedState<{ key: string; dir: "asc" | "desc" }>(cfg.storagePrefix, "hoursSort", { key: cfg.defaultSortKey, dir: "desc" })
   const [calendarMonth, setCalendarMonth] = usePersistedState<string>(
@@ -783,14 +810,19 @@ export default function CostVarianceDashboard() {
         <span className="mx-1 text-border">|</span>
 
         <div className="flex items-center gap-1">
-          {[
+          {(granularity === "weekly" ? [
+            { key: "last-4w", label: "Last 4W" },
+            { key: "last-12w", label: "Last 12W" },
+            { key: "last-26w", label: "Last 26W" },
+            { key: "weeks-ytd", label: "Weeks YTD" },
+          ] : [
             { key: "last-7", label: "Last 7 Days" },
             { key: "last-14", label: "Last 14 Days" },
             { key: "last-30", label: "Last 30 Days" },
             { key: "mtd", label: "MTD" },
             { key: "qtd", label: "QTD" },
             { key: "ytd", label: "YTD" },
-          ].map((option) => (
+          ]).map((option) => (
             <Button
               key={option.key}
               variant={timeWindow === option.key ? "default" : "outline"}
