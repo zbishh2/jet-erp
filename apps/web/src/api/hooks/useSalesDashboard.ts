@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { apiFetch } from "@/api/client"
 
-export type Granularity = "monthly" | "weekly" | "yearly"
+export type Granularity = "daily" | "monthly" | "weekly" | "yearly"
 
 export interface SalesSummary {
   period: string
@@ -72,6 +72,28 @@ export function useSalesByCustomer(startDate: string, endDate: string, limit = 5
     queryFn: () => {
       const params = new URLSearchParams({ startDate, endDate, limit: String(limit) })
       return apiFetch<{ data: SalesByCustomer[] }>(`/erp/sales/by-customer?${params}`)
+    },
+    enabled: !!startDate && !!endDate,
+    staleTime: 1000 * 60 * 5,
+  })
+}
+
+export interface SalesDetailRow {
+  invoiceDate: string
+  invoiceNumber: string
+  customerName: string
+  repName: string | null
+  totalSales: number
+  totalMSF: number
+  totalCost: number
+}
+
+export function useSalesDetail(startDate: string, endDate: string) {
+  return useQuery({
+    queryKey: ["sales", "detail", startDate, endDate],
+    queryFn: () => {
+      const params = new URLSearchParams({ startDate, endDate })
+      return apiFetch<{ data: SalesDetailRow[] }>(`/erp/sales/detail?${params}`)
     },
     enabled: !!startDate && !!endDate,
     staleTime: 1000 * 60 * 5,

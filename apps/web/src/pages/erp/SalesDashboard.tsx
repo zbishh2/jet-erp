@@ -45,16 +45,18 @@ import {
   TrendingDown,
   RotateCcw,
   Info,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import {
   useSalesSummary,
   useSalesByRep,
-  useSalesByCustomer,
+  useSalesDetail,
   useSalesReps,
   useSalesBudgets,
   useHolidays,
 } from "@/api/hooks/useSalesDashboard"
-import type { SalesByCustomer, SalesByRep, Granularity } from "@/api/hooks/useSalesDashboard"
+import type { SalesDetailRow, Granularity } from "@/api/hooks/useSalesDashboard"
 
 function usePersistedState<T>(key: string, defaultValue: T): [T, (val: T | ((prev: T) => T)) => void] {
   const storageKey = `sales-dash:${key}`
@@ -148,7 +150,7 @@ function getDateRange(period: TimePeriod, year: number): { startDate: string; en
 
 function getPeriodLabel(period: string, granularity: string): string {
   if (granularity === "yearly") return period // "2025"
-  if (granularity === "weekly") {
+  if (granularity === "daily" || granularity === "weekly") {
     // period is "2025-03-10" → "3/10"
     const [, mm, dd] = period.split("-")
     return `${parseInt(mm, 10)}/${parseInt(dd, 10)}`
@@ -210,15 +212,25 @@ export default function SalesDashboard() {
   const [year, setYear] = usePersistedState<number>("year", currentYear)
   const [quarter, setQuarter] = usePersistedState<Quarter>("quarter", "all")
   const [repFilter, setRepFilter] = usePersistedState<string>("repFilter", "all")
-  const [customerSort, setCustomerSort] = usePersistedState<{ key: string; dir: "asc" | "desc" }>("customerSort", { key: "totalSales", dir: "desc" })
   const [chartMode, setChartMode] = usePersistedState<"budget" | "yoy">("chartMode", "budget")
   const [granularity, setGranularity] = usePersistedState<Granularity>("granularity", "monthly")
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
+  const [budgetMonth, setBudgetMonth] = useState<string>(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+  })
 
   // Clear selected month when major filters change so it doesn't go stale
   useEffect(() => {
     setSelectedMonth(null)
   }, [period, year, quarter, granularity])
+
+  // Keep budgetMonth in sync with selected year
+  useEffect(() => {
+    const now = new Date()
+    const m = year === now.getFullYear() ? now.getMonth() + 1 : 1
+    setBudgetMonth(`${year}-${String(m).padStart(2, "0")}`)
+  }, [year])
 
   const { startDate, endDate } = getDateRange(period, year)
   const budgetYear = period === "last-year" ? String(year - 1) : String(year)
@@ -245,6 +257,13 @@ export default function SalesDashboard() {
     if (granularity === "yearly") {
       return [`${selectedMonth}-01-01`, `${parseInt(selectedMonth) + 1}-01-01`]
     }
+    if (granularity === "daily") {
+      // selectedMonth is a date like "2026-01-15", range is that single day
+      const d = new Date(selectedMonth)
+      const end = new Date(d)
+      end.setDate(end.getDate() + 1)
+      return [d.toISOString().slice(0, 10), end.toISOString().slice(0, 10)]
+    }
     if (granularity === "weekly") {
       // selectedMonth is a Monday like "2026-01-05", range is that week
       const d = new Date(selectedMonth)
@@ -262,7 +281,7 @@ export default function SalesDashboard() {
   const summaryQuery = useSalesSummary(summaryStart, summaryEnd, granularity, activeRep)
   const priorYearQuery = useSalesSummary(priorYearStart, priorYearEnd, granularity, activeRep)
   const byRepQuery = useSalesByRep(detailStart, detailEnd)
-  const byCustomerQuery = useSalesByCustomer(detailStart, detailEnd, 9999)
+  const salesDetailQuery = useSalesDetail(detailStart, detailEnd)
   const repsQuery = useSalesReps()
   const budgetsQuery = useSalesBudgets(budgetYear)
   const holidaysQuery = useHolidays(startDate, endDate)
@@ -306,7 +325,7 @@ export default function SalesDashboard() {
     return map
   }, [priorYearData, granularity])
   const repData = byRepQuery.data?.data ?? []
-  const customerData = byCustomerQuery.data?.data ?? []
+  const salesDetailData = salesDetailQuery.data?.data ?? []
   const reps = repsQuery.data?.data ?? []
   const budgets = budgetsQuery.data?.data ?? []
 
@@ -387,6 +406,11 @@ export default function SalesDashboard() {
         const bMonth = b.month.substring(0, 7) // "YYYY-MM"
         if (granularity === "monthly" && bMonth !== selectedMonth) continue
         if (granularity === "yearly" && !bMonth.startsWith(selectedMonth)) continue
+        if (granularity === "daily") {
+          // selectedMonth is a date like "2026-01-15" — only include that month's budget, prorated
+          const dayMonth = selectedMonth.substring(0, 7)
+          if (bMonth !== dayMonth) continue
+        }
         if (granularity === "weekly") {
           // selectedMonth is a Monday date like "2026-01-05" — only include that month's budget, prorated
           const weekMonth = selectedMonth.substring(0, 7)
@@ -644,11 +668,10 @@ export default function SalesDashboard() {
     const remainingSales = budgetDollars - totalSales
     const salesPerDayNeeded = remainingDays > 0 ? Math.max(0, remainingSales / remainingDays) : 0
 
-    // Months elapsed for projected monthly
-    const monthsElapsed = Math.max(1, (elapsed.getFullYear() - wdStart.getFullYear()) * 12 + (elapsed.getMonth() - wdStart.getMonth()) + (elapsed.getDate() > 1 ? 1 : 0))
-    const projectedMonthlySales = totalSales / monthsElapsed
-    const projectedMonthlyCont = contribution / monthsElapsed
-    const projectedMonthlyMSF = totalMSF / monthsElapsed
+    // Projected monthly: sales per day * total work days in period
+    const projectedMonthlySales = daysCompleted > 0 ? (totalSales / daysCompleted) * totalWorkDays : 0
+    const projectedMonthlyCont = daysCompleted > 0 ? (contribution / daysCompleted) * totalWorkDays : 0
+    const projectedMonthlyMSF = daysCompleted > 0 ? (totalMSF / daysCompleted) * totalWorkDays : 0
 
     // Derived per-MSF metrics
     const budgetedPerMSF = budgetMSF > 0 ? budgetDollars / budgetMSF : 0
@@ -683,50 +706,205 @@ export default function SalesDashboard() {
     }
   }, [filteredSummary, summaryData, budgetByPeriod, selectedMonth, detailStart, detailEnd, holidayDates, viewingCurrentYear, granularity, seasonalityIndices])
 
-  // Filter customer data by rep
-  const filteredCustomerData = useMemo(() => {
-    let data = customerData
-    if (repFilter !== "all") {
-      data = data.filter((c) => c.repName === repFilter)
+  // Budget tab KPIs — scoped to budgetMonth, independent of selectedMonth
+  const budgetKpis = useMemo(() => {
+    // Match summary periods that fall within budgetMonth regardless of granularity
+    // monthly: "2026-02" === "2026-02", weekly/daily: "2026-02-03".startsWith("2026-02")
+    const periods = summaryData.filter((m) =>
+      granularity === "monthly" ? m.period === budgetMonth : m.period.startsWith(budgetMonth)
+    )
+    const totalSales = periods.reduce((sum, m) => sum + m.totalSales, 0)
+    const totalMSF = periods.reduce((sum, m) => sum + m.totalMSF, 0)
+    const totalCost = periods.reduce((sum, m) => sum + m.totalCost, 0)
+    const contribution = totalSales - totalCost
+    const salesPerMSF = totalMSF > 0 ? totalSales / totalMSF : 0
+
+    // Build budget from raw budget records (always monthly-keyed, not affected by granularity)
+    let budgetDollars = 0, budgetMSF = 0, budgetContribution = 0
+    for (const b of budgets) {
+      if (b.month.substring(0, 7) !== budgetMonth) continue
+      if (repFilter !== "all" && b.salesRep !== repFilter) continue
+      budgetDollars += b.budgetedDollars
+      budgetMSF += b.budgetedMsf
+      budgetContribution += b.budgetedContribution
     }
-    // Sort
-    const key = customerSort.key as keyof SalesByCustomer
-    return [...data].sort((a, b) => {
-      const aVal = a[key] ?? 0
-      const bVal = b[key] ?? 0
-      if (typeof aVal === "number" && typeof bVal === "number") {
-        return customerSort.dir === "asc" ? aVal - bVal : bVal - aVal
+
+    // Work days for this single month
+    const [bY, bM] = budgetMonth.split("-").map(Number)
+    const monthStart = new Date(bY, bM - 1, 1)
+    const monthEnd = new Date(bY, bM, 1)
+    const today = new Date()
+    const countNetWorkDays = (from: Date, to: Date) => {
+      let count = 0
+      const d = new Date(from)
+      while (d < to) {
+        const day = d.getDay()
+        if (day !== 0 && day !== 6) {
+          const iso = d.toISOString().slice(0, 10)
+          if (!holidayDates.has(iso)) count++
+        }
+        d.setDate(d.getDate() + 1)
       }
-      const aStr = String(aVal)
-      const bStr = String(bVal)
-      return customerSort.dir === "asc" ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr)
-    })
-  }, [customerData, repFilter, customerSort])
+      return count
+    }
+    const totalWorkDays = countNetWorkDays(monthStart, monthEnd)
+    const elapsed = today < monthEnd ? today : monthEnd
+    const daysCompleted = countNetWorkDays(monthStart, elapsed)
+    const salesPerDay = daysCompleted > 0 ? totalSales / daysCompleted : 0
+    const remainingDays = totalWorkDays - daysCompleted
+    const remainingSales = budgetDollars - totalSales
+    const salesPerDayNeeded = remainingDays > 0 ? Math.max(0, remainingSales / remainingDays) : 0
 
-  // Rep table data (sorted)
-  const [repSort, setRepSort] = usePersistedState<{ key: string; dir: "asc" | "desc" }>("repSort", { key: "totalSales", dir: "desc" })
-  const [tableTab, setTableTab] = usePersistedState<"customer" | "rep" | "budget">("tableTab", "customer")
+    const projectedMonthlySales = daysCompleted > 0 ? (totalSales / daysCompleted) * totalWorkDays : 0
+    const projectedMonthlyCont = daysCompleted > 0 ? (contribution / daysCompleted) * totalWorkDays : 0
+    const projectedMonthlyMSF = daysCompleted > 0 ? (totalMSF / daysCompleted) * totalWorkDays : 0
 
-  const sortedRepData = useMemo(() => {
-    const key = repSort.key as keyof SalesByRep
-    return [...repData].sort((a, b) => {
-      const aVal = a[key] ?? 0
-      const bVal = b[key] ?? 0
-      if (typeof aVal === "number" && typeof bVal === "number") {
-        return repSort.dir === "asc" ? aVal - bVal : bVal - aVal
-      }
-      const aStr = String(aVal)
-      const bStr = String(bVal)
-      return repSort.dir === "asc" ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr)
-    })
-  }, [repData, repSort])
+    const budgetedPerMSF = budgetMSF > 0 ? budgetDollars / budgetMSF : 0
+    const budgetedContPerMSF = budgetMSF > 0 ? budgetContribution / budgetMSF : 0
+    const contPerMSF = totalMSF > 0 ? contribution / totalMSF : 0
 
-  const handleRepSort = (key: string) => {
-    setRepSort((prev) => ({
-      key,
-      dir: prev.key === key && prev.dir === "desc" ? "asc" : "desc",
-    }))
+    return {
+      totalSales, totalMSF, contribution, salesPerMSF,
+      budgetDollars, budgetMSF, budgetContribution,
+      toBudgetPct: budgetDollars > 0 ? (totalSales / budgetDollars) * 100 : 0,
+      totalWorkDays, daysCompleted, salesPerDay, salesPerDayNeeded,
+      projectedMonthlySales, projectedMonthlyCont, projectedMonthlyMSF,
+      budgetedPerMSF, budgetedContPerMSF, contPerMSF,
+      contToBudgetPct: budgetContribution > 0 ? (contribution / budgetContribution) * 100 : 0,
+      msfToBudgetPct: budgetMSF > 0 ? (totalMSF / budgetMSF) * 100 : 0,
+      perMsfToBudgetPct: budgetedPerMSF > 0 ? (salesPerMSF / budgetedPerMSF) * 100 : 0,
+      contPerMsfToBudgetPct: budgetedContPerMSF > 0 ? (contPerMSF / budgetedContPerMSF) * 100 : 0,
+    }
+  }, [summaryData, budgets, repFilter, granularity, budgetMonth, holidayDates])
+
+  // Detail table state
+  const [detailTab, setDetailTab] = usePersistedState<"detail" | "budget">("detailTab", "detail")
+  const [detailSort, setDetailSort] = usePersistedState<{ key: string; dir: "asc" | "desc" }>("detailSort", { key: "invoiceDate", dir: "desc" })
+  const groupByDimOptions = [
+    ["invoiceDate", "Date"],
+    ["customerName", "Customer"],
+    ["repName", "Rep"],
+    ["invoiceNumber", "Invoice #"],
+  ] as const
+  const [groupByDims, setGroupByDims] = usePersistedState<string[]>("groupByDims", ["invoiceDate", "customerName", "repName", "invoiceNumber"])
+
+  // Detail date helpers
+  function parseSalesDate(value: string): Date | null {
+    const raw = value.trim()
+    if (!raw) return null
+    const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (isoMatch) return new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]))
+    const slashMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+    if (slashMatch) {
+      const yearPart = Number(slashMatch[3])
+      const yr = yearPart < 100 ? 2000 + yearPart : yearPart
+      return new Date(yr, Number(slashMatch[1]) - 1, Number(slashMatch[2]))
+    }
+    const parsed = new Date(raw)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
   }
+
+  function formatSalesDate(value: string): string {
+    const parsed = parseSalesDate(value)
+    if (!parsed) return value
+    return new Intl.DateTimeFormat("en-US", { month: "numeric", day: "numeric", year: "2-digit" }).format(parsed)
+  }
+
+  function getSalesDateSortKey(value: string): string {
+    const parsed = parseSalesDate(value)
+    return parsed ? parsed.toISOString().slice(0, 10) : value
+  }
+
+  // Normalize detail rows
+  const detailRows = useMemo(() => {
+    let data = salesDetailData as SalesDetailRow[]
+    if (repFilter !== "all") {
+      data = data.filter((r) => r.repName === repFilter)
+    }
+    return data.map((row) => {
+      const contribution = row.totalSales - row.totalCost
+      const salesPerMSF = row.totalMSF > 0 ? row.totalSales / row.totalMSF : 0
+      const contPct = row.totalSales > 0 ? (contribution / row.totalSales) * 100 : 0
+      return {
+        invoiceDate: formatSalesDate(row.invoiceDate),
+        invoiceDateSort: getSalesDateSortKey(row.invoiceDate),
+        customerName: row.customerName,
+        repName: row.repName || "Unassigned",
+        invoiceNumber: row.invoiceNumber,
+        totalSales: row.totalSales,
+        totalMSF: row.totalMSF,
+        totalCost: row.totalCost,
+        salesPerMSF,
+        contribution,
+        contPct,
+      }
+    })
+  }, [salesDetailData, repFilter])
+
+  // Group detail rows by active dims
+  const groupedDetailRows = useMemo(() => {
+    const allDims = groupByDimOptions.map(([d]) => d)
+    const activeDims = allDims.filter((d) => groupByDims.includes(d))
+    if (activeDims.length === allDims.length) return detailRows
+
+    const grouped = new Map<string, typeof detailRows[number]>()
+    for (const row of detailRows) {
+      const keyParts = activeDims.map((d) => {
+        return (row as unknown as Record<string, unknown>)[d] as string
+      })
+      const key = keyParts.join("|")
+      const existing = grouped.get(key)
+      if (!existing) {
+        grouped.set(key, {
+          ...row,
+          invoiceDate: activeDims.includes("invoiceDate") ? row.invoiceDate : "",
+          invoiceDateSort: activeDims.includes("invoiceDate") ? row.invoiceDateSort : "",
+          customerName: activeDims.includes("customerName") ? row.customerName : "",
+          repName: activeDims.includes("repName") ? row.repName : "",
+          invoiceNumber: activeDims.includes("invoiceNumber") ? row.invoiceNumber : "",
+        })
+      } else {
+        existing.totalSales += row.totalSales
+        existing.totalMSF += row.totalMSF
+        existing.totalCost += row.totalCost
+        // Recompute derived fields from sums
+        existing.contribution = existing.totalSales - existing.totalCost
+        existing.salesPerMSF = existing.totalMSF > 0 ? existing.totalSales / existing.totalMSF : 0
+        existing.contPct = existing.totalSales > 0 ? (existing.contribution / existing.totalSales) * 100 : 0
+      }
+    }
+    return [...grouped.values()]
+  }, [detailRows, groupByDims, groupByDimOptions])
+
+  // Sort detail rows
+  const sortedDetailRows = useMemo(() => {
+    const data = [...groupedDetailRows]
+    const isDateSort = detailSort.key === "invoiceDate"
+    data.sort((a, b) => {
+      const aVal = isDateSort ? a.invoiceDateSort : (a as unknown as Record<string, unknown>)[detailSort.key]
+      const bVal = isDateSort ? b.invoiceDateSort : (b as unknown as Record<string, unknown>)[detailSort.key]
+      if (typeof aVal === "number" && typeof bVal === "number") {
+        return detailSort.dir === "asc" ? aVal - bVal : bVal - aVal
+      }
+      const aStr = String(aVal ?? "")
+      const bStr = String(bVal ?? "")
+      return detailSort.dir === "asc" ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr)
+    })
+    return data
+  }, [groupedDetailRows, detailSort])
+
+  // Detail totals
+  const detailTotals = useMemo(() => {
+    const totalSales = detailRows.reduce((s, r) => s + r.totalSales, 0)
+    const totalMSF = detailRows.reduce((s, r) => s + r.totalMSF, 0)
+    const totalCost = detailRows.reduce((s, r) => s + r.totalCost, 0)
+    const contribution = totalSales - totalCost
+    const salesPerMSF = totalMSF > 0 ? totalSales / totalMSF : 0
+    const contPct = totalSales > 0 ? (contribution / totalSales) * 100 : 0
+    return { totalSales, totalMSF, totalCost, salesPerMSF, contribution, contPct }
+  }, [detailRows])
+
+  const detailSortIndicator = (key: string) => detailSort.key === key ? (detailSort.dir === "asc" ? " \u2191" : " \u2193") : ""
 
   // Area chart click handler — toggle period filter
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -742,8 +920,8 @@ export default function SalesDashboard() {
     setSelectedMonth((prev) => (prev === periodKey ? null : periodKey))
   }, [chartData])
 
-  const handleCustomerSort = (key: string) => {
-    setCustomerSort((prev) => ({
+  const handleDetailSort = (key: string) => {
+    setDetailSort((prev) => ({
       key,
       dir: prev.key === key && prev.dir === "desc" ? "asc" : "desc",
     }))
@@ -757,10 +935,10 @@ export default function SalesDashboard() {
     setChartMode("budget")
     setGranularity("monthly")
     setSelectedMonth(null)
-    setCustomerSort({ key: "totalSales", dir: "desc" })
-    setRepSort({ key: "totalSales", dir: "desc" })
-    setTableTab("customer")
-  }, [currentYear, setPeriod, setYear, setQuarter, setRepFilter, setChartMode, setGranularity, setCustomerSort, setRepSort, setTableTab])
+    setDetailSort({ key: "invoiceDate", dir: "desc" })
+    setDetailTab("detail")
+    setGroupByDims(["invoiceDate", "customerName", "repName", "invoiceNumber"])
+  }, [currentYear, setPeriod, setYear, setQuarter, setRepFilter, setChartMode, setGranularity, setDetailSort, setDetailTab, setGroupByDims])
 
   // Rep bar chart data
   const repBarData = useMemo(() => repData.map((r) => ({
@@ -801,7 +979,7 @@ export default function SalesDashboard() {
   // Scrollable chart for weekly view
   const chartScrollRef = useRef<HTMLDivElement>(null)
   const maxVisiblePoints = 16
-  const needsScroll = granularity === "weekly" && chartData.length > maxVisiblePoints
+  const needsScroll = (granularity === "weekly" || granularity === "daily") && chartData.length > maxVisiblePoints
   const chartWidth = needsScroll ? chartData.length * 70 : undefined // 70px per week
 
   // Auto-scroll to the right (most recent) when data changes
@@ -813,7 +991,7 @@ export default function SalesDashboard() {
 
   const chartLoading = summaryQuery.isLoading || priorYearQuery.isLoading || seasonalityY1Query.isLoading || seasonalityY2Query.isLoading
   const repLoading = byRepQuery.isLoading
-  const isLoading = chartLoading || repLoading || byCustomerQuery.isLoading
+  const isLoading = chartLoading || repLoading || salesDetailQuery.isLoading
 
   return (
     <div className="flex-1 overflow-y-auto px-6 pb-6 -mx-6 -mt-6 pt-3 space-y-4">
@@ -965,7 +1143,7 @@ export default function SalesDashboard() {
                     </Button>
                   </div>
                   <div className="flex items-center gap-1">
-                    {(["yearly", "monthly", "weekly"] as Granularity[]).map((g) => (
+                    {(["yearly", "monthly", "weekly", "daily"] as Granularity[]).map((g) => (
                       <Button
                         key={g}
                         variant={granularity === g ? "default" : "outline"}
@@ -1248,86 +1426,113 @@ export default function SalesDashboard() {
         </Card>
       </div>
 
-      {/* Sales Detail Table — Tabbed Customer / Rep */}
+      {/* Sales Detail Table — Detail / Budget */}
       <Card className="bg-background-secondary">
         <CardHeader className="pb-2">
-          <div className="flex items-center gap-3">
-            <CardTitle className="text-base">Sales Detail</CardTitle>
-            <div className="flex items-center gap-1">
-              <Button
-                variant={tableTab === "customer" ? "default" : "outline"}
-                size="sm"
-                className="h-7 px-2.5 text-xs"
-                onClick={() => setTableTab("customer")}
-              >
-                By Customer
-              </Button>
-              <Button
-                variant={tableTab === "rep" ? "default" : "outline"}
-                size="sm"
-                className="h-7 px-2.5 text-xs"
-                onClick={() => setTableTab("rep")}
-              >
-                By Rep
-              </Button>
-              <Button
-                variant={tableTab === "budget" ? "default" : "outline"}
-                size="sm"
-                className="h-7 px-2.5 text-xs"
-                onClick={() => setTableTab("budget")}
-              >
-                Budget
-              </Button>
-            </div>
-            {tableTab === "budget" && (
-              <>
-                <Select
-                  value={selectedMonth ?? "all"}
-                  onValueChange={(v) => setSelectedMonth(v === "all" ? null : v)}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <CardTitle className="text-base">Sales Detail</CardTitle>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant={detailTab === "detail" ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 px-2.5 text-xs"
+                  onClick={() => setDetailTab("detail")}
                 >
-                  <SelectTrigger className="w-[130px] h-7 text-xs">
-                    <SelectValue placeholder="All Months" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Months</SelectItem>
-                    {Array.from({ length: 12 }, (_, i) => {
-                      const m = String(i + 1).padStart(2, "0")
-                      const key = `${year}-${m}`
-                      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-                      return (
-                        <SelectItem key={key} value={key}>
-                          {months[i]} {year}
+                  Detail
+                </Button>
+                <Button
+                  variant={detailTab === "budget" ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 px-2.5 text-xs"
+                  onClick={() => setDetailTab("budget")}
+                >
+                  Budget
+                </Button>
+              </div>
+              {detailTab === "budget" && (
+                <>
+                  <div className="flex items-center gap-0.5">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => {
+                        const [y, m] = budgetMonth.split("-").map(Number)
+                        const d = new Date(y, m - 2, 1)
+                        setBudgetMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
+                      }}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-xs font-medium min-w-[110px] text-center">
+                      {(() => {
+                        const [y, m] = budgetMonth.split("-").map(Number)
+                        return new Date(y, m - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" })
+                      })()}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => {
+                        const [y, m] = budgetMonth.split("-").map(Number)
+                        const d = new Date(y, m, 1)
+                        setBudgetMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
+                      }}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Select value={repFilter} onValueChange={setRepFilter}>
+                    <SelectTrigger className="w-[150px] h-7 text-xs">
+                      <SelectValue placeholder="All Reps" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Reps</SelectItem>
+                      {sortedReps.map((name) => (
+                        <SelectItem key={name} value={name}>
+                          {name}
                         </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
+            </div>
+            {detailTab === "detail" && (
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-muted-foreground mr-1">Group by:</span>
+                {groupByDimOptions.map(([dim, label]) => (
+                  <Button
+                    key={dim}
+                    variant={groupByDims.includes(dim) ? "default" : "outline"}
+                    size="sm"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={() => {
+                      setGroupByDims((prev) =>
+                        prev.includes(dim)
+                          ? prev.length > 0 ? prev.filter((d) => d !== dim) : prev
+                          : [...prev, dim]
                       )
-                    })}
-                  </SelectContent>
-                </Select>
-                <Select value={repFilter} onValueChange={setRepFilter}>
-                  <SelectTrigger className="w-[150px] h-7 text-xs">
-                    <SelectValue placeholder="All Reps" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Reps</SelectItem>
-                    {sortedReps.map((name) => (
-                      <SelectItem key={name} value={name}>
-                        {name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </>
+                    }}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
             )}
           </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto max-h-[400px] overflow-y-auto [&_td]:py-1.5 [&_th]:py-1.5">
-            {tableTab === "budget" ? (
+            {detailTab === "budget" ? (
               <>
               <div className="flex items-center gap-6 text-sm px-4 py-2 border-b border-border">
-                <span className="text-muted-foreground">Work Days: <strong className="text-foreground">{kpis.totalWorkDays}</strong></span>
-                <span className="text-muted-foreground">Completed: <strong className="text-foreground">{kpis.daysCompleted}</strong></span>
-                <span className="text-muted-foreground">$/Day: <strong className="text-foreground">{formatCurrencyFull(kpis.salesPerDay)}</strong></span>
-                <span className="text-muted-foreground">$/Day Needed: <strong className="text-foreground">{formatCurrencyFull(kpis.salesPerDayNeeded)}</strong></span>
+                <span className="text-muted-foreground">Work Days: <strong className="text-foreground">{budgetKpis.totalWorkDays}</strong></span>
+                <span className="text-muted-foreground">Completed: <strong className="text-foreground">{budgetKpis.daysCompleted}</strong></span>
+                <span className="text-muted-foreground">$/Day: <strong className="text-foreground">{formatCurrencyFull(budgetKpis.salesPerDay)}</strong></span>
+                <span className="text-muted-foreground">$/Day Needed: <strong className="text-foreground">{formatCurrencyFull(budgetKpis.salesPerDayNeeded)}</strong></span>
               </div>
               <Table>
                 <TableHeader className="sticky top-0 z-10 [&_th]:bg-[var(--color-bg-secondary)]">
@@ -1345,7 +1550,7 @@ export default function SalesDashboard() {
                             </span>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" className="max-w-[250px] text-xs bg-background-secondary text-foreground border border-border">
-                            <p>Actual / months elapsed in period. Extrapolates the current run rate to a full month.</p>
+                            <p>Daily run rate (actual / days completed) extrapolated to full month work days.</p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -1355,11 +1560,11 @@ export default function SalesDashboard() {
                 </TableHeader>
                 <TableBody>
                   {[
-                    { label: "Sales ($)", budget: kpis.budgetDollars, actual: kpis.totalSales, projected: kpis.projectedMonthlySales, pct: kpis.toBudgetPct, fmt: formatCurrencyFull },
-                    { label: "Contribution ($)", budget: kpis.budgetContribution, actual: kpis.contribution, projected: kpis.projectedMonthlyCont, pct: kpis.contToBudgetPct, fmt: formatCurrencyFull },
-                    { label: "MSF", budget: kpis.budgetMSF, actual: kpis.totalMSF, projected: kpis.projectedMonthlyMSF, pct: kpis.msfToBudgetPct, fmt: (v: number) => formatNumber(v, 0) },
-                    { label: "$ per MSF", budget: kpis.budgetedPerMSF, actual: kpis.salesPerMSF, projected: null, pct: kpis.perMsfToBudgetPct, fmt: (v: number) => `$${formatNumber(v, 2)}` },
-                    { label: "Cont. $ per MSF", budget: kpis.budgetedContPerMSF, actual: kpis.contPerMSF, projected: null, pct: kpis.contPerMsfToBudgetPct, fmt: (v: number) => `$${formatNumber(v, 2)}` },
+                    { label: "Sales ($)", budget: budgetKpis.budgetDollars, actual: budgetKpis.totalSales, projected: budgetKpis.projectedMonthlySales, pct: budgetKpis.toBudgetPct, fmt: formatCurrencyFull },
+                    { label: "Contribution ($)", budget: budgetKpis.budgetContribution, actual: budgetKpis.contribution, projected: budgetKpis.projectedMonthlyCont, pct: budgetKpis.contToBudgetPct, fmt: formatCurrencyFull },
+                    { label: "MSF", budget: budgetKpis.budgetMSF, actual: budgetKpis.totalMSF, projected: budgetKpis.projectedMonthlyMSF, pct: budgetKpis.msfToBudgetPct, fmt: (v: number) => formatNumber(v, 0) },
+                    { label: "$ per MSF", budget: budgetKpis.budgetedPerMSF, actual: budgetKpis.salesPerMSF, projected: null, pct: budgetKpis.perMsfToBudgetPct, fmt: (v: number) => `$${formatNumber(v, 2)}` },
+                    { label: "Cont. $ per MSF", budget: budgetKpis.budgetedContPerMSF, actual: budgetKpis.contPerMSF, projected: null, pct: budgetKpis.contPerMsfToBudgetPct, fmt: (v: number) => `$${formatNumber(v, 2)}` },
                   ].map((row) => (
                     <TableRow key={row.label}>
                       <TableCell className="font-medium">{row.label}</TableCell>
@@ -1376,100 +1581,71 @@ export default function SalesDashboard() {
                 </TableBody>
               </Table>
               </>
-            ) : tableTab === "customer" ? (
-              <Table>
-                <TableHeader className="sticky top-0 z-10 [&_th]:bg-[var(--color-bg-secondary)]">
-                  <TableRow>
-                    <TableHead className="cursor-pointer hover:text-foreground" onClick={() => handleCustomerSort("customerName")}>
-                      Customer {customerSort.key === "customerName" && (customerSort.dir === "asc" ? "↑" : "↓")}
-                    </TableHead>
-                    <TableHead className="cursor-pointer hover:text-foreground" onClick={() => handleCustomerSort("repName")}>
-                      Rep {customerSort.key === "repName" && (customerSort.dir === "asc" ? "↑" : "↓")}
-                    </TableHead>
-                    <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleCustomerSort("totalSales")}>
-                      Total Sales {customerSort.key === "totalSales" && (customerSort.dir === "asc" ? "↑" : "↓")}
-                    </TableHead>
-                    <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleCustomerSort("totalMSF")}>
-                      MSF {customerSort.key === "totalMSF" && (customerSort.dir === "asc" ? "↑" : "↓")}
-                    </TableHead>
-                    <TableHead className="text-right">$/MSF</TableHead>
-                    <TableHead className="text-right">Cont. $</TableHead>
-                    <TableHead className="text-right">Cont. %</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredCustomerData.map((c, i) => {
-                    const contribution = c.totalSales - c.totalCost
-                    const contPct = c.totalSales > 0 ? (contribution / c.totalSales) * 100 : 0
-                    const salesPerMSF = c.totalMSF > 0 ? c.totalSales / c.totalMSF : 0
-                    return (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium max-w-[200px] truncate">{c.customerName}</TableCell>
-                        <TableCell className="text-muted-foreground max-w-[120px] truncate">{c.repName || "Unassigned"}</TableCell>
-                        <TableCell className="text-right">{formatCurrencyFull(c.totalSales)}</TableCell>
-                        <TableCell className="text-right">{formatNumber(c.totalMSF, 0)}</TableCell>
-                        <TableCell className="text-right">${formatNumber(salesPerMSF, 2)}</TableCell>
-                        <TableCell className="text-right">{formatCurrencyFull(contribution)}</TableCell>
-                        <TableCell className="text-right">{formatPercent(contPct)}</TableCell>
-                      </TableRow>
-                    )
-                  })}
-                  {filteredCustomerData.length === 0 && !isLoading && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                        No customer data for this period
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
             ) : (
               <Table>
                 <TableHeader className="sticky top-0 z-10 [&_th]:bg-[var(--color-bg-secondary)]">
                   <TableRow>
-                    <TableHead className="cursor-pointer hover:text-foreground" onClick={() => handleRepSort("repName")}>
-                      Rep {repSort.key === "repName" && (repSort.dir === "asc" ? "↑" : "↓")}
+                    {groupByDimOptions.map(([dim, label]) =>
+                      groupByDims.includes(dim) ? (
+                        <TableHead key={dim} className="cursor-pointer hover:text-foreground" onClick={() => handleDetailSort(dim)}>
+                          {label}{detailSortIndicator(dim)}
+                        </TableHead>
+                      ) : null
+                    )}
+                    <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleDetailSort("totalSales")}>
+                      Sales{detailSortIndicator("totalSales")}
                     </TableHead>
-                    <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleRepSort("totalSales")}>
-                      Total Sales {repSort.key === "totalSales" && (repSort.dir === "asc" ? "↑" : "↓")}
+                    <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleDetailSort("totalMSF")}>
+                      MSF{detailSortIndicator("totalMSF")}
                     </TableHead>
-                    <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleRepSort("totalMSF")}>
-                      MSF {repSort.key === "totalMSF" && (repSort.dir === "asc" ? "↑" : "↓")}
+                    <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleDetailSort("salesPerMSF")}>
+                      $/MSF{detailSortIndicator("salesPerMSF")}
                     </TableHead>
-                    <TableHead className="text-right">$/MSF</TableHead>
-                    <TableHead className="text-right">Cont. $</TableHead>
-                    <TableHead className="text-right">Cont. %</TableHead>
-                    <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleRepSort("totalSales")}>
-                      Budget {repSort.key === "totalSales" && ""}
+                    <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleDetailSort("totalCost")}>
+                      Cost{detailSortIndicator("totalCost")}
                     </TableHead>
-                    <TableHead className="text-right">% to Budget</TableHead>
+                    <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleDetailSort("contribution")}>
+                      Cont. ${detailSortIndicator("contribution")}
+                    </TableHead>
+                    <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleDetailSort("contPct")}>
+                      Cont. %{detailSortIndicator("contPct")}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedRepData.map((r, i) => {
-                    const contribution = r.totalSales - r.totalCost
-                    const contPct = r.totalSales > 0 ? (contribution / r.totalSales) * 100 : 0
-                    const salesPerMSF = r.totalMSF > 0 ? r.totalSales / r.totalMSF : 0
-                    const budget = budgetByRep.get(r.repName || "") ?? 0
-                    const toBudgetPct = budget > 0 ? (r.totalSales / budget) * 100 : 0
-                    return (
-                      <TableRow key={i} className={repFilter !== "all" && r.repName !== repFilter ? "opacity-40" : ""}>
-                        <TableCell className="font-medium">{r.repName || "Unassigned"}</TableCell>
-                        <TableCell className="text-right">{formatCurrencyFull(r.totalSales)}</TableCell>
-                        <TableCell className="text-right">{formatNumber(r.totalMSF, 0)}</TableCell>
-                        <TableCell className="text-right">${formatNumber(salesPerMSF, 2)}</TableCell>
-                        <TableCell className="text-right">{formatCurrencyFull(contribution)}</TableCell>
-                        <TableCell className="text-right">{formatPercent(contPct)}</TableCell>
-                        <TableCell className="text-right">{formatCurrencyFull(budget)}</TableCell>
-                        <TableCell className="text-right">{budget > 0 ? formatPercent(toBudgetPct) : "—"}</TableCell>
-                      </TableRow>
-                    )
-                  })}
-                  {sortedRepData.length === 0 && !isLoading && (
+                  {sortedDetailRows.map((row, idx) => (
+                    <TableRow key={`${row.invoiceDate}-${row.customerName}-${row.invoiceNumber}-${idx}`}>
+                      {groupByDimOptions.map(([dim]) =>
+                        groupByDims.includes(dim) ? (
+                          <TableCell key={dim} className={dim === "invoiceDate" ? "font-medium" : dim === "customerName" ? "max-w-[200px] truncate" : dim === "repName" ? "text-muted-foreground max-w-[120px] truncate" : ""}>
+                            {String((row as unknown as Record<string, unknown>)[dim] ?? "")}
+                          </TableCell>
+                        ) : null
+                      )}
+                      <TableCell className="text-right">{formatCurrencyFull(row.totalSales)}</TableCell>
+                      <TableCell className="text-right">{formatNumber(row.totalMSF, 0)}</TableCell>
+                      <TableCell className="text-right">${formatNumber(row.salesPerMSF, 2)}</TableCell>
+                      <TableCell className="text-right">{formatCurrencyFull(row.totalCost)}</TableCell>
+                      <TableCell className="text-right">{formatCurrencyFull(row.contribution)}</TableCell>
+                      <TableCell className="text-right">{formatPercent(row.contPct)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {sortedDetailRows.length === 0 && !isLoading && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                        No rep data for this period
+                      <TableCell colSpan={99} className="text-center text-muted-foreground py-8">
+                        No detail data for this period
                       </TableCell>
+                    </TableRow>
+                  )}
+                  {sortedDetailRows.length > 0 && (
+                    <TableRow className="font-semibold border-t">
+                      <TableCell colSpan={groupByDims.length || 1}>Total</TableCell>
+                      <TableCell className="text-right">{formatCurrencyFull(detailTotals.totalSales)}</TableCell>
+                      <TableCell className="text-right">{formatNumber(detailTotals.totalMSF, 0)}</TableCell>
+                      <TableCell className="text-right">${formatNumber(detailTotals.salesPerMSF, 2)}</TableCell>
+                      <TableCell className="text-right">{formatCurrencyFull(detailTotals.totalCost)}</TableCell>
+                      <TableCell className="text-right">{formatCurrencyFull(detailTotals.contribution)}</TableCell>
+                      <TableCell className="text-right">{formatPercent(detailTotals.contPct)}</TableCell>
                     </TableRow>
                   )}
                 </TableBody>

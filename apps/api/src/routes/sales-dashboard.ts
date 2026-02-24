@@ -7,8 +7,13 @@ import {
 } from '../services/kiwiplan-client'
 import { salesBudget, holiday } from '../db/schema'
 import { and, gte, lt } from 'drizzle-orm'
+import { logAudit } from '../services/audit'
+import { requireModuleRole } from '../middleware/require-role'
 
 export const salesDashboardRoutes = new Hono<{ Bindings: Env }>()
+
+// Financial dashboards require ADMIN or FINANCE role
+salesDashboardRoutes.use('*', requireModuleRole('ADMIN', 'FINANCE'))
 
 // Helper to get configured client
 function getClient(env: Env) {
@@ -28,9 +33,14 @@ function getSummarySQL(granularity: string, hasRep: boolean) {
   let orderBy: string
 
   switch (granularity) {
+    case 'daily':
+      periodExpr = `CONVERT(VARCHAR(10), CAST(inv.transactiondate AS DATE), 23)`
+      groupBy = periodExpr
+      orderBy = periodExpr
+      break
     case 'weekly':
-      // Truncate to Monday of each week
-      periodExpr = `CONVERT(VARCHAR(10), DATEADD(DAY, 1 - DATEPART(WEEKDAY, inv.transactiondate), inv.transactiondate), 23)`
+      // Truncate to Monday of each week (1900-01-01 was a Monday)
+      periodExpr = `CONVERT(VARCHAR(10), DATEADD(DAY, -(DATEDIFF(DAY, '19000101', CAST(inv.transactiondate AS DATE)) % 7), CAST(inv.transactiondate AS DATE)), 23)`
       groupBy = periodExpr
       orderBy = periodExpr
       break
@@ -116,6 +126,28 @@ const SALES_SQL = {
     ORDER BY totalSales DESC
   `,
 
+  detail: `
+    SELECT
+      CONVERT(VARCHAR(10), inv.transactiondate, 23) as invoiceDate,
+      inv.invoicenumber as invoiceNumber,
+      cust.name as customerName,
+      con.firstname + ' ' + con.lastname as repName,
+      SUM(il.totalvalue) as totalSales,
+      SUM(il.areainvoiced) / 1000.0 as totalMSF,
+      SUM((ISNULL(ce.fullcost, 0) / 1000.0) * il.quantity) as totalCost
+    FROM espInvoiceLine il
+    INNER JOIN espInvoice inv ON il.invoiceID = inv.ID
+    INNER JOIN orgCompany cust ON inv.companyID = cust.ID
+    LEFT JOIN orgContact con ON cust.salesContactID = con.ID
+    LEFT JOIN espOrder o ON il.orderID = o.ID
+    LEFT JOIN cstCostEstimate ce ON o.preCostEstimateID = ce.ID
+    WHERE inv.transactiondate >= @startDate
+      AND inv.transactiondate < @endDate
+      AND inv.invoicestatus = 'Final'
+    GROUP BY inv.transactiondate, inv.invoicenumber, cust.name, con.firstname + ' ' + con.lastname
+    ORDER BY inv.transactiondate DESC
+  `,
+
   reps: `
     SELECT DISTINCT
       con.ID as contactId,
@@ -141,8 +173,8 @@ salesDashboardRoutes.get('/summary', async (c) => {
   if (!startDate || !endDate) {
     return c.json({ error: 'startDate and endDate are required' }, 400)
   }
-  if (!['monthly', 'weekly', 'yearly'].includes(granularity)) {
-    return c.json({ error: 'granularity must be monthly, weekly, or yearly' }, 400)
+  if (!['daily', 'monthly', 'weekly', 'yearly'].includes(granularity)) {
+    return c.json({ error: 'granularity must be daily, monthly, weekly, or yearly' }, 400)
   }
 
   try {
@@ -221,6 +253,30 @@ salesDashboardRoutes.get('/by-customer', async (c) => {
   }
 })
 
+// GET /api/erp/sales/detail?startDate=&endDate=
+salesDashboardRoutes.get('/detail', async (c) => {
+  const client = getClient(c.env)
+  if (!client) {
+    return c.json({ error: 'Kiwiplan gateway not configured' }, 503)
+  }
+
+  const startDate = c.req.query('startDate')
+  const endDate = c.req.query('endDate')
+  if (!startDate || !endDate) {
+    return c.json({ error: 'startDate and endDate are required' }, 400)
+  }
+
+  try {
+    const result = await client.rawQuery(SALES_SQL.detail, { startDate, endDate })
+    return c.json(result)
+  } catch (err) {
+    if (err instanceof KiwiplanError) {
+      return c.json({ error: err.message }, err.statusCode as 400)
+    }
+    throw err
+  }
+})
+
 // GET /api/erp/sales/reps
 salesDashboardRoutes.get('/reps', async (c) => {
   const client = getClient(c.env)
@@ -239,8 +295,14 @@ salesDashboardRoutes.get('/reps', async (c) => {
   }
 })
 
-// POST /api/erp/sales/query - raw SQL proxy for SQL Explorer
+// POST /api/erp/sales/query - raw SQL proxy for SQL Explorer (ADMIN only)
 salesDashboardRoutes.post('/query', async (c) => {
+  // Security: Restrict SQL Explorer to ADMIN role only
+  const auth = c.get('auth')
+  if (!auth?.roles?.includes('ADMIN')) {
+    return c.json({ error: 'Forbidden: ADMIN role required for SQL Explorer' }, 403)
+  }
+
   const client = getClient(c.env)
   if (!client) {
     return c.json({ error: 'Kiwiplan gateway not configured' }, 503)
@@ -251,14 +313,22 @@ salesDashboardRoutes.post('/query', async (c) => {
     return c.json({ error: 'sql is required' }, 400)
   }
 
+  // Validate: only allow SELECT/WITH statements
+  const trimmed = body.sql.trim().toUpperCase()
+  if (!trimmed.startsWith('SELECT') && !trimmed.startsWith('WITH')) {
+    return c.json({ error: 'Only SELECT queries are allowed' }, 400)
+  }
+
   try {
+    await logAudit(c, { action: 'sql_explorer.query', resource: 'sql_explorer', metadata: { sql: body.sql.substring(0, 500) } })
     const result = await client.rawQuery(body.sql, body.params)
     return c.json(result)
   } catch (err) {
     if (err instanceof KiwiplanError) {
       return c.json({ error: err.message }, err.statusCode as 400)
     }
-    throw err
+    console.error('[SQL Explorer] Query error:', err)
+    return c.json({ error: 'Query execution failed' }, 500)
   }
 })
 
