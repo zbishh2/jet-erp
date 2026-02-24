@@ -133,7 +133,7 @@ export async function createSession(
   const token = generateToken()
   const tokenHash = await hashSessionToken(token)
   const timestamp = now()
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days
+  const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString() // 12 hours
 
   await db.insert(session).values({
     id: generateUUID(),
@@ -165,6 +165,16 @@ export async function validateSession(db: Database, token: string) {
   if (sessions.length === 0) return null
 
   const sess = sessions[0]
+
+  // Enforce idle timeout: revoke sessions unused for more than 2 hours
+  const IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000 // 2 hours
+  if (sess.lastUsedAt) {
+    const lastUsed = new Date(sess.lastUsedAt).getTime()
+    if (Date.now() - lastUsed > IDLE_TIMEOUT_MS) {
+      await db.delete(session).where(eq(session.id, sess.id))
+      return null
+    }
+  }
 
   // Update last used
   await db
@@ -335,20 +345,20 @@ export async function createUserWithPassword(
     updatedAt: timestamp,
   })
 
-  // Get QMS module
-  const qmsModule = await db
+  // Get ERP module
+  const erpModule = await db
     .select({ id: module.id })
     .from(module)
-    .where(eq(module.code, 'qms'))
+    .where(eq(module.code, 'erp'))
     .limit(1)
 
   // Create userOrganizationModule with role
-  if (qmsModule.length > 0) {
+  if (erpModule.length > 0) {
     await db.insert(userOrganizationModule).values({
       id: generateUUID(),
       userId,
       organizationId,
-      moduleId: qmsModule[0].id,
+      moduleId: erpModule[0].id,
       role: roleName,
       isActive: true,
       grantedAt: timestamp,

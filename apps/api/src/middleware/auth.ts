@@ -150,9 +150,16 @@ export const authMiddleware = createMiddleware<{ Bindings: Env }>(async (c, next
   // Read X-Organization-Id header for multi-org support
   const orgHeader = c.req.header('X-Organization-Id')
 
-  // Check for X-Dev-User header only when explicitly allowed in development
-  // Requires BOTH flags to be explicitly set - fails closed if either is missing
-  const allowDevAuth = c.env.ALLOW_DEV_AUTH === 'true' && c.env.ENVIRONMENT === 'development'
+  // SECURITY: Dev auth bypass requires ALL of:
+  // 1. ALLOW_DEV_AUTH === 'true' (explicit opt-in)
+  // 2. ENVIRONMENT === 'development' (never set in production wrangler.toml)
+  // 3. Request must come from localhost (prevents exposure on shared networks)
+  const allowDevAuth = c.env.ALLOW_DEV_AUTH === 'true'
+    && c.env.ENVIRONMENT === 'development'
+    && (() => {
+      const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || ''
+      return !ip || ip === '127.0.0.1' || ip === '::1' || ip === 'localhost'
+    })()
   if (allowDevAuth) {
     const devUserHeader = c.req.header('X-Dev-User')
     if (devUserHeader) {

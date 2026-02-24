@@ -1,8 +1,14 @@
-import { PublicClientApplication, Configuration, LogLevel, EventType, AuthenticationResult } from "@azure/msal-browser"
+import { PublicClientApplication, Configuration, LogLevel, AuthenticationResult } from "@azure/msal-browser"
+
+const clientId = import.meta.env.VITE_AZURE_CLIENT_ID || ""
+const PLACEHOLDER = "00000000-0000-0000-0000-000000000000"
+
+/** Microsoft auth is enabled when a real (non-placeholder) client ID is configured */
+export const isMicrosoftAuthEnabled = !!clientId && clientId !== PLACEHOLDER
 
 const msalConfig: Configuration = {
   auth: {
-    clientId: import.meta.env.VITE_AZURE_CLIENT_ID || "",
+    clientId,
     authority: "https://login.microsoftonline.com/common",
     redirectUri: window.location.origin,
     postLogoutRedirectUri: window.location.origin,
@@ -10,7 +16,7 @@ const msalConfig: Configuration = {
   },
   cache: {
     cacheLocation: "localStorage",
-    storeAuthStateInCookie: true, // Enable for redirect flow
+    storeAuthStateInCookie: true,
   },
   system: {
     loggerOptions: {
@@ -30,44 +36,36 @@ const msalConfig: Configuration = {
   },
 }
 
-export const msalInstance = new PublicClientApplication(msalConfig)
+const msalInstance = new PublicClientApplication(msalConfig)
 
-// Track pending redirect callback
-let redirectCallbackRegistered = false
-let pendingRedirectCallback: ((result: AuthenticationResult) => void) | null = null
+let cachedRedirectResult: AuthenticationResult | null = null
+let resultConsumed = false
 
-export function registerRedirectCallback(callback: (result: AuthenticationResult) => void) {
-  pendingRedirectCallback = callback
-}
-
-// Initialize MSAL and handle redirect response
+/** Initialize MSAL and capture any pending redirect response. Call once before React mounts. */
 export async function initializeMsal() {
+  if (!isMicrosoftAuthEnabled) return
   await msalInstance.initialize()
-
-  // Handle redirect response if returning from auth
-  if (!redirectCallbackRegistered) {
-    redirectCallbackRegistered = true
-    msalInstance.addEventCallback((event) => {
-      if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
-        const result = event.payload as AuthenticationResult
-        if (pendingRedirectCallback && result.idToken) {
-          pendingRedirectCallback(result)
-        }
-      }
-    })
-
-    // Check for redirect response
-    try {
-      const response = await msalInstance.handleRedirectPromise()
-      if (response && pendingRedirectCallback) {
-        pendingRedirectCallback(response)
-      }
-    } catch (error) {
-      console.error("Error handling redirect:", error)
+  try {
+    const response = await msalInstance.handleRedirectPromise()
+    if (response) {
+      cachedRedirectResult = response
     }
+  } catch (error) {
+    console.error("Error handling MSAL redirect:", error)
   }
 }
 
-export const loginRequest = {
-  scopes: ["openid", "profile", "email"],
+/** Get the redirect result (consumed on first read — subsequent calls return null). */
+export function getRedirectResult(): AuthenticationResult | null {
+  if (resultConsumed) return null
+  resultConsumed = true
+  return cachedRedirectResult
+}
+
+/** Start the Microsoft login redirect flow. Pass optional state (e.g. inviteToken) that survives the redirect. */
+export function startMicrosoftLogin(state?: string) {
+  msalInstance.loginRedirect({
+    scopes: ["openid", "profile", "email"],
+    state: state || undefined,
+  })
 }

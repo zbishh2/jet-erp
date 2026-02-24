@@ -6,6 +6,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { MicrosoftIcon } from '@/components/icons/MicrosoftIcon'
+import { isMicrosoftAuthEnabled, getRedirectResult, startMicrosoftLogin } from '@/lib/msal'
 import { toast } from 'sonner'
 
 type Step = 'email' | 'verify' | 'password'
@@ -17,6 +19,17 @@ interface SignupStartResponse {
 
 interface CompleteSignupResponse {
   message: string
+  token: string
+  user: {
+    id: string
+    email: string
+    displayName: string
+    organizationId: string
+    roles: string[]
+  }
+}
+
+interface MicrosoftAuthResponse {
   token: string
   user: {
     id: string
@@ -49,6 +62,7 @@ export function Signup() {
   const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [msLoading, setMsLoading] = useState(false)
 
   const inviteQuery = useQuery({
     queryKey: ['invite', inviteToken],
@@ -61,6 +75,30 @@ export function Signup() {
       setEmail(inviteQuery.data.email)
     }
   }, [inviteQuery.data])
+
+  // Handle Microsoft redirect response on mount
+  useEffect(() => {
+    const result = getRedirectResult()
+    if (!result?.idToken) return
+
+    setMsLoading(true)
+    // The inviteToken was passed as MSAL state and survives the redirect
+    const stateInviteToken = result.state || undefined
+    apiFetch<MicrosoftAuthResponse>('/auth/microsoft', {
+      method: 'POST',
+      body: JSON.stringify({ idToken: result.idToken, inviteToken: stateInviteToken }),
+      skipAuth: true,
+    })
+      .then((data) => {
+        login(data.token)
+        toast.success('Account created successfully!')
+        navigate('/')
+      })
+      .catch((err: any) => {
+        toast.error(err.message || 'Microsoft sign-up failed')
+        setMsLoading(false)
+      })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const startMutation = useMutation({
     mutationFn: async () => {
@@ -108,6 +146,7 @@ export function Signup() {
           password,
           displayName,
           inviteToken: inviteToken || undefined,
+          code,
         }),
         skipAuth: true,
       })
@@ -150,7 +189,7 @@ export function Signup() {
       <div className="min-h-screen flex items-center justify-center bg-background-secondary py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8 text-center">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Jet Container ERP</h1>
+            <h1 className="text-3xl font-bold text-foreground">Jet Container</h1>
             <h2 className="mt-6 text-2xl font-semibold text-foreground">
               Invite Required
             </h2>
@@ -175,7 +214,7 @@ export function Signup() {
       <div className="min-h-screen flex items-center justify-center bg-background-secondary py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8 text-center">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Jet Container ERP</h1>
+            <h1 className="text-3xl font-bold text-foreground">Jet Container</h1>
             <h2 className="mt-6 text-2xl font-semibold text-foreground">
               Invalid or Expired Invite
             </h2>
@@ -195,13 +234,15 @@ export function Signup() {
     )
   }
 
-  if (inviteQuery.isLoading) {
+  if (inviteQuery.isLoading || msLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background-secondary py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8 text-center">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Jet Container ERP</h1>
-            <p className="mt-4 text-foreground-secondary">Validating invitation...</p>
+            <h1 className="text-3xl font-bold text-foreground">Jet Container</h1>
+            <p className="mt-4 text-foreground-secondary">
+              {msLoading ? 'Completing Microsoft sign-up...' : 'Validating invitation...'}
+            </p>
           </div>
         </div>
       </div>
@@ -212,7 +253,7 @@ export function Signup() {
     <div className="min-h-screen flex items-center justify-center bg-background-secondary py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
-          <h1 className="text-center text-3xl font-bold text-foreground">Jet Container ERP</h1>
+          <h1 className="text-center text-3xl font-bold text-foreground">Jet Container</h1>
           <h2 className="mt-6 text-center text-2xl font-semibold text-foreground">
             Create your account
           </h2>
@@ -222,6 +263,29 @@ export function Signup() {
             </p>
           )}
         </div>
+
+        {isMicrosoftAuthEnabled && (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => startMicrosoftLogin(inviteToken || undefined)}
+            >
+              <MicrosoftIcon className="mr-2" />
+              Sign up with Microsoft
+            </Button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background-secondary px-2 text-foreground-secondary">or</span>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Step indicator */}
         <div className="flex justify-center space-x-4">

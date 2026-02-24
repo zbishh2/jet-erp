@@ -8,6 +8,7 @@ import { ThemeProvider } from './contexts/ThemeContext'
 import { ErrorBoundary } from './components/shared/ErrorBoundary'
 import { OfflineIndicator } from './components/shared/OfflineIndicator'
 import { ApiError } from './lib/errors'
+import { initializeMsal } from './lib/msal'
 import App from './App'
 import './index.css'
 
@@ -36,20 +37,26 @@ const queryClient = new QueryClient({
   },
 })
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <ThemeProvider>
-        <QueryClientProvider client={queryClient}>
-          <BrowserRouter>
-            <AuthProvider>
-              <App />
-              <Toaster position="top-right" richColors closeButton />
-              <OfflineIndicator />
-            </AuthProvider>
-          </BrowserRouter>
-        </QueryClientProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
-  </React.StrictMode>,
-)
+async function boot() {
+  await initializeMsal()
+
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <ThemeProvider>
+          <QueryClientProvider client={queryClient}>
+            <BrowserRouter>
+              <AuthProvider>
+                <App />
+                <Toaster position="top-right" richColors closeButton />
+                <OfflineIndicator />
+              </AuthProvider>
+            </BrowserRouter>
+          </QueryClientProvider>
+        </ThemeProvider>
+      </ErrorBoundary>
+    </React.StrictMode>,
+  )
+}
+
+boot()

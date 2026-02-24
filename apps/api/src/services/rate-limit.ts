@@ -63,11 +63,21 @@ export async function checkRateLimit(
   }
 }
 
+/**
+ * Clear a rate limit counter (e.g. after a successful password reset).
+ */
+export async function clearRateLimit(env: Env, key: string): Promise<void> {
+  if (!env.RATE_LIMIT) return
+  await env.RATE_LIMIT.delete(key)
+}
+
 // Pre-configured rate limits for common use cases
 export const AUTH_RATE_LIMITS = {
-  login: { maxAttempts: 5, windowSeconds: 15 * 60 } as RateLimitConfig,        // 5 per 15 min
-  signup: { maxAttempts: 3, windowSeconds: 60 * 60 } as RateLimitConfig,       // 3 per hour
-  passwordReset: { maxAttempts: 3, windowSeconds: 60 * 60 } as RateLimitConfig, // 3 per hour
+  login: { maxAttempts: 5, windowSeconds: 15 * 60 } as RateLimitConfig,        // 5 per 15 min per IP
+  loginAccount: { maxAttempts: 10, windowSeconds: 30 * 60 } as RateLimitConfig, // 10 per 30 min per email (account lockout)
+  signup: { maxAttempts: 10, windowSeconds: 60 * 60 } as RateLimitConfig,     // 10 per hour
+  passwordReset: { maxAttempts: 5, windowSeconds: 60 * 60 } as RateLimitConfig, // 5 per hour
   verification: { maxAttempts: 5, windowSeconds: 15 * 60 } as RateLimitConfig, // 5 per 15 min
+  inviteValidation: { maxAttempts: 10, windowSeconds: 60 } as RateLimitConfig,  // 10 per minute
   publicSubmission: { maxAttempts: 10, windowSeconds: 60 * 60 } as RateLimitConfig, // 10 per hour
 }

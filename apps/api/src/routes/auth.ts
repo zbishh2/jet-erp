@@ -17,7 +17,8 @@ import {
 } from '../services/auth'
 import { getUserOrgRoles } from '../middleware/auth'
 import { sendEmail, verificationCodeEmail, passwordResetEmail } from '../services/email'
-import { checkRateLimit, getClientIp, AUTH_RATE_LIMITS } from '../services/rate-limit'
+import { checkRateLimit, clearRateLimit, getClientIp, AUTH_RATE_LIMITS } from '../services/rate-limit'
+import { logAuthEvent, logAudit } from '../services/audit'
 
 const auth = new Hono<{ Bindings: Env }>()
 
@@ -299,7 +300,7 @@ auth.post('/complete-signup', async (c) => {
       const qmsModule = await db
         .select({ id: module.id })
         .from(module)
-        .where(eq(module.code, 'qms'))
+        .where(eq(module.code, 'erp'))
         .limit(1)
 
       if (qmsModule.length > 0) {
@@ -368,6 +369,8 @@ auth.post('/complete-signup', async (c) => {
   // Get user roles from new multi-org system (falls back to legacy)
   const roles = await getUserOrgRoles(db, userId, organizationId)
 
+  await logAuthEvent(c, db, { eventType: 'signup', email, userId, success: true })
+
   return c.json({
     message: 'Account created successfully',
     token,
@@ -387,6 +390,8 @@ auth.post('/login', async (c) => {
   const ip = getClientIp(c)
   const rateLimit = await checkRateLimit(c.env, `login:${ip}`, AUTH_RATE_LIMITS.login)
   if (!rateLimit.allowed) {
+    const db = c.get('db')
+    await logAuthEvent(c, db, { eventType: 'login_failed', success: false, failureReason: 'ip_rate_limited' })
     return c.json(
       { error: 'Too many login attempts. Please try again later.' },
       429,
@@ -402,22 +407,38 @@ auth.post('/login', async (c) => {
   }
 
   const { email, password } = parsed.data
+
+  // Rate limit by email (account-level lockout to prevent distributed brute-force)
+  const accountRateLimit = await checkRateLimit(c.env, `login-account:${email.toLowerCase()}`, AUTH_RATE_LIMITS.loginAccount)
+  if (!accountRateLimit.allowed) {
+    const db = c.get('db')
+    await logAuthEvent(c, db, { eventType: 'account_locked', email, success: false, failureReason: 'account_rate_limited' })
+    return c.json(
+      { error: 'Account temporarily locked due to too many failed attempts. Please try again later.' },
+      429,
+      { 'Retry-After': accountRateLimit.retryAfter.toString() }
+    )
+  }
+
   const db = c.get('db')
 
   const user = await findUserByEmail(db, email)
 
   if (!user) {
-    return c.json({ error: 'Invalid email or password' }, 401)
+    await logAuthEvent(c, db, { eventType: 'login_failed', email, success: false, failureReason: 'user_not_found' })
+    return c.json({ error: 'Invalid email or password', attemptsRemaining: accountRateLimit.remaining }, 401)
   }
 
   if (!user.passwordHash || !user.isActive) {
-    return c.json({ error: 'Invalid email or password' }, 401)
+    await logAuthEvent(c, db, { eventType: 'login_failed', email, userId: user.id, success: false, failureReason: user.isActive ? 'no_password' : 'account_deactivated' })
+    return c.json({ error: 'Invalid email or password', attemptsRemaining: accountRateLimit.remaining }, 401)
   }
 
   const isValid = await verifyPassword(password, user.passwordHash)
 
   if (!isValid) {
-    return c.json({ error: 'Invalid email or password' }, 401)
+    await logAuthEvent(c, db, { eventType: 'login_failed', email, userId: user.id, success: false, failureReason: 'invalid_password' })
+    return c.json({ error: 'Invalid email or password', attemptsRemaining: accountRateLimit.remaining }, 401)
   }
 
   // Create session
@@ -427,6 +448,8 @@ auth.post('/login', async (c) => {
 
   // Get user roles from new multi-org system (falls back to legacy)
   const roles = await getUserOrgRoles(db, user.id, user.organizationId!)
+
+  await logAuthEvent(c, db, { eventType: 'login_success', email, userId: user.id, success: true })
 
   return c.json({
     token,
@@ -532,12 +555,45 @@ auth.post('/microsoft', async (c) => {
     }
 
     if (!foundUser) {
-      // For new users, require an invite
-      if (!invite) {
-        return c.json({ error: 'Account not found. Please use an invite link to sign up.' }, 400)
+      // Determine organization: from invite, or by email domain lookup
+      let organizationId: string | null = null
+
+      if (invite) {
+        organizationId = invite.organization.id
+      } else {
+        // Auto-provision: look up org by email domain
+        const emailDomain = email.toLowerCase().split('@')[1]
+        if (emailDomain) {
+          const { organization: orgTable, domainAlias } = await import('../db/schema')
+
+          // Check organization.domain first
+          const orgByDomain = await db
+            .select({ id: orgTable.id })
+            .from(orgTable)
+            .where(and(eq(orgTable.domain, emailDomain), eq(orgTable.isActive, true)))
+            .limit(1)
+
+          if (orgByDomain.length > 0) {
+            organizationId = orgByDomain[0].id
+          } else {
+            // Check domain_alias table
+            const aliasByDomain = await db
+              .select({ organizationId: domainAlias.organizationId })
+              .from(domainAlias)
+              .where(eq(domainAlias.domain, emailDomain))
+              .limit(1)
+
+            if (aliasByDomain.length > 0) {
+              organizationId = aliasByDomain[0].organizationId
+            }
+          }
+        }
+
+        if (!organizationId) {
+          return c.json({ error: 'No organization found for your email domain. Contact your administrator.' }, 400)
+        }
       }
 
-      const organizationId = invite.organization.id
       const timestamp = new Date().toISOString()
 
       // Create new user
@@ -566,29 +622,38 @@ auth.post('/microsoft', async (c) => {
         updatedAt: timestamp,
       })
 
-      // Get QMS module and create userOrganizationModule role
-      const qmsModule = await db
-        .select({ id: module.id })
-        .from(module)
-        .where(eq(module.code, 'qms'))
-        .limit(1)
+      if (invite) {
+        // Invited users get the role specified in the invite
+        const qmsModule = await db
+          .select({ id: module.id })
+          .from(module)
+          .where(eq(module.code, 'erp'))
+          .limit(1)
 
-      if (qmsModule.length > 0) {
-        await db.insert(userOrganizationModule).values({
-          id: crypto.randomUUID(),
-          userId,
-          organizationId,
-          moduleId: qmsModule[0].id,
-          role: invite.role,
-          isActive: true,
-          grantedAt: timestamp,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        })
+        if (qmsModule.length > 0) {
+          await db.insert(userOrganizationModule).values({
+            id: crypto.randomUUID(),
+            userId,
+            organizationId,
+            moduleId: qmsModule[0].id,
+            role: invite.role,
+            isActive: true,
+            grantedAt: timestamp,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          })
+        }
+
+        await markInviteUsed(db, inviteToken!, email)
       }
+      // Auto-provisioned users (no invite) get no module roles — admin must assign
 
-      // Mark invite as used with the actual SSO email
-      await markInviteUsed(db, inviteToken!, email)
+      await logAudit(c, {
+        action: 'user.auto_provision',
+        resource: 'user',
+        resourceId: userId,
+        metadata: { email: email.toLowerCase(), organizationId, method: invite ? 'invite' : 'domain_match' },
+      })
 
       foundUser = {
         id: userId,
@@ -652,7 +717,7 @@ auth.post('/microsoft', async (c) => {
         const qmsModule = await db
           .select({ id: module.id })
           .from(module)
-          .where(eq(module.code, 'qms'))
+          .where(eq(module.code, 'erp'))
           .limit(1)
 
         if (qmsModule.length > 0) {
@@ -722,7 +787,7 @@ auth.post('/microsoft', async (c) => {
         const qmsModule = await db
           .select({ id: module.id })
           .from(module)
-          .where(eq(module.code, 'qms'))
+          .where(eq(module.code, 'erp'))
           .limit(1)
 
         if (qmsModule.length > 0) {
@@ -760,6 +825,8 @@ auth.post('/microsoft', async (c) => {
     // Get user roles from new multi-org system (falls back to legacy)
     const roles = await getUserOrgRoles(db, foundUser.id, foundUser.organizationId!)
 
+    await logAuthEvent(c, db, { eventType: 'login_success', email: foundUser.email, userId: foundUser.id, success: true })
+
     return c.json({
       token,
       user: {
@@ -772,11 +839,13 @@ auth.post('/microsoft', async (c) => {
     })
   } catch (error: any) {
     console.error('Microsoft auth error:', error)
+    const db = c.get('db')
+    await logAuthEvent(c, db, { eventType: 'login_failed', success: false, failureReason: 'microsoft_auth_error' })
     const errorMessage = error?.message || 'Unknown error'
     if (errorMessage.includes('exp') || errorMessage.includes('expired')) {
       return c.json({ error: 'Microsoft token expired. Please try signing in again.' }, 401)
     }
-    return c.json({ error: `Token validation failed: ${errorMessage}` }, 401)
+    return c.json({ error: 'Authentication failed. Please try again.' }, 401)
   }
 })
 
@@ -787,7 +856,11 @@ auth.post('/logout', async (c) => {
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7)
     const db = c.get('db')
+    const sess = await validateSession(db, token)
     await deleteSession(db, token)
+    if (sess) {
+      await logAuthEvent(c, db, { eventType: 'logout', userId: sess.userId, success: true })
+    }
   }
 
   return c.json({ message: 'Logged out successfully' })
@@ -901,11 +974,29 @@ auth.post('/reset-password', async (c) => {
   const { deleteUserSessions } = await import('../services/auth')
   await deleteUserSessions(db, foundUser.id)
 
+  // Clear login rate limits so the user can log in immediately with new password
+  await clearRateLimit(c.env, `login-account:${email.toLowerCase()}`)
+  const resetIp = getClientIp(c)
+  await clearRateLimit(c.env, `login:${resetIp}`)
+
+  await logAuthEvent(c, db, { eventType: 'password_reset', email, userId: foundUser.id, success: true })
+
   return c.json({ message: 'Password reset successfully' })
 })
 
 // GET /api/auth/invite/:token - Validate invite and get org info
 auth.get('/invite/:token', async (c) => {
+  // Rate limit invite token validation to prevent enumeration
+  const ip = getClientIp(c)
+  const rateLimit = await checkRateLimit(c.env, `invite-validate:${ip}`, AUTH_RATE_LIMITS.inviteValidation)
+  if (!rateLimit.allowed) {
+    return c.json(
+      { error: 'Too many requests. Please try again later.' },
+      429,
+      { 'Retry-After': rateLimit.retryAfter.toString() }
+    )
+  }
+
   const token = c.req.param('token')
   const db = c.get('db')
 
