@@ -1,0 +1,504 @@
+table crc8e_wearpartactivity
+	lineageTag: e95b9a88-75ac-4eb7-b690-667ea46b4f32
+
+	column 'Wear Part Activity'
+		dataType: string
+		lineageTag: 4084892b-4219-4847-8d70-fd7abdcac84b
+		summarizeBy: none
+		sourceColumn: crc8e_wearpartactivityid
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Created On'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: dc90b7ba-be62-4009-a63a-b5a30ce973b8
+		summarizeBy: none
+		sourceColumn: createdon
+
+		variation Variation
+			isDefault
+			relationship: f8b150dc-8b38-4735-8cd4-91200ff3a8ab
+			defaultHierarchy: LocalDateTable_8c528dbb-7d12-4efc-8649-98dc2b720284.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column createdby
+		dataType: string
+		lineageTag: 93777de9-34b0-4c5a-ba5f-2fb775cf42aa
+		summarizeBy: none
+		sourceColumn: createdby
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Modified On'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 8ccd0776-f2c3-406d-8f7c-a827ca939bb6
+		summarizeBy: none
+		sourceColumn: modifiedon
+
+		variation Variation
+			isDefault
+			relationship: b3ba8326-7494-43b9-9583-bbd71318ac8f
+			defaultHierarchy: LocalDateTable_d4018d32-0a4d-4c3f-8b96-99446d28495c.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column modifiedby
+		dataType: string
+		lineageTag: 5b01b0d3-44ae-42d4-b7b6-9f87a4f73dcf
+		summarizeBy: none
+		sourceColumn: modifiedby
+
+		annotation SummarizationSetBy = Automatic
+
+	column createdonbehalfby
+		dataType: string
+		lineageTag: dea32ee3-f7ea-4040-9ada-04f0bb104737
+		summarizeBy: none
+		sourceColumn: createdonbehalfby
+
+		annotation SummarizationSetBy = Automatic
+
+	column modifiedonbehalfby
+		dataType: string
+		lineageTag: a5c726e0-47d4-46c4-b355-bf6051413250
+		summarizeBy: none
+		sourceColumn: modifiedonbehalfby
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Created By'
+		dataType: string
+		lineageTag: 7bbc5592-aa02-4ea5-a5b3-267f369dc298
+		summarizeBy: none
+		sourceColumn: createdbyname
+
+		annotation SummarizationSetBy = Automatic
+
+	column createdbyyominame
+		dataType: string
+		lineageTag: 34070cae-5984-45fc-b9dd-8f08d67a105e
+		summarizeBy: none
+		sourceColumn: createdbyyominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Created By (Delegate)'
+		dataType: string
+		lineageTag: e39a122e-1d6c-450b-9ce3-c37af95e32f7
+		summarizeBy: none
+		sourceColumn: createdonbehalfbyname
+
+		annotation SummarizationSetBy = Automatic
+
+	column createdonbehalfbyyominame
+		dataType: string
+		lineageTag: bf263794-130b-4395-99d6-08e9915fa93e
+		summarizeBy: none
+		sourceColumn: createdonbehalfbyyominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Modified By'
+		dataType: string
+		lineageTag: 6b06b1bf-3e05-40c3-9ba6-dd2f60138f89
+		summarizeBy: none
+		sourceColumn: modifiedbyname
+
+		annotation SummarizationSetBy = Automatic
+
+	column modifiedbyyominame
+		dataType: string
+		lineageTag: 11b41ce9-2122-4c98-aae0-a3924ccd7f9e
+		summarizeBy: none
+		sourceColumn: modifiedbyyominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Modified By (Delegate)'
+		dataType: string
+		lineageTag: d192e030-507e-4a02-bd0e-4694fb626caf
+		summarizeBy: none
+		sourceColumn: modifiedonbehalfbyname
+
+		annotation SummarizationSetBy = Automatic
+
+	column modifiedonbehalfbyyominame
+		dataType: string
+		lineageTag: b2158f70-65b3-4c35-87d1-03045f5b0735
+		summarizeBy: none
+		sourceColumn: modifiedonbehalfbyyominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column ownerid
+		dataType: string
+		lineageTag: 0df2bcba-420e-4c10-9c49-a08dc8e1939f
+		summarizeBy: none
+		sourceColumn: ownerid
+
+		annotation SummarizationSetBy = Automatic
+
+	column Owner
+		dataType: string
+		lineageTag: 4d75ad7a-6267-42f6-bf75-e026ef1b1b6d
+		summarizeBy: none
+		sourceColumn: owneridname
+
+		annotation SummarizationSetBy = Automatic
+
+	column owneridyominame
+		dataType: string
+		lineageTag: fdf8421c-7dce-4372-89d4-1d2bea9f3327
+		summarizeBy: none
+		sourceColumn: owneridyominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column owningbusinessunit
+		dataType: string
+		lineageTag: 466483c4-de40-4fa3-ba3d-866caa864743
+		summarizeBy: none
+		sourceColumn: owningbusinessunit
+
+		annotation SummarizationSetBy = Automatic
+
+	column owninguser
+		dataType: string
+		lineageTag: 4e7c3f6a-ab7a-41fe-917b-c9a7cf1e0bd7
+		summarizeBy: none
+		sourceColumn: owninguser
+
+		annotation SummarizationSetBy = Automatic
+
+	column owningteam
+		dataType: string
+		lineageTag: cd5c8976-99bf-4b33-809b-ed236d4bf3c5
+		summarizeBy: none
+		sourceColumn: owningteam
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Owning Business Unit'
+		dataType: string
+		lineageTag: b5e7433c-67e4-4b96-9f8d-de6702e48430
+		summarizeBy: none
+		sourceColumn: owningbusinessunitname
+
+		annotation SummarizationSetBy = Automatic
+
+	column Status
+		dataType: int64
+		formatString: 0
+		lineageTag: c8cd0443-d37c-4e78-8e1a-9dc37adc11ae
+		summarizeBy: sum
+		sourceColumn: statecode
+
+		annotation SummarizationSetBy = Automatic
+
+	column statecodename
+		dataType: string
+		lineageTag: 73c5fc37-1692-4c86-a19a-9de3920f580d
+		summarizeBy: none
+		sourceColumn: statecodename
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Status Reason'
+		dataType: int64
+		formatString: 0
+		lineageTag: 79c56113-0737-4d1d-b081-640d245fe586
+		summarizeBy: sum
+		sourceColumn: statuscode
+
+		annotation SummarizationSetBy = Automatic
+
+	column statuscodename
+		dataType: string
+		lineageTag: e9030c8b-658a-48dd-8f84-f8c711786529
+		summarizeBy: none
+		sourceColumn: statuscodename
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Import Sequence Number'
+		dataType: int64
+		formatString: 0
+		lineageTag: 4a7a5d16-3322-427b-a234-ab742b54c40f
+		summarizeBy: sum
+		sourceColumn: importsequencenumber
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Record Created On'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: e235789e-8122-4619-bcdb-fdd790bb8960
+		summarizeBy: none
+		sourceColumn: overriddencreatedon
+
+		variation Variation
+			isDefault
+			relationship: 2adc0e0b-3acc-4b82-a816-208762fde935
+			defaultHierarchy: LocalDateTable_34b75b39-4591-4adf-ba8b-3158862087ac.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Time Zone Rule Version Number'
+		dataType: int64
+		formatString: 0
+		lineageTag: f59e34e2-e66a-49c5-9d18-550b84feb376
+		summarizeBy: sum
+		sourceColumn: timezoneruleversionnumber
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'UTC Conversion Time Zone Code'
+		dataType: int64
+		formatString: 0
+		lineageTag: 3e6e82d2-ea7a-4287-bf34-74aa3caf9685
+		summarizeBy: count
+		sourceColumn: utcconversiontimezonecode
+
+		annotation SummarizationSetBy = Automatic
+
+	column Name
+		dataType: string
+		lineageTag: 3ba961e0-7305-423c-b7d3-017cef9efc6d
+		summarizeBy: none
+		sourceColumn: crc8e_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column Date
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: e4ca8946-72d8-4294-836d-5b98441cbba7
+		summarizeBy: none
+		sourceColumn: crc8e_date
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_wearpart
+		dataType: string
+		lineageTag: 0e76b8ba-f513-413b-8584-79cdf43e3755
+		summarizeBy: none
+		sourceColumn: crc8e_wearpart
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Wear Part'
+		dataType: string
+		lineageTag: 2575ca09-c121-47e8-9f10-820ba4e7db8e
+		summarizeBy: none
+		sourceColumn: crc8e_wearpartname
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_checkreplacement
+		dataType: int64
+		formatString: 0
+		lineageTag: 1aa9d386-3d0d-4162-8284-209eec2cb64c
+		summarizeBy: sum
+		sourceColumn: crc8e_checkreplacement
+
+		annotation SummarizationSetBy = Automatic
+
+	column Check/Replacement
+		dataType: string
+		lineageTag: 7365a010-04c1-4c8a-acfe-d341e5753f86
+		summarizeBy: none
+		sourceColumn: crc8e_checkreplacementname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Time taken to do'
+		dataType: double
+		lineageTag: 29537f43-dca8-4bc8-9d96-9251b6b4adf8
+		summarizeBy: sum
+		sourceColumn: crc8e_timetakentodo
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Total Cycles'
+		dataType: int64
+		formatString: 0
+		lineageTag: 15f660a9-ca01-43ac-a07e-d5ae0dfcf5f8
+		summarizeBy: sum
+		sourceColumn: crc8e_totalcyclessincelastreplacement
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Wear Measurement at Check/Replacement'
+		dataType: double
+		lineageTag: 162d6e2f-9fcd-48e3-ad71-e0e71d82e073
+		summarizeBy: sum
+		sourceColumn: crc8e_measurementatcheckreplacement
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Part Price'
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 9526f45b-aec8-42b0-a44d-6013b98d2e8b
+		summarizeBy: sum
+		sourceColumn: crc8e_partprice
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column transactioncurrencyid
+		dataType: string
+		lineageTag: f5282920-4c72-46d7-9f13-e446e0773bd8
+		summarizeBy: none
+		sourceColumn: transactioncurrencyid
+
+		annotation SummarizationSetBy = Automatic
+
+	column Currency
+		dataType: string
+		lineageTag: 5afbae29-d501-4139-8549-f05c6ef5b7d7
+		summarizeBy: none
+		sourceColumn: transactioncurrencyidname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Exchange Rate'
+		dataType: double
+		lineageTag: 5c58fdd0-94d1-4a80-bdaa-2038b9cb40ab
+		summarizeBy: sum
+		sourceColumn: exchangerate
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Part Price (Base)'
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 1cf8886e-07a3-462d-b218-b84ae88dea78
+		summarizeBy: sum
+		sourceColumn: crc8e_partprice_base
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column crc8e_equipment
+		dataType: string
+		lineageTag: c8afcdd7-fd1c-46fe-86fb-65bebd469b08
+		summarizeBy: none
+		sourceColumn: crc8e_equipment
+
+		annotation SummarizationSetBy = Automatic
+
+	column Equipment
+		dataType: string
+		lineageTag: 49c8f312-8f6f-42f2-b4bf-5e40b6e64074
+		summarizeBy: none
+		sourceColumn: crc8e_equipmentname
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_line
+		dataType: string
+		lineageTag: be613ac0-cb8b-4237-a598-5231eca82263
+		summarizeBy: none
+		sourceColumn: crc8e_line
+
+		annotation SummarizationSetBy = Automatic
+
+	column Line
+		dataType: string
+		lineageTag: 669588a8-5eb1-465b-abdc-7407981b1f5f
+		summarizeBy: none
+		sourceColumn: crc8e_linename
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Measurement of New Part'
+		dataType: double
+		lineageTag: 06bd1b1d-c860-479b-a8ae-e1ea0fb967e4
+		summarizeBy: sum
+		sourceColumn: crc8e_measurementofnewpart
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Notes
+		dataType: string
+		lineageTag: 65d9e275-a987-4688-be6d-1d440bc36d1c
+		summarizeBy: none
+		sourceColumn: crc8e_notes
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'New Part Material Type'
+		dataType: string
+		lineageTag: 94884c5d-e4b1-40d5-8d5e-718bf4eb8db4
+		summarizeBy: none
+		sourceColumn: crc8e_newpartmaterialtype
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Wear Unit of Measurement'
+		dataType: string
+		lineageTag: cfb622d3-f75b-476e-a370-917754d7c84c
+		summarizeBy: none
+		sourceColumn: crc8e_wearunitofmeasurement
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Wear per Day'
+		dataType: double
+		lineageTag: 9fe42686-ac09-401e-b6bb-19ba2cc10dd1
+		summarizeBy: sum
+		sourceColumn: crc8e_wearperday
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Check
+		dataType: string
+		lineageTag: 68c9628f-e09a-4d55-bb5f-71594449fec3
+		summarizeBy: none
+		sourceColumn: crc8e_check
+
+		annotation SummarizationSetBy = Automatic
+
+	column Replace
+		dataType: string
+		lineageTag: 6300148e-8f70-41aa-a4bd-0c2806d3d7b3
+		summarizeBy: none
+		sourceColumn: crc8e_replace
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Quantity Consumed'
+		dataType: double
+		lineageTag: c36122a0-4a5b-4671-9068-ff1356b7e59a
+		summarizeBy: sum
+		sourceColumn: crc8e_quantityconsumed
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	partition crc8e_wearpartactivity = m
+		mode: import
+		source =
+				let
+				    Source = CommonDataService.Database("orgb25ca9e8.crm.dynamics.com"),
+				    dbo_crc8e_wearpartactivity = Source{[Schema="dbo",Item="crc8e_wearpartactivity"]}[Data]
+				in
+				    dbo_crc8e_wearpartactivity
+

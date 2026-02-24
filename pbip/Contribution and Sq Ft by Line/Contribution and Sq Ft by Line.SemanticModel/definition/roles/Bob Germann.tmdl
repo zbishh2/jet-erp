@@ -1,0 +1,5 @@
+role 'Bob Germann'
+	modelPermission: read
+
+	annotation PBI_Id = 12a674ff24484a70bae99ab89bb04d54
+

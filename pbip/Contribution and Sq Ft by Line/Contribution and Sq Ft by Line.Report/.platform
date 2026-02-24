@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Report",
+    "displayName": "Contribution and Sq Ft by Line"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "c18e29a5-3449-4e4c-a310-47dd14cb2b40"
+  }
+}

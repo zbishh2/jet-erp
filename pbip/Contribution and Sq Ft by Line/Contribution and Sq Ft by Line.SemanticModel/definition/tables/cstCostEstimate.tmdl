@@ -1,0 +1,701 @@
+table cstCostEstimate
+	lineageTag: 778e6a67-a9db-4bb1-bef0-b8c51df37d7d
+
+	column ID
+		dataType: int64
+		formatString: 0
+		lineageTag: 67f7c7b9-b03d-4e21-a5a9-d20596818066
+		summarizeBy: none
+		sourceColumn: ID
+
+		annotation SummarizationSetBy = Automatic
+
+	column mainttime
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 2c7d7a1e-419b-4715-99fc-e0b525599d77
+		summarizeBy: none
+		sourceColumn: mainttime
+
+		variation Variation
+			isDefault
+			relationship: 0cb8adce-c421-41f2-8420-76c86e9f6f31
+			defaultHierarchy: LocalDateTable_efc01e6b-838f-48fd-b891-2a8886ae4f46.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column userID
+		dataType: string
+		lineageTag: f277b396-b879-4d96-8fa6-43fec8d3b3ed
+		summarizeBy: none
+		sourceColumn: userID
+
+		annotation SummarizationSetBy = Automatic
+
+	column costingdate
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: bad9be47-070e-47d8-9b19-65eeaa9590ae
+		summarizeBy: none
+		sourceColumn: costingdate
+
+		variation Variation
+			isDefault
+			relationship: b846e6e0-155b-4dab-af24-9cc7198913b2
+			defaultHierarchy: LocalDateTable_d595c547-4518-4e21-a630-a3d10f4c00cb.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column effectivedate
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: ed883b4f-0116-41c5-bd4a-799a16b7054b
+		summarizeBy: none
+		sourceColumn: effectivedate
+
+		variation Variation
+			isDefault
+			relationship: 1840dd69-3dc6-4ac7-9ffe-1836c2dfcda7
+			defaultHierarchy: LocalDateTable_08245b1f-59e0-440b-9f80-9427e93aa980.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column calculationquantity
+		dataType: double
+		lineageTag: 8cd8f10b-d401-4872-8287-57c24bf3a384
+		summarizeBy: sum
+		sourceColumn: calculationquantity
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column allcomponents
+		dataType: int64
+		formatString: 0
+		lineageTag: abe5b7e5-5f7f-41e9-841b-6882e7800c99
+		summarizeBy: sum
+		sourceColumn: allcomponents
+
+		annotation SummarizationSetBy = Automatic
+
+	column materialcost
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 847ca3a3-5522-4e64-ad4a-13c9ee9a7be2
+		summarizeBy: sum
+		sourceColumn: materialcost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column labourcost
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: d783c142-e396-4e53-9c31-50230d1019b9
+		summarizeBy: sum
+		sourceColumn: labourcost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column freightcost
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: ddb3bee3-4b45-4ed6-bcf4-9c25e6ef254c
+		summarizeBy: sum
+		sourceColumn: freightcost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column otherdirectcost
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: bffa54fb-0361-47f9-88f3-a792b6d247ac
+		summarizeBy: sum
+		sourceColumn: otherdirectcost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column otherindirectcost
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 0b0b1d44-f82f-4740-8f7a-ea8ac43d7140
+		summarizeBy: sum
+		sourceColumn: otherindirectcost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column fullcost
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 87b8b9bd-890d-44ec-b345-b9c8d47fc7ce
+		summarizeBy: sum
+		sourceColumn: fullcost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column materialtargetcost
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 44d3ba25-e715-4fbe-8a27-b09e9ade17a6
+		summarizeBy: sum
+		sourceColumn: materialtargetcost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column labourtargetcost
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: dff72ec0-f7ec-4780-ac70-7d667e72f6e4
+		summarizeBy: sum
+		sourceColumn: labourtargetcost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column freighttargetcost
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 78c9a458-6ebe-4e5b-85b3-66580c91c34b
+		summarizeBy: sum
+		sourceColumn: freighttargetcost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column otherdirecttargetcost
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: c3f058f8-35d4-47c3-a420-a1463cb7cdbc
+		summarizeBy: sum
+		sourceColumn: otherdirecttargetcost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column otherindirecttargetcost
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: fcf0e1ee-862c-4d3a-a677-1a5f443403d7
+		summarizeBy: sum
+		sourceColumn: otherindirecttargetcost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column targetcost
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 727ab5f7-b5e6-484b-af3c-d862ea5c651a
+		summarizeBy: sum
+		sourceColumn: targetcost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column comborun
+		dataType: int64
+		formatString: 0
+		lineageTag: fc718f6e-6240-477a-b976-b0e9e2a0ae0c
+		summarizeBy: sum
+		sourceColumn: comborun
+
+		annotation SummarizationSetBy = Automatic
+
+	column isrecovery
+		dataType: int64
+		formatString: 0
+		lineageTag: 3ada19a8-fced-4cba-81d5-cce9219cb2a5
+		summarizeBy: sum
+		sourceColumn: isrecovery
+
+		annotation SummarizationSetBy = Automatic
+
+	column addressID
+		dataType: int64
+		formatString: 0
+		lineageTag: 66c708b4-fc0a-4fce-8927-b3d46e8eeaa5
+		summarizeBy: count
+		sourceColumn: addressID
+
+		annotation SummarizationSetBy = Automatic
+
+	column companyID
+		dataType: int64
+		formatString: 0
+		lineageTag: 641c3be5-9819-4576-93d2-1918e4a6bcec
+		summarizeBy: count
+		sourceColumn: companyID
+
+		annotation SummarizationSetBy = Automatic
+
+	column priceRevisionID
+		dataType: int64
+		formatString: 0
+		lineageTag: 8344387a-5b9b-4b10-920a-95aea32b30d8
+		summarizeBy: count
+		sourceColumn: priceRevisionID
+
+		annotation SummarizationSetBy = Automatic
+
+	column productDesignID
+		dataType: int64
+		formatString: 0
+		lineageTag: 71f6e183-b60d-41e1-9e2b-2b96e6e797b7
+		summarizeBy: count
+		sourceColumn: productDesignID
+
+		annotation SummarizationSetBy = Automatic
+
+	column routeID
+		dataType: int64
+		formatString: 0
+		lineageTag: 963eb9a7-2f35-48f0-9301-f0180fa867db
+		summarizeBy: count
+		sourceColumn: routeID
+
+		annotation SummarizationSetBy = Automatic
+
+	column uOM
+		dataType: string
+		lineageTag: dad65f23-2dd6-4e84-86b8-476685e528ee
+		summarizeBy: none
+		sourceColumn: uOM
+
+		annotation SummarizationSetBy = Automatic
+
+	column costestimatenumber
+		dataType: string
+		lineageTag: 6de9bb39-3d8c-431c-abc2-a7e2b558d7f0
+		summarizeBy: none
+		sourceColumn: costestimatenumber
+
+		annotation SummarizationSetBy = Automatic
+
+	column masterCostEstimateID
+		dataType: int64
+		formatString: 0
+		lineageTag: 3a90702b-cf84-4d70-a980-63064b36843a
+		summarizeBy: count
+		sourceColumn: masterCostEstimateID
+
+		annotation SummarizationSetBy = Automatic
+
+	column estimatetype
+		dataType: int64
+		formatString: 0
+		lineageTag: c5e15f55-67f1-4447-91da-893fe1051f0b
+		summarizeBy: sum
+		sourceColumn: estimatetype
+
+		annotation SummarizationSetBy = Automatic
+
+	column orderID
+		dataType: int64
+		formatString: 0
+		lineageTag: 7d36dfac-4143-4383-bc43-73979725c455
+		summarizeBy: count
+		sourceColumn: orderID
+
+		annotation SummarizationSetBy = Automatic
+
+	column ownershipmask
+		dataType: int64
+		formatString: 0
+		lineageTag: 27861e27-4791-4b1a-b7c4-c6a4cef5a2a7
+		summarizeBy: sum
+		sourceColumn: ownershipmask
+
+		annotation SummarizationSetBy = Automatic
+
+	column costPer1000Quantity
+		dataType: double
+		lineageTag: 3dee836f-dd06-4a7b-8bf6-21eb45640c1f
+		summarizeBy: sum
+		sourceColumn: costPer1000Quantity
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column isCombo
+		dataType: int64
+		formatString: 0
+		lineageTag: aef6894f-c2b9-4650-a807-587bc98c17c9
+		summarizeBy: sum
+		sourceColumn: isCombo
+
+		annotation SummarizationSetBy = Automatic
+
+	column shadowedCostEstimateID
+		dataType: int64
+		formatString: 0
+		lineageTag: f8371f2d-1739-4e95-a22f-c1f864224a8e
+		summarizeBy: count
+		sourceColumn: shadowedCostEstimateID
+
+		annotation SummarizationSetBy = Automatic
+
+	column exchangeRate
+		dataType: double
+		lineageTag: 52ac3bd4-641a-4cfb-a329-e7cd884a6621
+		summarizeBy: sum
+		sourceColumn: exchangeRate
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column nationalCurrencyID
+		dataType: int64
+		formatString: 0
+		lineageTag: a58bbd5e-3e3d-4577-9c09-036e89b77b8c
+		summarizeBy: count
+		sourceColumn: nationalCurrencyID
+
+		annotation SummarizationSetBy = Automatic
+
+	column freightcost3
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 1dfcb05c-1309-499f-8fff-66f9ec8c65ca
+		summarizeBy: sum
+		sourceColumn: freightcost3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column directcost3
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 75ff8ff8-23f4-4f74-a0e1-2fdeac9eca54
+		summarizeBy: sum
+		sourceColumn: directcost3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column indirectcost3
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: ad695ce0-5cb8-4436-8b6e-0509a97389cc
+		summarizeBy: sum
+		sourceColumn: indirectcost3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column materialcost3
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 9ea0dd7c-c340-4eca-ac01-878edd052af8
+		summarizeBy: sum
+		sourceColumn: materialcost3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column fullcost3
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 3c8c20c3-d953-4c5d-90b5-5f19f6f68975
+		summarizeBy: sum
+		sourceColumn: fullcost3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column freightcost4
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 8ed80249-8adf-4f41-9368-61731c0388a0
+		summarizeBy: sum
+		sourceColumn: freightcost4
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column directcost4
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 75d7ced8-f767-433e-8c89-29e254488b5d
+		summarizeBy: sum
+		sourceColumn: directcost4
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column indirectcost4
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: b2946abe-7f96-4819-9317-a7fd201a5949
+		summarizeBy: sum
+		sourceColumn: indirectcost4
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column materialcost4
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: bb3467ae-690b-4f0b-8a57-918e87e3009d
+		summarizeBy: sum
+		sourceColumn: materialcost4
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column fullcost4
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 93716e66-416b-4448-b489-219668f4740f
+		summarizeBy: sum
+		sourceColumn: fullcost4
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column labourcost3
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 9c9f9442-dafb-4cb6-8f27-68c296c5c81f
+		summarizeBy: sum
+		sourceColumn: labourcost3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column labourcost4
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: b1cfd976-fc1a-4c83-b101-a7f5c00ce70a
+		summarizeBy: sum
+		sourceColumn: labourcost4
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column stockLineID
+		dataType: int64
+		formatString: 0
+		lineageTag: f4949fc5-5580-471a-9b23-018aedb2783f
+		summarizeBy: count
+		sourceColumn: stockLineID
+
+		annotation SummarizationSetBy = Automatic
+
+	column standardtrailerID
+		dataType: int64
+		formatString: 0
+		lineageTag: 122147a6-6f84-46aa-b4db-cdb73fdd14f8
+		summarizeBy: count
+		sourceColumn: standardtrailerID
+
+		annotation SummarizationSetBy = Automatic
+
+	column trailerquantity
+		dataType: int64
+		formatString: 0
+		lineageTag: d4bb15b9-94bc-4509-9c30-039ad0743618
+		summarizeBy: sum
+		sourceColumn: trailerquantity
+
+		annotation SummarizationSetBy = Automatic
+
+	column paperCostForecastDate
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: fdcc0ad0-ffdf-46e4-8d90-1d4a71ba5a4d
+		summarizeBy: none
+		sourceColumn: paperCostForecastDate
+
+		variation Variation
+			isDefault
+			relationship: 2abde716-4a66-44da-9472-51cd7ab00511
+			defaultHierarchy: LocalDateTable_90a60e34-465c-4a82-aa1c-b079cb2d4e15.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column inTransitCompanyID
+		dataType: int64
+		formatString: 0
+		lineageTag: cf2c3a15-704a-43d7-8208-829475da9939
+		summarizeBy: count
+		sourceColumn: inTransitCompanyID
+
+		annotation SummarizationSetBy = Automatic
+
+	column inTransitAddressID
+		dataType: int64
+		formatString: 0
+		lineageTag: 0b9aae0c-bfad-4936-8a4a-edaa96476efd
+		summarizeBy: count
+		sourceColumn: inTransitAddressID
+
+		annotation SummarizationSetBy = Automatic
+
+	column isTopUpAverage
+		dataType: int64
+		formatString: 0
+		lineageTag: 6468a7d0-6109-4562-8e3b-3b621c74afad
+		summarizeBy: sum
+		sourceColumn: isTopUpAverage
+
+		annotation SummarizationSetBy = Automatic
+
+	column hasJoiningComponentCosts
+		dataType: int64
+		formatString: 0
+		lineageTag: 974e8aa7-be9c-4e74-b3bb-691ce4ccc371
+		summarizeBy: sum
+		sourceColumn: hasJoiningComponentCosts
+
+		annotation SummarizationSetBy = Automatic
+
+	column hasmaterialcosts
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: cde6a392-2f64-40cd-8ed2-fdd17c8fe4b1
+		summarizeBy: none
+		sourceColumn: hasmaterialcosts
+
+		annotation SummarizationSetBy = Automatic
+
+	column costlinegrouping
+		dataType: int64
+		formatString: 0
+		lineageTag: 79d56961-cedb-4100-82d8-139d4b216c9f
+		summarizeBy: sum
+		sourceColumn: costlinegrouping
+
+		annotation SummarizationSetBy = Automatic
+
+	column freightoverridecost
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 258df131-793d-4f66-a0bf-e9e806a256ba
+		summarizeBy: sum
+		sourceColumn: freightoverridecost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column Column = LOOKUPVALUE(orgCompany[Rep])
+		lineageTag: 4173f6a2-27e1-4bdf-9b3c-9e1a0167c6ca
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Full Cost'
+		dataType: string
+		lineageTag: 7cbddcc9-627e-45ff-b5e5-4eea57ab003b
+		summarizeBy: none
+		sourceColumn: Full Cost
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Full Cost (Calculated Quantity)' = (cstCostEstimate[calculationquantity]/1000)*cstCostEstimate[fullcost]
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		lineageTag: 60d16dc6-50f2-474d-9db7-91990d7e78ed
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column 'Full cost (product price)' = CALCULATE(SUM(ebxProductPrice[fullcost]),RELATEDTABLE(ebxProductPrice))
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 5e7bd2f7-6733-457c-b30a-143703741f3b
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column 'Calculated quantity' = cstCostEstimate[calculationquantity]
+		lineageTag: d6b782c1-0abf-42e4-b9de-402e20bf9ee8
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Full cost 2' = cstCostEstimate[fullcost]
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 7fe89d18-812e-4407-a864-380cb9c3cd11
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column 'Calculated quantity (product price)' = CALCULATE(AVERAGE(ebxProductPrice[calculationquantity]))
+		lineageTag: 9f40c878-2bb0-4a91-b54b-c8f7cb24b414
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Net Margin' = CALCULATE(SUM(ebxProductPrice[netmargin]),RELATEDTABLE(ebxProductPrice))
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: fe05ce7a-1ad9-4b79-a6a8-4c173393504b
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column 'Price Per 1000' = CALCULATE(MAX(ebxProductPrice[calculatedprice]),RELATEDTABLE(ebxProductPrice))
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 1d171210-9fca-4399-8edf-d7630cdd8c34
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	partition cstCostEstimate = m
+		mode: import
+		source =
+				let
+				    Source = Sql.Databases("192.168.1.12"),
+				    esp = Source{[Name="esp"]}[Data],
+				    dbo_cstCostEstimate = esp{[Schema="dbo",Item="cstCostEstimate"]}[Data],
+				    #"Added Custom" = Table.AddColumn(dbo_cstCostEstimate, "Full Cost", each ([calculationquantity]/1000)*[fullcost])
+				in
+				    #"Added Custom"
+
+	annotation PBI_ResultType = Table
+

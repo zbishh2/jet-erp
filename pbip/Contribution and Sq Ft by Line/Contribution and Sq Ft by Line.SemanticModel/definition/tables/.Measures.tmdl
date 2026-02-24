@@ -1,0 +1,81 @@
+table '.Measures'
+	lineageTag: b808d58e-425d-4b0e-bd60-e504b72c1197
+
+	measure 'Order Hours' = SUM(dwproductionfeedback[Order Hours])
+		formatString: 0.0
+		lineageTag: 35ac4e9a-2f5c-41f0-98df-0ff2d1813fbc
+
+	measure 'Feedback Calculated Value' = SUM(dwproductionfeedback[$ Value])
+		formatString: \$#,0;(\$#,0);\$#,0
+		lineageTag: eb3ac1b7-a2db-42b1-9c56-4a7f588303fb
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	measure 'Feedback Calculated Contribution' = SUM(dwproductionfeedback[Pre Est. Contribution $])
+		formatString: \$#,0;(\$#,0);\$#,0
+		lineageTag: 9dd5d6c3-07a3-4cca-8d34-4bbd1ecf193a
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	measure 'Contribution / Order Hour' = IFERROR([Feedback Calculated Contribution]/[Order Hours],BLANK())
+		formatString: \$#,0;(\$#,0);\$#,0
+		lineageTag: 58c17395-2cde-4afc-829b-7ec2caf81117
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	measure 'Feedback Calculated Contribution %' = IFERROR([Feedback Calculated Contribution]/[Feedback Calculated Value],BLANK())
+		formatString: 0.0%;-0.0%;0.0%
+		lineageTag: bca379a2-de46-481c-8de7-e6b107682229
+
+	measure 'Sq Ft Entry' = SUM(dwproductionfeedback[total sq ft])
+		formatString: #,0
+		lineageTag: 7017787c-9073-4f25-9912-6cc390100016
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Sq Ft per Order Hour' = [Sq Ft Entry]/[Order Hours]
+		formatString: #,0.00
+		lineageTag: 526c9801-8feb-4d2a-b871-d8d92430a477
+
+	measure 'Sq Ft Prod MTD' = ```
+			
+			CALCULATE(
+			    [Sq Ft Entry],
+			    DATESMTD(dwproductionfeedback[feedback_report_date]),
+			    ALL(dwproductionfeedback)
+			)
+			
+			```
+		lineageTag: f1fb0a34-4f8a-4b26-8a49-35aed198e12d
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Days = DISTINCTCOUNT(dwproductionfeedback[feedback_report_date])
+		formatString: 0
+		lineageTag: 7bbb67d0-f097-4fc2-8015-8ba431f5046c
+
+	measure 'Sq Ft Per Day' = [Sq Ft Entry]/[Days]
+		formatString: #,0.00
+		lineageTag: cbab1383-6935-4bbb-a0c6-5307323330e8
+
+	measure 'Contribution Per Day' = [Feedback Calculated Contribution]/[Days]
+		formatString: \$#,0.00;(\$#,0.00);\$#,0.00
+		lineageTag: 10a194de-0b36-480d-9bb9-090234f77bf3
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column Value
+		formatString: 0
+		lineageTag: 88b4c280-ec32-416e-85ae-82600a532a07
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Value]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition '.Measures' = calculated
+		mode: import
+		source = Row("Value", BLANK())
+
+	annotation PBI_Id = 22282b6d892f4eeca3d088bd70253f84
+

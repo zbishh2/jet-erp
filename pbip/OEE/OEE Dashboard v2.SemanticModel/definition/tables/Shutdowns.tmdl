@@ -1,0 +1,34 @@
+table Shutdowns
+	lineageTag: 39540d69-ff19-4e56-920e-f0232c5bdf71
+
+	column Date
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 9b7984fc-4192-41e3-82cf-3154aaed6600
+		summarizeBy: none
+		sourceColumn: Date
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Reason
+		dataType: string
+		lineageTag: 15c4a599-8cb0-4150-94ca-52f5e1b8fbb3
+		summarizeBy: none
+		sourceColumn: Reason
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Shutdowns = m
+		mode: import
+		source =
+				let
+				    Source = Excel.Workbook(Web.Contents("https://jetcontainercompany.sharepoint.com/sites/ContinuousImprovement/Shared%20Documents/General/Employee%20of%20the%20Month,%20COGs,%20Upcoming%20Shutdowns.xlsx"), null, true),
+				    Shutdowns_Table = Source{[Item="Shutdowns",Kind="Table"]}[Data],
+				    #"Changed Type" = Table.TransformColumnTypes(Shutdowns_Table,{{"Date", type date}, {"Reason", type text}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Table
+

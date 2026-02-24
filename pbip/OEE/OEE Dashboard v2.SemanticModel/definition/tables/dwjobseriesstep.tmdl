@@ -1,0 +1,662 @@
+table dwjobseriesstep
+	lineageTag: 26f1dac6-5499-4c1a-84ad-5924c6bce1de
+
+	column job_series_step_id
+		dataType: int64
+		formatString: 0
+		lineageTag: b189d80f-2b0e-4e53-a4b1-035357ac7bcd
+		summarizeBy: none
+		sourceColumn: job_series_step_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column jss_dataset
+		dataType: string
+		lineageTag: 04557d55-e5d1-4990-a123-ad614f9cde71
+		summarizeBy: none
+		sourceColumn: jss_dataset
+
+		annotation SummarizationSetBy = Automatic
+
+	column jss_report_date
+		dataType: dateTime
+		formatString: Long Date
+		lineageTag: 06de7fb7-7d44-4f39-8851-b200222caf4d
+		summarizeBy: none
+		sourceColumn: jss_report_date
+
+		variation Variation
+			isDefault
+			relationship: cf044c97-0909-48fe-980e-89689c2294e4
+			defaultHierarchy: LocalDateTable_8fba2bf4-9180-4742-8575-24aa5a5800c6.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column jss_time_zone
+		dataType: string
+		lineageTag: 5b05d740-2901-4f9f-8c12-e4c0ab137775
+		summarizeBy: none
+		sourceColumn: jss_time_zone
+
+		annotation SummarizationSetBy = Automatic
+
+	column jss_pcs_order_id
+		dataType: int64
+		formatString: 0
+		lineageTag: f995bb43-11ee-4295-afb9-dc77c8384998
+		summarizeBy: sum
+		sourceColumn: jss_pcs_order_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column jss_calendar_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 771006f6-4456-4d3e-a187-879389456867
+		summarizeBy: sum
+		sourceColumn: jss_calendar_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column jss_date_id
+		dataType: int64
+		formatString: 0
+		lineageTag: daaa3757-0923-4522-976d-969691b3cdfa
+		summarizeBy: sum
+		sourceColumn: jss_date_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column jss_costcenter_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 4f5e8502-1357-4ef0-942e-0a37c272fb47
+		summarizeBy: sum
+		sourceColumn: jss_costcenter_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column jss_customer_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 63d9a704-b5ef-4ac6-837f-a3c54ad3487e
+		summarizeBy: sum
+		sourceColumn: jss_customer_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column jss_customer_address_id
+		dataType: int64
+		formatString: 0
+		lineageTag: a555c84c-aa2d-4652-aec0-04a787cb42e4
+		summarizeBy: sum
+		sourceColumn: jss_customer_address_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column start_datetime_rounded
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 4227e715-988e-4695-9c79-70686c27449a
+		summarizeBy: none
+		sourceColumn: start_datetime_rounded
+
+		variation Variation
+			isDefault
+			relationship: a04483f9-7473-4832-848d-5db923c518b0
+			defaultHierarchy: LocalDateTable_7d1032e9-7c1b-4de9-9080-e99b39273375.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column setup_finish_datetime_rounded
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: f83f43e4-6488-40e0-a24d-475d180ad821
+		summarizeBy: none
+		sourceColumn: setup_finish_datetime_rounded
+
+		variation Variation
+			isDefault
+			relationship: e69796b9-f0ed-45d4-b55e-1309c56f178d
+			defaultHierarchy: LocalDateTable_97ecea4e-34b8-4bcd-a826-551e6c9f5f9b.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column finish_datetime_rounded
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 735f7666-c094-4c06-9d7b-8bb69e0f9623
+		summarizeBy: none
+		sourceColumn: finish_datetime_rounded
+
+		variation Variation
+			isDefault
+			relationship: 3eb6a146-8658-460f-9112-07334e4b3271
+			defaultHierarchy: LocalDateTable_a35c8f51-d362-4af2-a992-e9543037cbfd.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_job_number
+		dataType: string
+		lineageTag: 7365126e-b931-42ec-b904-d485223d81d2
+		summarizeBy: none
+		sourceColumn: feedback_job_number
+
+		annotation SummarizationSetBy = Automatic
+
+	column job_series
+		dataType: int64
+		formatString: 0
+		lineageTag: 3f5c304c-7f2d-4432-b577-b8c76e62a02d
+		summarizeBy: sum
+		sourceColumn: job_series
+
+		annotation SummarizationSetBy = Automatic
+
+	column job_step
+		dataType: int64
+		formatString: 0
+		lineageTag: d9e3ba85-c830-4715-8162-c86832274e4f
+		summarizeBy: sum
+		sourceColumn: job_step
+
+		annotation SummarizationSetBy = Automatic
+
+	column job_series_status
+		dataType: string
+		lineageTag: c4c358df-31c6-4132-8a9e-c8af665f5861
+		summarizeBy: none
+		sourceColumn: job_series_status
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_start
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: bd644ca1-9ea7-43fa-954d-875e3904abe9
+		summarizeBy: none
+		sourceColumn: feedback_start
+
+		variation Variation
+			isDefault
+			relationship: 3ac10306-871e-47d8-92ff-4f0886e2c97b
+			defaultHierarchy: LocalDateTable_63ba5941-708f-4f55-b324-fca5fe9af77d.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column setup_started
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: b8980834-494e-4b1a-940c-206c77c19a8b
+		summarizeBy: none
+		sourceColumn: setup_started
+
+		variation Variation
+			isDefault
+			relationship: 6f45c69e-3880-49d6-b128-13dc2fc07bb7
+			defaultHierarchy: LocalDateTable_7991e723-ff67-4662-953e-f9d50767f0d4.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column setup_finished
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: da7c1666-cdc3-4824-9048-835f28b3ed77
+		summarizeBy: none
+		sourceColumn: setup_finished
+
+		variation Variation
+			isDefault
+			relationship: b96fb23f-4d28-4c29-999b-1e43c13b88c4
+			defaultHierarchy: LocalDateTable_83866d4c-a27d-4133-bcec-8d093a8e402a.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column run_finished
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 9e118be9-7687-4291-8e0f-9b06b59baa0b
+		summarizeBy: none
+		sourceColumn: run_finished
+
+		variation Variation
+			isDefault
+			relationship: 55a5d18c-6128-45bd-8551-c00c27fbdfab
+			defaultHierarchy: LocalDateTable_121cd86d-f910-4c47-92bd-ae745f6d5f75.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_finish
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 82311139-2224-4e6f-94fc-54d0608f48bc
+		summarizeBy: none
+		sourceColumn: feedback_finish
+
+		variation Variation
+			isDefault
+			relationship: 8b613ae8-f44a-4637-93df-7fcbe3fe54f7
+			defaultHierarchy: LocalDateTable_723067a9-2f1a-43e7-8bcb-6834ceffcde9.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column number_up_entry_1
+		dataType: int64
+		formatString: 0
+		lineageTag: 3eb233e3-54f4-45ac-995e-b683ef12b365
+		summarizeBy: sum
+		sourceColumn: number_up_entry_1
+
+		annotation SummarizationSetBy = Automatic
+
+	column number_up_entry_2
+		dataType: int64
+		formatString: 0
+		lineageTag: 61f6b16e-e617-4423-bfdf-bcc603af140e
+		summarizeBy: sum
+		sourceColumn: number_up_entry_2
+
+		annotation SummarizationSetBy = Automatic
+
+	column number_up_exit_1
+		dataType: int64
+		formatString: 0
+		lineageTag: 03e07d17-4641-468e-8899-d294cb033d7c
+		summarizeBy: sum
+		sourceColumn: number_up_exit_1
+
+		annotation SummarizationSetBy = Automatic
+
+	column number_up_exit_2
+		dataType: int64
+		formatString: 0
+		lineageTag: ddcaa950-cd97-44d9-bed2-3db1a84392c2
+		summarizeBy: sum
+		sourceColumn: number_up_exit_2
+
+		annotation SummarizationSetBy = Automatic
+
+	column rework_flag
+		dataType: string
+		lineageTag: 9c4d98d7-2369-4e7f-84f9-17f607b03ba1
+		summarizeBy: none
+		sourceColumn: rework_flag
+
+		annotation SummarizationSetBy = Automatic
+
+	column check_job_within_one_shift
+		dataType: string
+		lineageTag: 17b6d061-4b0a-4866-be49-474c8bb1dec8
+		summarizeBy: none
+		sourceColumn: check_job_within_one_shift
+
+		annotation SummarizationSetBy = Automatic
+
+	column check_job_within_open_shift
+		dataType: string
+		lineageTag: 5a82816c-8ea1-4bcf-a855-ea9c8c044624
+		summarizeBy: none
+		sourceColumn: check_job_within_open_shift
+
+		annotation SummarizationSetBy = Automatic
+
+	column check_job_times
+		dataType: string
+		lineageTag: 24320371-d90a-4faf-a73c-e0eb1aa6edd5
+		summarizeBy: none
+		sourceColumn: check_job_times
+
+		annotation SummarizationSetBy = Automatic
+
+	column check_duplicate_feedbacks
+		dataType: string
+		lineageTag: deae8bf8-b86b-45aa-98ed-178b8410a9b8
+		summarizeBy: none
+		sourceColumn: check_duplicate_feedbacks
+
+		annotation SummarizationSetBy = Automatic
+
+	column check_quantity
+		dataType: string
+		lineageTag: 87bf7030-2d6a-4623-85a5-0b0c9ed2d47b
+		summarizeBy: none
+		sourceColumn: check_quantity
+
+		annotation SummarizationSetBy = Automatic
+
+	column planned_machine_number
+		dataType: int64
+		formatString: 0
+		lineageTag: d196403c-e6ca-4bdc-94dc-d2f335f534df
+		summarizeBy: sum
+		sourceColumn: planned_machine_number
+
+		annotation SummarizationSetBy = Automatic
+
+	column planned_datetime
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: faf95def-0f74-48cc-806c-322d25a3971b
+		summarizeBy: none
+		sourceColumn: planned_datetime
+
+		variation Variation
+			isDefault
+			relationship: c237fe69-3b94-4b25-8dc9-d615c38334da
+			defaultHierarchy: LocalDateTable_5d67ba8d-9c24-4f83-a42e-4c513a5b532e.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column home_series_number
+		dataType: int64
+		formatString: 0
+		lineageTag: 02274ee9-6d12-425c-85da-1aeaee861a92
+		summarizeBy: sum
+		sourceColumn: home_series_number
+
+		annotation SummarizationSetBy = Automatic
+
+	column maintenance_code
+		dataType: int64
+		formatString: 0
+		lineageTag: f8ed3379-6d06-4a1c-bf78-9d895d858b9e
+		summarizeBy: sum
+		sourceColumn: maintenance_code
+
+		annotation SummarizationSetBy = Automatic
+
+	column maintenance_code_desc
+		dataType: string
+		lineageTag: e3589909-aac2-4ddf-b6fa-e6a7c9dc6414
+		summarizeBy: none
+		sourceColumn: maintenance_code_desc
+
+		annotation SummarizationSetBy = Automatic
+
+	column join_to_job
+		dataType: string
+		lineageTag: 705c9197-40a0-45ea-946a-91546bc6a93e
+		summarizeBy: none
+		sourceColumn: join_to_job
+
+		annotation SummarizationSetBy = Automatic
+
+	column separate_from_job
+		dataType: string
+		lineageTag: 56e8d1f5-5005-4de9-8b87-58c02995729d
+		summarizeBy: none
+		sourceColumn: separate_from_job
+
+		annotation SummarizationSetBy = Automatic
+
+	column unit_quantity
+		dataType: int64
+		formatString: 0
+		lineageTag: c364b144-a36d-48eb-af5b-602f05c7b269
+		summarizeBy: sum
+		sourceColumn: unit_quantity
+
+		annotation SummarizationSetBy = Automatic
+
+	column shift_split_code
+		dataType: string
+		lineageTag: 18f1a3b5-4098-4b85-8eb5-4fc8b6e9e365
+		summarizeBy: none
+		sourceColumn: shift_split_code
+
+		annotation SummarizationSetBy = Automatic
+
+	column operations
+		dataType: int64
+		formatString: 0
+		lineageTag: 6a2a2225-9ffd-4b00-9c46-e19a0a92ad17
+		summarizeBy: sum
+		sourceColumn: operations
+
+		annotation SummarizationSetBy = Automatic
+
+	column print_number
+		dataType: string
+		lineageTag: c5f2b036-a1b9-4a8a-b67a-ca462c955c0a
+		summarizeBy: none
+		sourceColumn: print_number
+
+		annotation SummarizationSetBy = Automatic
+
+	column die_number
+		dataType: string
+		lineageTag: ecc09633-d8ae-400d-a8f2-6f0808f66c13
+		summarizeBy: none
+		sourceColumn: die_number
+
+		annotation SummarizationSetBy = Automatic
+
+	column crew_id
+		dataType: string
+		lineageTag: 406b8ddd-2483-4d80-9478-9dffd923387d
+		summarizeBy: none
+		sourceColumn: crew_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column hand_hole_code
+		dataType: string
+		lineageTag: cc2c98b5-ef0b-447a-bb93-1e8d0bbe809a
+		summarizeBy: none
+		sourceColumn: hand_hole_code
+
+		annotation SummarizationSetBy = Automatic
+
+	column rotated_on_machine
+		dataType: int64
+		formatString: 0
+		lineageTag: 7e792263-5798-45c1-b7b0-01dddffa8708
+		summarizeBy: sum
+		sourceColumn: rotated_on_machine
+
+		annotation SummarizationSetBy = Automatic
+
+	column job_create_datetime
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: d1b35829-bc48-4ac7-916a-6fd6752eddbb
+		summarizeBy: none
+		sourceColumn: job_create_datetime
+
+		variation Variation
+			isDefault
+			relationship: 1dc554e2-34b8-4493-8047-2d9191bec380
+			defaultHierarchy: LocalDateTable_649886b9-7a96-4436-ae29-b39c627ea252.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column stock_manufacture_flag
+		dataType: int64
+		formatString: 0
+		lineageTag: 7c83ca60-be34-4f6f-9436-eafdb06e479f
+		summarizeBy: sum
+		sourceColumn: stock_manufacture_flag
+
+		annotation SummarizationSetBy = Automatic
+
+	column creator_username
+		dataType: string
+		lineageTag: b3d4c5fd-2231-4a43-bdfb-7e37f9e5243e
+		summarizeBy: none
+		sourceColumn: creator_username
+
+		annotation SummarizationSetBy = Automatic
+
+	column die_copy
+		dataType: int64
+		formatString: 0
+		lineageTag: f85d957a-895e-4378-8067-093560be1c4b
+		summarizeBy: sum
+		sourceColumn: die_copy
+
+		annotation SummarizationSetBy = Automatic
+
+	column print_copy
+		dataType: int64
+		formatString: 0
+		lineageTag: 2105355e-fc0e-436e-a70a-c4c68e2afcae
+		summarizeBy: sum
+		sourceColumn: print_copy
+
+		annotation SummarizationSetBy = Automatic
+
+	column line_no
+		dataType: int64
+		formatString: 0
+		lineageTag: 6c5a1290-91dd-437f-82a2-60b4badb958e
+		summarizeBy: sum
+		sourceColumn: line_no
+
+		annotation SummarizationSetBy = Automatic
+
+	column strap_code
+		dataType: int64
+		formatString: 0
+		lineageTag: 12313412-17e7-4b84-899f-65da5c0d30d4
+		summarizeBy: sum
+		sourceColumn: strap_code
+
+		annotation SummarizationSetBy = Automatic
+
+	column lengthwise_strap_number
+		dataType: int64
+		formatString: 0
+		lineageTag: 2beecfa0-4993-475c-a63c-ec228a2259b8
+		summarizeBy: sum
+		sourceColumn: lengthwise_strap_number
+
+		annotation SummarizationSetBy = Automatic
+
+	column widthwise_strap_number
+		dataType: int64
+		formatString: 0
+		lineageTag: 15d4cd82-cf52-422f-b6ac-601d1b5c7b0b
+		summarizeBy: sum
+		sourceColumn: widthwise_strap_number
+
+		annotation SummarizationSetBy = Automatic
+
+	column quantity_per_shipper_bundle
+		dataType: int64
+		formatString: 0
+		lineageTag: ec5ca668-3c02-4af7-8468-8344d2ff9c30
+		summarizeBy: sum
+		sourceColumn: quantity_per_shipper_bundle
+
+		annotation SummarizationSetBy = Automatic
+
+	column quantity_per_wip_unit
+		dataType: int64
+		formatString: 0
+		lineageTag: d5daa5b5-ba11-480d-a715-a672115286df
+		summarizeBy: sum
+		sourceColumn: quantity_per_wip_unit
+
+		annotation SummarizationSetBy = Automatic
+
+	column edge_protectors
+		dataType: int64
+		formatString: 0
+		lineageTag: a4ed4804-b720-4d3f-8c62-a6464c2bf923
+		summarizeBy: sum
+		sourceColumn: edge_protectors
+
+		annotation SummarizationSetBy = Automatic
+
+	column pallet_covering
+		dataType: string
+		lineageTag: 93327b6d-e916-4ee1-8b18-6155fd151740
+		summarizeBy: none
+		sourceColumn: pallet_covering
+
+		annotation SummarizationSetBy = Automatic
+
+	column destination_code
+		dataType: string
+		lineageTag: 842e82ea-84f1-4e36-a963-d061d94eb30b
+		summarizeBy: none
+		sourceColumn: destination_code
+
+		annotation SummarizationSetBy = Automatic
+
+	column number_per_set
+		dataType: int64
+		formatString: 0
+		lineageTag: bdbf66f7-95ce-4150-ae7f-fd4c73dc7a7c
+		summarizeBy: sum
+		sourceColumn: number_per_set
+
+		annotation SummarizationSetBy = Automatic
+
+	column master_job_flag
+		dataType: int64
+		formatString: 0
+		lineageTag: 7c6721f8-63b7-46f1-9d7f-dfa2ec0a2082
+		summarizeBy: sum
+		sourceColumn: master_job_flag
+
+		annotation SummarizationSetBy = Automatic
+
+	column jss_record_origin
+		dataType: string
+		lineageTag: a5f38e1d-1121-427e-8878-ac296e286089
+		summarizeBy: none
+		sourceColumn: jss_record_origin
+
+		annotation SummarizationSetBy = Automatic
+
+	column jss_record_status
+		dataType: string
+		lineageTag: 2afd55aa-f0c9-414d-a90d-46ce9d3425f7
+		summarizeBy: none
+		sourceColumn: jss_record_status
+
+		annotation SummarizationSetBy = Automatic
+
+	column jss_record_last_changed
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: ec86dd91-ec24-4f73-9b78-c6b3818d4d8d
+		summarizeBy: none
+		sourceColumn: jss_record_last_changed
+
+		variation Variation
+			isDefault
+			relationship: 72839b22-30f3-4fd7-aac3-cf4feed29eac
+			defaultHierarchy: LocalDateTable_f4d2766a-a109-488e-891b-0adcc9eb5596.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Setup Downtime' = CALCULATE(SUM(dwdowntimes[Setup Closed downtime hours]) + SUM(dwdowntimes[Setup Open downtime hours]),RELATEDTABLE(dwdowntimes))
+		lineageTag: 24b93e10-603b-48d4-b77e-cc4e5fabb693
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Total Downtime' = CALCULATE(SUM(dwdowntimes[Open Downtime Hours])+sum(dwdowntimes[Closed downtime hours]),RELATEDTABLE(dwdowntimes))
+		lineageTag: 1864573d-510c-4a82-ade9-e3efe0f52142
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	partition dwjobseriesstep = m
+		mode: import
+		source =
+				let
+				    Source = Sql.Databases("192.168.1.12"),
+				    kdw_master = Source{[Name="kdw_master"]}[Data],
+				    dbo_dwjobseriesstep = kdw_master{[Schema="dbo",Item="dwjobseriesstep"]}[Data]
+				in
+				    dbo_dwjobseriesstep
+

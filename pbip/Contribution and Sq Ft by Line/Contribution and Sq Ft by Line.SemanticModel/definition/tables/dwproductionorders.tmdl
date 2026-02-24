@@ -1,0 +1,382 @@
+table dwproductionorders
+	lineageTag: 01f1aa1f-d2f3-48b8-bc93-a68613fc6497
+
+	column pcs_order_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 3cc155dc-220f-4e51-9269-172a55664caa
+		summarizeBy: sum
+		sourceColumn: pcs_order_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column pcs_order_customer_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 328b9bb3-5451-4b86-8d94-1941104c1620
+		summarizeBy: sum
+		sourceColumn: pcs_order_customer_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column pcs_order_customer_address_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 9b124123-2601-43e2-8b62-eb3490f48466
+		summarizeBy: sum
+		sourceColumn: pcs_order_customer_address_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column ordered_board_cost
+		dataType: double
+		lineageTag: 6c94dacb-6f77-4a9b-9de1-854f7aeb6a67
+		summarizeBy: sum
+		sourceColumn: ordered_board_cost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column ordered_board_cost_unit
+		dataType: string
+		lineageTag: 92fe5057-cfc6-4fef-9237-a75a3ceaa5e2
+		summarizeBy: none
+		sourceColumn: ordered_board_cost_unit
+
+		annotation SummarizationSetBy = Automatic
+
+	column spec_number
+		dataType: string
+		lineageTag: 620aac23-3ede-4973-b8d9-99a7c82275da
+		summarizeBy: none
+		sourceColumn: spec_number
+
+		annotation SummarizationSetBy = Automatic
+
+	column job_number
+		dataType: string
+		lineageTag: 3e90ffd8-5559-41ee-83de-9a7d15e58abb
+		summarizeBy: none
+		sourceColumn: job_number
+
+		annotation SummarizationSetBy = Automatic
+
+	column customer_order_number
+		dataType: string
+		lineageTag: e3e3c155-0970-4760-9c5f-ea782e2c960f
+		summarizeBy: none
+		sourceColumn: customer_order_number
+
+		annotation SummarizationSetBy = Automatic
+
+	column pcs_customer_number
+		dataType: string
+		lineageTag: ea461f52-d89f-42ed-bbc4-5630cdfef3c3
+		summarizeBy: none
+		sourceColumn: pcs_customer_number
+
+		annotation SummarizationSetBy = Automatic
+
+	column customer_name
+		dataType: string
+		lineageTag: 590bc4e3-fccf-45f7-8dc3-fc199a574436
+		summarizeBy: none
+		sourceColumn: customer_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_ordered
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 50868a96-1a53-4246-a96d-de98a21c0840
+		summarizeBy: none
+		sourceColumn: date_ordered
+
+		variation Variation
+			isDefault
+			relationship: 930aeca3-38b9-4353-bd84-ed3ecee1b848
+			defaultHierarchy: LocalDateTable_bf2de32b-85db-4afb-ab58-627b6e242b2b.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column job_status
+		dataType: int64
+		formatString: 0
+		lineageTag: e67c84e2-b51d-456f-9904-1cb817dbcda8
+		summarizeBy: sum
+		sourceColumn: job_status
+
+		annotation SummarizationSetBy = Automatic
+
+	column slot_code
+		dataType: string
+		lineageTag: 2af0bc07-b61e-4439-a991-94262938e321
+		summarizeBy: none
+		sourceColumn: slot_code
+
+		annotation SummarizationSetBy = Automatic
+
+	column sauer_equipment
+		dataType: string
+		lineageTag: c7638c01-f9e3-4021-a14d-6bd181f0e17c
+		summarizeBy: none
+		sourceColumn: sauer_equipment
+
+		annotation SummarizationSetBy = Automatic
+
+	column sales_rep_code
+		dataType: string
+		lineageTag: 1b897612-2272-4830-97e2-ea4e9ec29486
+		summarizeBy: none
+		sourceColumn: sales_rep_code
+
+		annotation SummarizationSetBy = Automatic
+
+	column ordered_quantity
+		dataType: int64
+		formatString: 0
+		lineageTag: 4c458b99-69c8-45fb-a7c8-92cd5f03458f
+		summarizeBy: sum
+		sourceColumn: ordered_quantity
+
+		annotation SummarizationSetBy = Automatic
+
+	column number_of_steps
+		dataType: int64
+		formatString: 0
+		lineageTag: c613dff4-7a89-4113-b371-4a4db66fad93
+		summarizeBy: sum
+		sourceColumn: number_of_steps
+
+		annotation SummarizationSetBy = Automatic
+
+	column priority
+		dataType: int64
+		formatString: 0
+		lineageTag: 8ed843c3-0943-4245-8220-35259fed9838
+		summarizeBy: sum
+		sourceColumn: priority
+
+		annotation SummarizationSetBy = Automatic
+
+	column print_quality
+		dataType: int64
+		formatString: 0
+		lineageTag: b8c0d42c-2b32-488e-96e2-833c851e14f8
+		summarizeBy: sum
+		sourceColumn: print_quality
+
+		annotation SummarizationSetBy = Automatic
+
+	column product_description
+		dataType: string
+		lineageTag: 997630b3-a282-40b9-9eda-8e31f2a33b98
+		summarizeBy: none
+		sourceColumn: product_description
+
+		annotation SummarizationSetBy = Automatic
+
+	column sales_clerk_code
+		dataType: string
+		lineageTag: 54ef0f6c-41be-4944-9044-430f5b317a09
+		summarizeBy: none
+		sourceColumn: sales_clerk_code
+
+		annotation SummarizationSetBy = Automatic
+
+	column percent_over_order
+		dataType: int64
+		formatString: 0
+		lineageTag: 95b7bdc3-e59a-4985-836a-4c0db9d1ef5b
+		summarizeBy: sum
+		sourceColumn: percent_over_order
+
+		annotation SummarizationSetBy = Automatic
+
+	column shipment_method
+		dataType: string
+		lineageTag: 6cc379fb-245f-4307-8dab-b6c4a226703e
+		summarizeBy: none
+		sourceColumn: shipment_method
+
+		annotation SummarizationSetBy = Automatic
+
+	column supply_by_datetime
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: dc2ca2d6-cd84-4b94-93f7-54eeab517ce8
+		summarizeBy: none
+		sourceColumn: supply_by_datetime
+
+		variation Variation
+			isDefault
+			relationship: e57b668b-21fa-4cec-8eef-287019a8e032
+			defaultHierarchy: LocalDateTable_bb9c39f1-339e-4586-9a3f-b26b19266b79.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column prefer_delivery_time
+		dataType: int64
+		formatString: 0
+		lineageTag: 30636a60-3aad-4297-854f-9a5c8b04c6c2
+		summarizeBy: sum
+		sourceColumn: prefer_delivery_time
+
+		annotation SummarizationSetBy = Automatic
+
+	column part_number
+		dataType: int64
+		formatString: 0
+		lineageTag: 2ab46fce-604f-4ff8-b270-d14502ce56fd
+		summarizeBy: sum
+		sourceColumn: part_number
+
+		annotation SummarizationSetBy = Automatic
+
+	column job_description
+		dataType: string
+		lineageTag: 921dfca1-9d6c-4c24-acc3-5f01d4b8c556
+		summarizeBy: none
+		sourceColumn: job_description
+
+		annotation SummarizationSetBy = Automatic
+
+	column print_status
+		dataType: int64
+		formatString: 0
+		lineageTag: 1dc824b5-575f-4d4b-b65e-d7f3c08e1396
+		summarizeBy: sum
+		sourceColumn: print_status
+
+		annotation SummarizationSetBy = Automatic
+
+	column overrun_percent
+		dataType: int64
+		formatString: 0
+		lineageTag: d912051b-a627-48cb-a93b-fd0026ea123d
+		summarizeBy: sum
+		sourceColumn: overrun_percent
+
+		annotation SummarizationSetBy = Automatic
+
+	column original_due_date
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 3511e30b-338b-475a-b3e8-5fc8c7fa7aa7
+		summarizeBy: none
+		sourceColumn: original_due_date
+
+		variation Variation
+			isDefault
+			relationship: 93be01c8-dabd-4d52-a929-33f9eb337a62
+			defaultHierarchy: LocalDateTable_43239fad-3268-4c35-b8f4-ba974caa848b.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column old_spec_number
+		dataType: string
+		lineageTag: 62f4cddc-10c7-4c31-9396-9fc941e6255a
+		summarizeBy: none
+		sourceColumn: old_spec_number
+
+		annotation SummarizationSetBy = Automatic
+
+	column supply_from_spec
+		dataType: string
+		lineageTag: 76fdaeb3-de72-4020-8640-4a2157a28b7c
+		summarizeBy: none
+		sourceColumn: supply_from_spec
+
+		annotation SummarizationSetBy = Automatic
+
+	column plant_bitmap
+		dataType: int64
+		formatString: 0
+		lineageTag: c1aab393-5e3f-4fa7-8593-debd34948c7f
+		summarizeBy: sum
+		sourceColumn: plant_bitmap
+
+		annotation SummarizationSetBy = Automatic
+
+	column RelatedFeedbackCount = ```
+			COUNTROWS(RELATEDTABLE(dwproductionfeedback))
+			
+			```
+		formatString: 0
+		lineageTag: 579171bd-a0bd-4802-9521-b70c36fa084a
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'transaction date' = CALCULATE(MAX(espInvoiceLine[transaction date]),RELATEDTABLE(espInvoiceLine))
+		formatString: General Date
+		lineageTag: 8649d593-14f3-414c-9bab-38a59e4bc859
+		summarizeBy: none
+
+		variation Variation
+			isDefault
+			relationship: eeaaf36e-3a78-4688-875a-802955d5b6b3
+			defaultHierarchy: LocalDateTable_23572afa-71d7-4235-9f75-42ba07531a54.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Unit Price' = IF(ISBLANK(dwproductionorders[Unit Price (Invoice AVG)]),RELATED(ebxProductDesign[Unit Price (AVG)]),dwproductionorders[Unit Price (Invoice AVG)])
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 2c8fbcd6-91cb-414f-854b-d583906d71e3
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column 'Invoice Status' = IF(not ISBLANK(dwproductionorders[transaction date]),"Invoiced","Not Invoiced")
+		lineageTag: ccf267a6-05c3-4b5a-ab08-a9b7a9c32d00
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'job #' = dwproductionorders[job_number]
+		lineageTag: 3e909c97-d920-4c8d-8cd7-265f1edc20e0
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Unit Price (Invoice AVG)' = CALCULATE(AVERAGE(espInvoiceLine[Price per piece]),RELATEDTABLE(espInvoiceLine))
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 1811eac2-0fc9-48a8-bdf2-ce0d091da581
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column 'Unit Price (Invoiced)' = CALCULATE(MAX(espInvoiceLine[Price per piece]),RELATEDTABLE(espInvoiceLine))
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 96263625-1fb1-4e38-b286-0afba60c89ed
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column 'Pre Unit Cost' = RELATED(espOrder[Pre Full Cost (Per Unit)])
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 3b997381-0932-4095-a400-3fd1f4b5df09
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	partition dwproductionorders = m
+		mode: import
+		source =
+				let
+				    Source = Sql.Databases("192.168.1.12"),
+				    kdw_master = Source{[Name="kdw_master"]}[Data],
+				    dbo_dwproductionorders = kdw_master{[Schema="dbo",Item="dwproductionorders"]}[Data],
+				    #"Removed Columns" = Table.RemoveColumns(dbo_dwproductionorders,{"ink_code_1", "ink_code_10", "ink_code_11", "ink_code_12", "ink_code_13", "ink_code_14", "ink_code_15", "ink_code_16", "ink_code_2", "ink_code_3", "ink_code_4", "ink_code_5", "ink_code_6", "ink_code_7", "ink_code_8", "ink_code_9", "long_or_short_flag", "score_1", "score_10", "score_11", "score_12", "score_13", "score_14", "score_15", "score_16", "score_17", "score_18", "score_19", "score_2", "score_20", "score_21", "score_22", "score_23", "score_24", "score_25", "score_3", "score_4", "score_5", "score_6", "score_7", "score_8", "score_9", "score_across_1", "score_across_10", "score_across_2", "score_across_3", "score_across_4", "score_across_5", "score_across_6", "score_across_7", "score_across_8", "score_across_9", "score_across_code_1", "score_across_code_10", "score_across_code_2", "score_across_code_3", "score_across_code_4", "score_across_code_6", "score_across_code_5", "score_across_code_7", "score_across_code_8", "score_across_code_9", "score_across_unit", "score_code_1", "score_code_10", "score_code_11", "score_code_12", "score_code_13", "score_code_14", "score_code_15", "score_code_17", "score_code_16", "score_code_18", "score_code_19", "score_code_2", "score_code_20", "score_code_21", "score_code_22", "score_code_23", "score_code_24", "score_code_25", "score_code_3", "score_code_4", "score_code_5", "score_code_6", "score_code_7", "score_code_8", "score_code_9", "score_unit", "a_1_alpha_user_field", "a_16_alpha_user_field", "a_2_alpha_user_field", "a_4_alpha_user_field", "a_8_alpha_user_field", "address_number", "coating_rev_1", "coating_rev_2", "coating_top_1", "coating_top_2", "extra_joint_code", "forecast_board_length", "forecast_board_length_unit", "forecast_board_width", "forecast_board_width_unit", "forecast_boards_per_piece", "forecast_family_key", "forecast_pieces_per_board", "glue_flap_across", "glue_flap_code", "production_order_board_density", "production_order_board_density_unit", "production_order_board_grade", "production_order_board_grade_additional_description", "production_order_board_paper_density", "production_order_board_paper_density_unit", "production_order_board_thickness", "production_order_board_thickness_unit", "production_order_board_wall", "production_order_case_bg_code", "production_order_created_datetime", "production_order_dataset", "production_order_destination_code", "production_order_die_number", "production_order_extra_cost", "production_order_extra_cost_unit", "production_order_flute", "production_order_maintained_datetime", "production_order_material_class", "production_order_number_per_set", "production_order_paper_cost", "production_order_paper_cost_unit", "production_order_planned_quantity", "production_order_print_number", "production_order_record_last_changed", "production_order_record_origin", "production_order_record_status", "production_order_selling_price", "production_order_starch_cost", "production_order_starch_cost_unit", "production_order_stock_manufacture_flag", "production_order_time_zone", "production_order_unit_quantity", "assembly_time", "closure_code", "comment", "customer_satisfied", "date_chg_count", "delivery_distance", "delivery_distance_unit", "delivery_time", "die_status", "difficulty_factor", "due_datetime", "early_due_datetime", "export_customer", "fefco_code", "final_length", "final_length_unit", "final_width", "final_width_unit", "finished_goods_id", "first_reverse_ink", "initial_length", "initial_length_unit", "initial_width", "initial_width_unit", "internal_height", "internal_height_unit", "internal_length", "internal_length_unit", "internal_width", "internal_width_unit", "slot_depth_across_1", "slot_depth_across_2", "slot_depth_across_unit", "slot_depth_corr_1", "slot_depth_corr_2", "slot_depth_corr_unit", "valuation", "unit_load_code", "underrun_percent", "truck_unit_load", "total_number_parts"})
+				in
+				    #"Removed Columns"
+

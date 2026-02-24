@@ -1,0 +1,1035 @@
+table espInvoiceLine
+	lineageTag: 5d9a1b66-a905-4014-b826-4837c3ac4f0d
+
+	measure Measure
+		lineageTag: 0131e48e-c1d0-4aca-a31c-694c435bf58d
+
+		annotation 43dbc3e8-3a1c-4b6f-9923-b49ff7d6691c = True
+
+	column ID
+		dataType: int64
+		formatString: 0
+		lineageTag: 580cc9c0-cfa8-47b2-9e26-d762cd426697
+		summarizeBy: count
+		sourceColumn: ID
+
+		annotation SummarizationSetBy = Automatic
+
+	column mainttime
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 91f3ab7a-bc43-49fa-8901-2a40bb71fa0b
+		summarizeBy: none
+		sourceColumn: mainttime
+
+		variation Variation
+			isDefault
+			relationship: 31ffc770-1c44-49f3-b9bd-4286b677fc3d
+			defaultHierarchy: LocalDateTable_32045abc-7c0b-4f70-9cc4-33deea6e4457.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column userID
+		dataType: string
+		lineageTag: f37e7d66-b3a7-4817-9485-ace66d2d4ede
+		summarizeBy: none
+		sourceColumn: userID
+
+		annotation SummarizationSetBy = Automatic
+
+	column quantity
+		dataType: double
+		lineageTag: be85e28f-972a-4a6e-946b-513f231c3f29
+		summarizeBy: sum
+		sourceColumn: quantity
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column description
+		dataType: string
+		lineageTag: cb5578c8-9de4-4eea-8f09-84d961f87f96
+		summarizeBy: none
+		sourceColumn: description
+
+		annotation SummarizationSetBy = Automatic
+
+	column comments
+		dataType: string
+		lineageTag: 2870f572-f48b-426b-913d-ed8c7048ee3c
+		summarizeBy: none
+		sourceColumn: comments
+
+		annotation SummarizationSetBy = Automatic
+
+	column priceperitem
+		dataType: double
+		lineageTag: 81e8c99a-7c72-43b8-8f27-7ab8eebba1d2
+		summarizeBy: sum
+		sourceColumn: priceperitem
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column tradediscountvalue
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 4336bd1a-64bf-4496-aaf2-cae0294cebdc
+		summarizeBy: sum
+		sourceColumn: tradediscountvalue
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column goodsvalue
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 1e17d34f-944a-4494-9460-e465868d0bf5
+		summarizeBy: sum
+		sourceColumn: goodsvalue
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column salestax1
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: afd5d028-0701-4775-bf49-3dd4df717394
+		summarizeBy: sum
+		sourceColumn: salestax1
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column salestax2
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 928e2dad-ddbc-4c2f-8438-6c5a811cb018
+		summarizeBy: sum
+		sourceColumn: salestax2
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column salestax3
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 9ef0b80e-6540-4ac2-8fb5-d1be9088b423
+		summarizeBy: sum
+		sourceColumn: salestax3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column totalsalestax
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 4b0e653a-b3f0-4ddf-988a-729b94a47d12
+		summarizeBy: sum
+		sourceColumn: totalsalestax
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column totalvalue
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: b8fc979f-79e5-4273-9d9f-d672ddfecfd5
+		summarizeBy: sum
+		sourceColumn: totalvalue
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column foreigndiscount
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 3b2a148a-5a1b-4499-849a-9dcd4c6366c3
+		summarizeBy: sum
+		sourceColumn: foreigndiscount
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column foreigngoodsvalue
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 4babbc61-fe1b-4b3a-bd42-ef5654157de9
+		summarizeBy: sum
+		sourceColumn: foreigngoodsvalue
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column totalforeignvalue
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 29108656-bfea-48c9-bb84-3be75ac86063
+		summarizeBy: sum
+		sourceColumn: totalforeignvalue
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl01
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 158ffe2c-a9a3-4f3d-9509-3662c5040366
+		summarizeBy: sum
+		sourceColumn: costivl01
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl02
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: f9914126-4260-411e-8de0-4fdc9f8d9703
+		summarizeBy: sum
+		sourceColumn: costivl02
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl03
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 2066865a-9993-46a6-acb0-76c34561ebbc
+		summarizeBy: sum
+		sourceColumn: costivl03
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl04
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: d839c187-52a2-4437-ae32-0fef7402bc60
+		summarizeBy: sum
+		sourceColumn: costivl04
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl05
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: fa678a3d-480e-429c-8817-c336625a792b
+		summarizeBy: sum
+		sourceColumn: costivl05
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl06
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 1272cb10-7bdc-4c5c-bb72-7b57ad5ccc33
+		summarizeBy: sum
+		sourceColumn: costivl06
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl07
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 0203d895-1165-4b81-9ee2-fa4d0b688dc7
+		summarizeBy: sum
+		sourceColumn: costivl07
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl08
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 0ac8c8da-c693-4d9a-bd15-a6a8571b2437
+		summarizeBy: sum
+		sourceColumn: costivl08
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl09
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: da27afb9-2c28-43d3-bbed-a4f5cad58021
+		summarizeBy: sum
+		sourceColumn: costivl09
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl10
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: eec9a051-a5e1-4437-a95a-926e8f62205c
+		summarizeBy: sum
+		sourceColumn: costivl10
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl11
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: f76999d3-0e0d-4991-945e-4e305375836c
+		summarizeBy: sum
+		sourceColumn: costivl11
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl12
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 275b5578-b9d0-4119-9ae0-38381b335dd6
+		summarizeBy: sum
+		sourceColumn: costivl12
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column iscosted
+		dataType: int64
+		formatString: 0
+		lineageTag: 7d6656d0-f014-4ff8-9504-6520cb4e27ed
+		summarizeBy: sum
+		sourceColumn: iscosted
+
+		annotation SummarizationSetBy = Automatic
+
+	column usernumivl01
+		dataType: double
+		lineageTag: 0b82e396-610b-4189-9f1a-dfc2d5b188b7
+		summarizeBy: sum
+		sourceColumn: usernumivl01
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column usernumivl02
+		dataType: double
+		lineageTag: 77589e8b-b0fa-4caa-a857-d665fcd56836
+		summarizeBy: sum
+		sourceColumn: usernumivl02
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column usernumivl03
+		dataType: double
+		lineageTag: 615118d4-5a3b-48a0-b0ec-b23c4f6491df
+		summarizeBy: sum
+		sourceColumn: usernumivl03
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column usernumivl04
+		dataType: double
+		lineageTag: 03667ed5-d899-4e89-b76f-ab4ef3a25f81
+		summarizeBy: sum
+		sourceColumn: usernumivl04
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column usernumivl05
+		dataType: double
+		lineageTag: 00d72992-6641-4b9b-bee5-72f24681bfa8
+		summarizeBy: sum
+		sourceColumn: usernumivl05
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column usercodeivl01
+		dataType: string
+		lineageTag: 3bc6837a-4d98-402d-b136-bb53908e4c4c
+		summarizeBy: none
+		sourceColumn: usercodeivl01
+
+		annotation SummarizationSetBy = Automatic
+
+	column usercodeivl02
+		dataType: string
+		lineageTag: 247f5098-f549-4958-a160-9c6bc1672bbb
+		summarizeBy: none
+		sourceColumn: usercodeivl02
+
+		annotation SummarizationSetBy = Automatic
+
+	column usercodeivl03
+		dataType: string
+		lineageTag: 6cebbfba-d779-4a34-9955-0f3d7587b4fd
+		summarizeBy: none
+		sourceColumn: usercodeivl03
+
+		annotation SummarizationSetBy = Automatic
+
+	column usercodeivl04
+		dataType: string
+		lineageTag: a39ae040-0c9b-4c3d-ad5b-f5c115c0abf7
+		summarizeBy: none
+		sourceColumn: usercodeivl04
+
+		annotation SummarizationSetBy = Automatic
+
+	column usercodeivl05
+		dataType: string
+		lineageTag: 9a1ee48a-764e-460d-8fda-01f9aa3b7c7f
+		summarizeBy: none
+		sourceColumn: usercodeivl05
+
+		annotation SummarizationSetBy = Automatic
+
+	column areainvoiced
+		dataType: double
+		lineageTag: 38d21869-48ba-4c9c-ae1b-0714278a097c
+		summarizeBy: sum
+		sourceColumn: areainvoiced
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column weightinvoiced
+		dataType: double
+		lineageTag: 0d976847-1d7c-400e-b1be-174bc15385de
+		summarizeBy: sum
+		sourceColumn: weightinvoiced
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column gLCode
+		dataType: string
+		lineageTag: 05553d5c-5d2e-403e-b549-d582098b5d28
+		summarizeBy: none
+		sourceColumn: gLCode
+
+		annotation SummarizationSetBy = Automatic
+
+	column invoiceLineType
+		dataType: string
+		lineageTag: 4c7890e2-3a41-483a-a9f3-f9f490dfd41e
+		summarizeBy: none
+		sourceColumn: invoiceLineType
+
+		annotation SummarizationSetBy = Automatic
+
+	column productCode
+		dataType: string
+		lineageTag: 5f71e90c-9380-4c8c-a5fa-a758a1488596
+		summarizeBy: none
+		sourceColumn: productCode
+
+		annotation SummarizationSetBy = Automatic
+
+	column docketItemID
+		dataType: int64
+		formatString: 0
+		lineageTag: 7d0352de-7363-4a7f-b371-b0fb3c1d8006
+		summarizeBy: count
+		sourceColumn: docketItemID
+
+		annotation SummarizationSetBy = Automatic
+
+	column invoiceID
+		dataType: int64
+		formatString: 0
+		lineageTag: 79d08b38-acdd-4025-b1e9-3a81e7bc268a
+		summarizeBy: count
+		sourceColumn: invoiceID
+
+		annotation SummarizationSetBy = Automatic
+
+	column orderID
+		dataType: int64
+		formatString: 0
+		lineageTag: b4122065-1e0d-4527-8761-a1c74dd2cabc
+		summarizeBy: count
+		sourceColumn: orderID
+
+		annotation SummarizationSetBy = Automatic
+
+	column plantID
+		dataType: int64
+		formatString: 0
+		lineageTag: c7f5b6c3-b7fd-4f8e-89e1-3e3c2ac93049
+		summarizeBy: count
+		sourceColumn: plantID
+
+		annotation SummarizationSetBy = Automatic
+
+	column purchaseOrderID
+		dataType: int64
+		formatString: 0
+		lineageTag: 89928300-42d8-48ac-a781-745cee840db8
+		summarizeBy: count
+		sourceColumn: purchaseOrderID
+
+		annotation SummarizationSetBy = Automatic
+
+	column unitprice
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: cb82d4c9-c78e-42a7-819c-daadc148263c
+		summarizeBy: sum
+		sourceColumn: unitprice
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column perUnitUOM
+		dataType: string
+		lineageTag: 4c86ef85-619f-4446-93d3-62428d860728
+		summarizeBy: none
+		sourceColumn: perUnitUOM
+
+		annotation SummarizationSetBy = Automatic
+
+	column originalInvoiceLineID
+		dataType: int64
+		formatString: 0
+		lineageTag: 478179f4-cb4d-4a06-8695-3320398d555c
+		summarizeBy: count
+		sourceColumn: originalInvoiceLineID
+
+		annotation SummarizationSetBy = Automatic
+
+	column issueItemID
+		dataType: int64
+		formatString: 0
+		lineageTag: e3b67a2e-3363-451b-b9f3-7cc530dabb1a
+		summarizeBy: count
+		sourceColumn: issueItemID
+
+		annotation SummarizationSetBy = Automatic
+
+	column levyRateID
+		dataType: int64
+		formatString: 0
+		lineageTag: 6d33799a-20c2-4a06-82bb-62e9ee28e59f
+		summarizeBy: count
+		sourceColumn: levyRateID
+
+		annotation SummarizationSetBy = Automatic
+
+	column tradediscountpercent
+		dataType: double
+		lineageTag: 817f050b-a2aa-40e6-9212-7c10bed4887a
+		summarizeBy: sum
+		sourceColumn: tradediscountpercent
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column parentInvoiceLineID
+		dataType: int64
+		formatString: 0
+		lineageTag: 9d902f99-3383-4034-82e8-214b4a78845b
+		summarizeBy: count
+		sourceColumn: parentInvoiceLineID
+
+		annotation SummarizationSetBy = Automatic
+
+	column taxproductgroupID
+		dataType: int64
+		formatString: 0
+		lineageTag: cad71b61-68b4-4503-9487-4de61c73dcdd
+		summarizeBy: count
+		sourceColumn: taxproductgroupID
+
+		annotation SummarizationSetBy = Automatic
+
+	column costivl13
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 3018a270-4a6b-44a9-a231-826538491f01
+		summarizeBy: sum
+		sourceColumn: costivl13
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl14
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 89a9db1f-0187-408a-92bc-5dd03a6fce21
+		summarizeBy: sum
+		sourceColumn: costivl14
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl15
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: d0379d13-c07d-4406-9c2f-31f50b52862f
+		summarizeBy: sum
+		sourceColumn: costivl15
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl16
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: a2c34c87-10e5-404e-8030-bd2cf7ea0f62
+		summarizeBy: sum
+		sourceColumn: costivl16
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl17
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 2711f55b-092e-4942-8f4c-0505ae243f90
+		summarizeBy: sum
+		sourceColumn: costivl17
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl18
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: cc3b1bbd-5a84-4ba6-b4aa-ac168d67d522
+		summarizeBy: sum
+		sourceColumn: costivl18
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl19
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: a28744f3-229a-4dbc-89e2-7ccf196c7250
+		summarizeBy: sum
+		sourceColumn: costivl19
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl20
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 26d3306f-7c46-4edf-bf10-770c473b4bc3
+		summarizeBy: sum
+		sourceColumn: costivl20
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl21
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: f389e22a-3ff5-4ce8-b254-31be741cba93
+		summarizeBy: sum
+		sourceColumn: costivl21
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl22
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 9ef7b258-4bf2-4f29-aeb1-931aea5985df
+		summarizeBy: sum
+		sourceColumn: costivl22
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl23
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: e3004771-e1f5-49d7-b08d-5d9e9e34b6d9
+		summarizeBy: sum
+		sourceColumn: costivl23
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl24
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: cafc6e55-f2dc-4840-9f41-21170be3a385
+		summarizeBy: sum
+		sourceColumn: costivl24
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl25
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: b9b751cb-c808-4344-878e-60dd5819aa6f
+		summarizeBy: sum
+		sourceColumn: costivl25
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl26
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 541636c7-183a-43b2-99bf-2f3a5eb44b59
+		summarizeBy: sum
+		sourceColumn: costivl26
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl27
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 0755894a-76d2-4000-a87d-6b9e1bcd8ac5
+		summarizeBy: sum
+		sourceColumn: costivl27
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl28
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: fb30c90c-a9f1-4596-872d-9db5ed1ec7f4
+		summarizeBy: sum
+		sourceColumn: costivl28
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl29
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: bcc682d8-19e8-4fc7-8be8-a12b24c57c7a
+		summarizeBy: sum
+		sourceColumn: costivl29
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl30
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: bc1c6d18-1b83-4912-b56d-8af8678bae21
+		summarizeBy: sum
+		sourceColumn: costivl30
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl31
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 28c6f2ad-a62e-46a4-b33f-b0f150bdefa3
+		summarizeBy: sum
+		sourceColumn: costivl31
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl32
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 6ecec345-45cb-4c2e-8608-588f03b30ed1
+		summarizeBy: sum
+		sourceColumn: costivl32
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl33
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 5e15eff4-f5d7-4e54-8258-1313c9306898
+		summarizeBy: sum
+		sourceColumn: costivl33
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl34
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 57e62f00-6673-4756-aca9-4a432cc0c0e4
+		summarizeBy: sum
+		sourceColumn: costivl34
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl35
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: faddfde7-9da6-469c-b509-3b237741c66f
+		summarizeBy: sum
+		sourceColumn: costivl35
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl36
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 961f7131-19b3-46c0-aa92-f6c051e9d3d2
+		summarizeBy: sum
+		sourceColumn: costivl36
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl37
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 1827e0db-f61f-4adc-8c19-b37153c940a6
+		summarizeBy: sum
+		sourceColumn: costivl37
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl38
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 2e24fa16-eaef-4eaa-85d2-74943a233a0d
+		summarizeBy: sum
+		sourceColumn: costivl38
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl39
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: dec94374-b531-4af8-bd7f-1037fe7ebfd9
+		summarizeBy: sum
+		sourceColumn: costivl39
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column costivl40
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: fd1dedf3-0f34-4b9a-98ac-bd82a2ac4209
+		summarizeBy: sum
+		sourceColumn: costivl40
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column quantityamortized
+		dataType: double
+		lineageTag: 4f1a53fe-2beb-418e-a804-710dadc01e7d
+		summarizeBy: sum
+		sourceColumn: quantityamortized
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column invoicelinemode
+		dataType: int64
+		formatString: 0
+		lineageTag: 2665d68a-f464-47ef-856a-03408021c8ef
+		summarizeBy: sum
+		sourceColumn: invoicelinemode
+
+		annotation SummarizationSetBy = Automatic
+
+	column commission
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 8052b0f9-e943-485c-a285-14735ca421ff
+		summarizeBy: sum
+		sourceColumn: commission
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column toolcharge
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 057e6239-957b-4709-9969-4c24561f1f95
+		summarizeBy: sum
+		sourceColumn: toolcharge
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column interestcharge
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 694792ce-f60c-4815-91a5-f4c517e6b959
+		summarizeBy: sum
+		sourceColumn: interestcharge
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column salestax4
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 2285301a-61e3-4527-8da9-b1693300c82d
+		summarizeBy: sum
+		sourceColumn: salestax4
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column salestax5
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 18b0e4b8-7cf2-4149-93f9-974d9c51be27
+		summarizeBy: sum
+		sourceColumn: salestax5
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column salestax6
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 7268bcaf-9f16-4215-8011-d8339ef765bc
+		summarizeBy: sum
+		sourceColumn: salestax6
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column ispriceconsolidated
+		dataType: int64
+		formatString: 0
+		lineageTag: d2b1d144-cc92-47ae-b0a1-a2a70dbc3d10
+		summarizeBy: sum
+		sourceColumn: ispriceconsolidated
+
+		annotation SummarizationSetBy = Automatic
+
+	column linenumber
+		dataType: int64
+		formatString: 0
+		lineageTag: 7425a213-ecd2-4205-9454-a9886383b7bb
+		summarizeBy: sum
+		sourceColumn: linenumber
+
+		annotation SummarizationSetBy = Automatic
+
+	column exchangeRateID
+		dataType: int64
+		formatString: 0
+		lineageTag: a619f22c-99f2-4fe5-abd3-eee439ffddff
+		summarizeBy: count
+		sourceColumn: exchangeRateID
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Total Sales' = If(espInvoiceLine[invoiceLineType] = "Additional Charge", blank(), espInvoiceLine[totalvalue])
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 755452d7-9504-4eb2-8a0f-f76ba4477856
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column 'espInvoice.transactiondate'
+		dataType: dateTime
+		formatString: Long Date
+		lineageTag: ab44e4ed-b346-4c75-82b3-f4147fa0f6ce
+		summarizeBy: none
+		sourceColumn: espInvoice.transactiondate
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	partition espInvoiceLine = m
+		mode: import
+		source =
+				let
+				    Source = Sql.Databases("192.168.1.12"),
+				    esp = Source{[Name="esp"]}[Data],
+				    dbo_espInvoiceLine = esp{[Schema="dbo",Item="espInvoiceLine"]}[Data],
+				    #"Expanded espInvoice" = Table.ExpandRecordColumn(dbo_espInvoiceLine, "espInvoice", {"transactiondate"}, {"espInvoice.transactiondate"}),
+				    #"Changed Type" = Table.TransformColumnTypes(#"Expanded espInvoice",{{"espInvoice.transactiondate", type date}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

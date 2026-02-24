@@ -1,0 +1,42 @@
+table EmployeeOfTheMonth
+	lineageTag: 829ac67d-6efe-45c5-adc4-d1e4efebe539
+
+	column Date
+		dataType: dateTime
+		formatString: Long Date
+		lineageTag: 25ccd988-5dd2-4394-bd12-695c5251efdd
+		summarizeBy: none
+		sourceColumn: Date
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Employee
+		dataType: string
+		lineageTag: bcdf98cb-c105-4d18-923d-50e1d06eb269
+		summarizeBy: none
+		sourceColumn: Employee
+
+		annotation SummarizationSetBy = Automatic
+
+	column Quarter
+		dataType: string
+		lineageTag: b924f37f-1159-45a6-b9cd-2fc3e0d182f7
+		summarizeBy: none
+		sourceColumn: Quarter
+
+		annotation SummarizationSetBy = Automatic
+
+	partition EmployeeOfTheMonth = m
+		mode: import
+		source =
+				let
+				    Source = Excel.Workbook(Web.Contents("https://jetcontainercompany.sharepoint.com/sites/ContinuousImprovement/Shared%20Documents/General/Employee%20of%20the%20Month,%20COGs,%20Upcoming%20Shutdowns.xlsx"), null, true),
+				    EmployeeOfTheMonth_Table = Source{[Item="EmployeeOfTheMonth",Kind="Table"]}[Data],
+				    #"Changed Type" = Table.TransformColumnTypes(EmployeeOfTheMonth_Table,{{"Date", type date}, {"Employee", type text}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Exception
+

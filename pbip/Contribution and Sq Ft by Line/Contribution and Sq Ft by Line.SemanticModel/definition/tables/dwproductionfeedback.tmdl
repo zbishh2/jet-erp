@@ -1,0 +1,1130 @@
+table dwproductionfeedback
+	lineageTag: 87c4c114-d2cf-4b55-bd5c-e95c61b33ed5
+
+	column feedback_id
+		dataType: int64
+		formatString: 0
+		lineageTag: cd08a52e-ad58-4777-b932-3ff98f496f9d
+		summarizeBy: sum
+		sourceColumn: feedback_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_dataset
+		dataType: string
+		lineageTag: c7ea7cfb-05f4-45b7-9449-4991f9b0cf53
+		summarizeBy: none
+		sourceColumn: feedback_dataset
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_report_date
+		dataType: dateTime
+		formatString: m/d/yy
+		lineageTag: a7638d01-f73e-4c58-83be-16ebf8956e0a
+		summarizeBy: none
+		sourceColumn: feedback_report_date
+
+		variation Variation
+			isDefault
+			relationship: 5d1eb5bb-3a68-4103-aff6-90025fa528e9
+			defaultHierarchy: LocalDateTable_9a38a04f-4e76-4ad4-a5e9-3680c4672823.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+		annotation PBI_FormatHint = {"isDateTimeCustom":true}
+
+	column feedback_time_zone
+		dataType: string
+		lineageTag: 3d23ba64-926c-467c-be94-8314fa45934b
+		summarizeBy: none
+		sourceColumn: feedback_time_zone
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_job_series_step_id
+		dataType: int64
+		formatString: 0
+		lineageTag: fe7f7a9f-cc90-4114-ad06-0ab05c5f1320
+		summarizeBy: none
+		sourceColumn: feedback_job_series_step_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_uniq_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 65f042ca-fe32-40c6-b57c-7647697e7f69
+		summarizeBy: sum
+		sourceColumn: feedback_uniq_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_csc_order_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 2fac8f6e-a86c-45d3-9b8f-23b81902ba7e
+		summarizeBy: sum
+		sourceColumn: feedback_csc_order_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_pcs_order_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 6dff7db2-200f-4e14-af86-33bb9606878a
+		summarizeBy: sum
+		sourceColumn: feedback_pcs_order_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_dryend_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 0044db9d-1ae1-42ec-9f91-97f35fe24dc1
+		summarizeBy: sum
+		sourceColumn: feedback_dryend_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_program_id
+		dataType: int64
+		formatString: 0
+		lineageTag: c358b27e-40c6-420d-9acc-d725fd28a8bc
+		summarizeBy: sum
+		sourceColumn: feedback_program_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_calendar_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 5f7039e3-f346-4425-a6f2-c07aa406720f
+		summarizeBy: sum
+		sourceColumn: feedback_calendar_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_date_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 438d66b9-d890-4f5a-a24e-d83e6e4acc0f
+		summarizeBy: none
+		sourceColumn: feedback_date_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_costcenter_id
+		dataType: int64
+		formatString: 0
+		lineageTag: e2705b31-f061-4a77-bbae-295e445b1663
+		summarizeBy: sum
+		sourceColumn: feedback_costcenter_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_customer_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 3f9b144b-6117-4a59-8191-83617ba88f0c
+		summarizeBy: sum
+		sourceColumn: feedback_customer_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_customer_address_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 8a9f74f7-26ce-466a-b2ac-11bca2dca3aa
+		summarizeBy: sum
+		sourceColumn: feedback_customer_address_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column setup_duration_minutes
+		dataType: int64
+		formatString: 0
+		lineageTag: da69f442-fe97-4b16-a0eb-862b03838c54
+		summarizeBy: sum
+		sourceColumn: setup_duration_minutes
+
+		annotation SummarizationSetBy = Automatic
+
+	column actual_setup_duration_minutes
+		dataType: int64
+		formatString: 0
+		lineageTag: 47df5e14-502e-4566-82b5-0cb3f4f77ba7
+		summarizeBy: sum
+		sourceColumn: actual_setup_duration_minutes
+
+		annotation SummarizationSetBy = Automatic
+
+	column setup_duration_seconds
+		dataType: int64
+		formatString: 0
+		lineageTag: eefccd66-0514-4cd5-b1ed-635d5f976db7
+		summarizeBy: sum
+		sourceColumn: setup_duration_seconds
+
+		annotation SummarizationSetBy = Automatic
+
+	column actual_setup_duration_seconds
+		dataType: int64
+		formatString: 0
+		lineageTag: 4d7de947-7a24-4754-b8b2-829a447a9516
+		summarizeBy: sum
+		sourceColumn: actual_setup_duration_seconds
+
+		annotation SummarizationSetBy = Automatic
+
+	column run_duration_minutes
+		dataType: int64
+		formatString: 0
+		lineageTag: 06b539ab-fd15-4ede-a2be-7e552f66120c
+		summarizeBy: sum
+		sourceColumn: run_duration_minutes
+
+		annotation SummarizationSetBy = Automatic
+
+	column actual_run_duration_minutes
+		dataType: int64
+		formatString: 0
+		lineageTag: bf82685a-0244-46ea-80ab-a30aca9095ec
+		summarizeBy: sum
+		sourceColumn: actual_run_duration_minutes
+
+		annotation SummarizationSetBy = Automatic
+
+	column run_duration_seconds
+		dataType: int64
+		formatString: 0
+		lineageTag: bb13520a-51b5-421a-bac6-dc8f66284b01
+		summarizeBy: sum
+		sourceColumn: run_duration_seconds
+
+		annotation SummarizationSetBy = Automatic
+
+	column actual_run_duration_seconds
+		dataType: int64
+		formatString: 0
+		lineageTag: a17b50df-11ac-4a32-bf45-53c668e312d6
+		summarizeBy: sum
+		sourceColumn: actual_run_duration_seconds
+
+		annotation SummarizationSetBy = Automatic
+
+	column quantity_ordered
+		dataType: int64
+		formatString: 0
+		lineageTag: faf1a135-5c4a-4843-9115-c8f3a3d41c1d
+		summarizeBy: sum
+		sourceColumn: quantity_ordered
+
+		annotation SummarizationSetBy = Automatic
+
+	column quantity_fed_in
+		dataType: int64
+		formatString: 0
+		lineageTag: 024b2a69-c569-4007-9cc6-d7bd3cb3cbfe
+		summarizeBy: sum
+		sourceColumn: quantity_fed_in
+
+		annotation SummarizationSetBy = Automatic
+
+	column prerun_waste
+		dataType: int64
+		formatString: 0
+		lineageTag: 110f6a23-4212-48d0-a9fb-190979040386
+		summarizeBy: sum
+		sourceColumn: prerun_waste
+
+		annotation SummarizationSetBy = Automatic
+
+	column setup_waste
+		dataType: int64
+		formatString: 0
+		lineageTag: 7ace8078-abb6-4717-acfe-0e68d3d32b4b
+		summarizeBy: sum
+		sourceColumn: setup_waste
+
+		annotation SummarizationSetBy = Automatic
+
+	column quantity_fed
+		dataType: int64
+		formatString: 0
+		lineageTag: b417e20c-c04b-478b-bb44-66373e381112
+		summarizeBy: sum
+		sourceColumn: quantity_fed
+
+		annotation SummarizationSetBy = Automatic
+
+	column run_waste_entry
+		dataType: int64
+		formatString: 0
+		lineageTag: c80e4247-cfb7-40a0-a09c-168968519337
+		summarizeBy: sum
+		sourceColumn: run_waste_entry
+
+		annotation SummarizationSetBy = Automatic
+
+	column run_waste_exit
+		dataType: int64
+		formatString: 0
+		lineageTag: 465ae981-1ae5-48f7-b2a7-785b7371a82d
+		summarizeBy: sum
+		sourceColumn: run_waste_exit
+
+		annotation SummarizationSetBy = Automatic
+
+	column other_waste
+		dataType: int64
+		formatString: 0
+		lineageTag: 57b5f43d-5496-49d1-9016-d2a66707abf3
+		summarizeBy: sum
+		sourceColumn: other_waste
+
+		annotation SummarizationSetBy = Automatic
+
+	column quantity_produced
+		dataType: int64
+		formatString: #,0
+		lineageTag: 2c97aaf4-500c-46d2-bef2-2cda06df91c6
+		summarizeBy: sum
+		sourceColumn: quantity_produced
+
+		annotation SummarizationSetBy = Automatic
+
+	column waste_quantity_reworked
+		dataType: int64
+		formatString: 0
+		lineageTag: a7d91b89-192e-4634-82f3-343e1f788f11
+		summarizeBy: sum
+		sourceColumn: waste_quantity_reworked
+
+		annotation SummarizationSetBy = Automatic
+
+	column entry_length
+		dataType: int64
+		formatString: 0
+		lineageTag: 6385ce3a-8067-416a-9b0a-1e6d4a16aa5d
+		summarizeBy: sum
+		sourceColumn: entry_length
+
+		annotation SummarizationSetBy = Automatic
+
+	column entry_length_unit
+		dataType: string
+		lineageTag: 17a201a5-d3a2-41ba-9f42-3fe30ffa6e97
+		summarizeBy: none
+		sourceColumn: entry_length_unit
+
+		annotation SummarizationSetBy = Automatic
+
+	column entry_width
+		dataType: int64
+		formatString: 0
+		lineageTag: 5423a3f6-482a-4bec-9bd3-5bd170c0e14e
+		summarizeBy: sum
+		sourceColumn: entry_width
+
+		annotation SummarizationSetBy = Automatic
+
+	column entry_width_unit
+		dataType: string
+		lineageTag: 0fb20bd9-6b84-4bef-ba32-6d69e6ea6726
+		summarizeBy: none
+		sourceColumn: entry_width_unit
+
+		annotation SummarizationSetBy = Automatic
+
+	column exit_length
+		dataType: int64
+		formatString: 0
+		lineageTag: 2f763bda-4dea-4e7a-9e98-84b14660c479
+		summarizeBy: sum
+		sourceColumn: exit_length
+
+		annotation SummarizationSetBy = Automatic
+
+	column exit_length_unit
+		dataType: string
+		lineageTag: 22bcac7b-d597-4522-8fe7-4555ea167276
+		summarizeBy: none
+		sourceColumn: exit_length_unit
+
+		annotation SummarizationSetBy = Automatic
+
+	column exit_width
+		dataType: int64
+		formatString: 0
+		lineageTag: f2eee8bb-5a97-49e2-b558-8d126344628d
+		summarizeBy: sum
+		sourceColumn: exit_width
+
+		annotation SummarizationSetBy = Automatic
+
+	column exit_width_unit
+		dataType: string
+		lineageTag: 50219906-dc81-46b4-9a6a-6661ffcb0ac2
+		summarizeBy: none
+		sourceColumn: exit_width_unit
+
+		annotation SummarizationSetBy = Automatic
+
+	column ontime_variance_minutes
+		dataType: int64
+		formatString: 0
+		lineageTag: f9a7139f-b653-450c-ab7b-45b6da7fbe89
+		summarizeBy: sum
+		sourceColumn: ontime_variance_minutes
+
+		annotation SummarizationSetBy = Automatic
+
+	column planned_setup_time
+		dataType: int64
+		formatString: 0
+		lineageTag: 8c680fa2-99df-48af-bc5f-0ab4c2ecf359
+		summarizeBy: sum
+		sourceColumn: planned_setup_time
+
+		annotation SummarizationSetBy = Automatic
+
+	column planned_setup_waste
+		dataType: int64
+		formatString: 0
+		lineageTag: 76136c2b-a491-4538-aa51-becdc316c123
+		summarizeBy: sum
+		sourceColumn: planned_setup_waste
+
+		annotation SummarizationSetBy = Automatic
+
+	column planned_run_speed
+		dataType: int64
+		formatString: 0
+		lineageTag: 403a240e-1d9f-499d-a8af-65bf4c24c6b8
+		summarizeBy: sum
+		sourceColumn: planned_run_speed
+
+		annotation SummarizationSetBy = Automatic
+
+	column planned_run_speed_unit
+		dataType: string
+		lineageTag: 4322bef0-bd84-40a6-9678-2251547092c6
+		summarizeBy: none
+		sourceColumn: planned_run_speed_unit
+
+		annotation SummarizationSetBy = Automatic
+
+	column planned_run_waste
+		dataType: int64
+		formatString: 0
+		lineageTag: 7d29aee9-f862-4a92-a6c6-8dec809d653d
+		summarizeBy: sum
+		sourceColumn: planned_run_waste
+
+		annotation SummarizationSetBy = Automatic
+
+	column planned_quantity
+		dataType: int64
+		formatString: 0
+		lineageTag: 7e15fb84-fa6b-495f-a89a-0e05f14a1faf
+		summarizeBy: sum
+		sourceColumn: planned_quantity
+
+		annotation SummarizationSetBy = Automatic
+
+	column planned_post_wait
+		dataType: int64
+		formatString: 0
+		lineageTag: 6311374c-9af5-41e7-9285-8ba026e2ca2d
+		summarizeBy: sum
+		sourceColumn: planned_post_wait
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_standard_setup_time
+		dataType: int64
+		formatString: 0
+		lineageTag: 552a3a87-2853-45f0-bef4-db8d8be188af
+		summarizeBy: sum
+		sourceColumn: feedback_standard_setup_time
+
+		annotation SummarizationSetBy = Automatic
+
+	column series_priority
+		dataType: int64
+		formatString: 0
+		lineageTag: 04e2fd76-b81e-47c4-8a68-3b6dbdf17fec
+		summarizeBy: sum
+		sourceColumn: series_priority
+
+		annotation SummarizationSetBy = Automatic
+
+	column ink_coverage_percentage
+		dataType: int64
+		formatString: 0
+		lineageTag: 4349a3c6-7fbe-4866-a81c-c4cc33db0908
+		summarizeBy: sum
+		sourceColumn: ink_coverage_percentage
+
+		annotation SummarizationSetBy = Automatic
+
+	column decimal_crew_size
+		dataType: double
+		lineageTag: 73afad73-59a9-48f6-ac24-ba078223db51
+		summarizeBy: sum
+		sourceColumn: decimal_crew_size
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column selling_price
+		dataType: int64
+		formatString: 0
+		lineageTag: 7fbea43e-8876-4a2e-82bd-d5a6c7b6d04c
+		summarizeBy: sum
+		sourceColumn: selling_price
+
+		annotation SummarizationSetBy = Automatic
+
+	column area_entry
+		dataType: int64
+		formatString: 0
+		lineageTag: 0f81d109-60be-4c30-bd9e-0e3a8a2c3c19
+		summarizeBy: sum
+		sourceColumn: area_entry
+
+		annotation SummarizationSetBy = Automatic
+
+	column area_entry_unit
+		dataType: string
+		lineageTag: 3de3edb5-a783-4b67-8c84-0df5364449ab
+		summarizeBy: none
+		sourceColumn: area_entry_unit
+
+		annotation SummarizationSetBy = Automatic
+
+	column area_exit
+		dataType: int64
+		formatString: 0
+		lineageTag: 8c9820d3-f03f-4bc1-aa9f-b6177f1c6e02
+		summarizeBy: sum
+		sourceColumn: area_exit
+
+		annotation SummarizationSetBy = Automatic
+
+	column area_exit_unit
+		dataType: string
+		lineageTag: 201df8c8-67fc-4c53-ac01-763a0675beb5
+		summarizeBy: none
+		sourceColumn: area_exit_unit
+
+		annotation SummarizationSetBy = Automatic
+
+	column board_total_cost
+		dataType: int64
+		formatString: 0
+		lineageTag: fb3ace1e-abeb-4427-8fae-80364497fce1
+		summarizeBy: sum
+		sourceColumn: board_total_cost
+
+		annotation SummarizationSetBy = Automatic
+
+	column board_total_cost_unit
+		dataType: string
+		lineageTag: 0adb89c6-b41a-4384-a054-cd3f2d6b54f7
+		summarizeBy: none
+		sourceColumn: board_total_cost_unit
+
+		annotation SummarizationSetBy = Automatic
+
+	column paper_cost
+		dataType: int64
+		formatString: 0
+		lineageTag: 32548d48-f394-4187-9713-289edf0628f5
+		summarizeBy: sum
+		sourceColumn: paper_cost
+
+		annotation SummarizationSetBy = Automatic
+
+	column paper_cost_unit
+		dataType: string
+		lineageTag: 214e68d1-7209-4328-b8db-61a44a961d0b
+		summarizeBy: none
+		sourceColumn: paper_cost_unit
+
+		annotation SummarizationSetBy = Automatic
+
+	column edited_start
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: d404f73d-11e4-43f0-969b-d279fd3b8dd5
+		summarizeBy: none
+		sourceColumn: edited_start
+
+		annotation SummarizationSetBy = Automatic
+
+	column edited_setup
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 2e82d490-71be-4259-8cfa-75fc3fa9c804
+		summarizeBy: none
+		sourceColumn: edited_setup
+
+		annotation SummarizationSetBy = Automatic
+
+	column edited_finish
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 8d553c57-d3cc-4b53-8cca-1b8075a5e3d1
+		summarizeBy: none
+		sourceColumn: edited_finish
+
+		annotation SummarizationSetBy = Automatic
+
+	column edited_ofi_quantity
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 79ab62da-e802-4bd2-ac4a-9bc17bd94dd1
+		summarizeBy: none
+		sourceColumn: edited_ofi_quantity
+
+		annotation SummarizationSetBy = Automatic
+
+	column edited_quantity_fed
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 55494661-394f-40b1-b1d9-ebb56f9a97e6
+		summarizeBy: none
+		sourceColumn: edited_quantity_fed
+
+		annotation SummarizationSetBy = Automatic
+
+	column edited_quantity_produced
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 072bbff7-f6b1-4866-af69-705fc81a81ec
+		summarizeBy: none
+		sourceColumn: edited_quantity_produced
+
+		annotation SummarizationSetBy = Automatic
+
+	column edited_mdc_count
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: dd408fb6-d385-4ff0-922d-178f501ba020
+		summarizeBy: none
+		sourceColumn: edited_mdc_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column area_produced
+		dataType: int64
+		formatString: 0
+		lineageTag: 124687fa-d627-4bde-ab86-a7d7e16aa910
+		summarizeBy: sum
+		sourceColumn: area_produced
+
+		annotation SummarizationSetBy = Automatic
+
+	column area_produced_unit
+		dataType: string
+		lineageTag: 038bd9a7-bfeb-40f1-a5ca-c9309ab52cde
+		summarizeBy: none
+		sourceColumn: area_produced_unit
+
+		annotation SummarizationSetBy = Automatic
+
+	column machine_availability
+		dataType: double
+		lineageTag: e7d1aad7-8a31-470a-949f-308b01f5c448
+		summarizeBy: sum
+		sourceColumn: machine_availability
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column machine_performance
+		dataType: double
+		lineageTag: 73886ee4-530b-44b2-a2f4-0d60c528bdc6
+		summarizeBy: sum
+		sourceColumn: machine_performance
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column machine_quality
+		dataType: double
+		lineageTag: 2bdb6cf0-03c4-47f6-bb52-109625ea26c0
+		summarizeBy: sum
+		sourceColumn: machine_quality
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column feedback_oee
+		dataType: double
+		lineageTag: 51450ab2-6b9d-4208-a912-3ffb8d32d67b
+		summarizeBy: sum
+		sourceColumn: feedback_oee
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column oee_variance
+		dataType: double
+		lineageTag: b078a888-66a3-4e73-b63b-f63239107afa
+		summarizeBy: sum
+		sourceColumn: oee_variance
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column job_setup_flag
+		dataType: int64
+		formatString: 0
+		lineageTag: f625ef7e-f570-46bd-a2a2-76527ee49a3d
+		summarizeBy: sum
+		sourceColumn: job_setup_flag
+
+		annotation SummarizationSetBy = Automatic
+
+	column reported_quantity
+		dataType: int64
+		formatString: 0
+		lineageTag: f872f732-10fb-4632-82d5-ed5057fa4016
+		summarizeBy: sum
+		sourceColumn: reported_quantity
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_count_as_shift_split
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: ff742478-5d07-464b-a441-563ae43dab3b
+		summarizeBy: none
+		sourceColumn: feedback_count_as_shift_split
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_count_as_setup
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 28c92c59-d620-4dc0-8b90-29b848d8e769
+		summarizeBy: none
+		sourceColumn: feedback_count_as_setup
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_record_origin
+		dataType: string
+		lineageTag: 96c20967-73c5-47b0-919c-76c729a36efd
+		summarizeBy: none
+		sourceColumn: feedback_record_origin
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_record_status
+		dataType: string
+		lineageTag: ff4ed9b6-7a9f-4185-bddd-b4b380359973
+		summarizeBy: none
+		sourceColumn: feedback_record_status
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_record_last_changed
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 0d4c084a-1104-4816-a22e-fe55cf1a8109
+		summarizeBy: none
+		sourceColumn: feedback_record_last_changed
+
+		variation Variation
+			isDefault
+			relationship: 692ade0c-4f2a-4af2-bdb7-c1d7875a6e8b
+			defaultHierarchy: LocalDateTable_5455fe4c-29d6-4c09-a442-6e90d106f4ba.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column feedback_board_grade_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 64386ba2-17e6-451e-ac34-2809d4448028
+		summarizeBy: sum
+		sourceColumn: feedback_board_grade_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'dwcostcenters.costcenter_number'
+		dataType: string
+		lineageTag: 04b912bf-9945-4937-94e1-c1e6b9a568e9
+		summarizeBy: none
+		sourceColumn: dwcostcenters.costcenter_number
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'dwcostcenters.costcenter_name'
+		dataType: string
+		lineageTag: e4a0dc3c-5aa1-49f4-ba29-c82bc27c9d01
+		summarizeBy: none
+		sourceColumn: dwcostcenters.costcenter_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'dwcostcenters.costcenter_number_and_name'
+		dataType: string
+		lineageTag: cd41c34f-b514-4017-9ff4-23fea86420fc
+		summarizeBy: none
+		sourceColumn: dwcostcenters.costcenter_number_and_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'dwproductionorders.job_number'
+		dataType: string
+		lineageTag: db7cabb3-d6d2-4b8b-9035-db47dcd64c22
+		summarizeBy: none
+		sourceColumn: dwproductionorders.job_number
+
+		annotation SummarizationSetBy = Automatic
+
+	column spec_number = RELATED(dwproductionorders[spec_number])
+		lineageTag: 41ffb672-7d16-485f-9157-76f3910e6e28
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Order Start' = RELATED(dwjobseriesstep[feedback_start])
+		formatString: General Date
+		lineageTag: f5dbde8e-3fb1-479c-b3bb-d841be849108
+		summarizeBy: none
+
+		variation Variation
+			isDefault
+			relationship: 05450b59-4478-4e4c-b66e-899471d383a0
+			defaultHierarchy: LocalDateTable_0e7fdda6-389a-46f8-9be8-0f0eec07caa1.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Order Finish' = RELATED(dwjobseriesstep[feedback_finish])
+		formatString: General Date
+		lineageTag: 7bfda8d2-cc80-4ef0-bf70-a5798d07894b
+		summarizeBy: none
+
+		variation Variation
+			isDefault
+			relationship: e14ec8b4-22b3-4968-b08d-a4d2c612c87c
+			defaultHierarchy: LocalDateTable_b668407b-f2d1-44c7-a940-867714ab2287.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Order Hours' = DATEDIFF(dwproductionfeedback[Order Start],dwproductionfeedback[Order Finish],SECOND)/60/60
+		dataType: double
+		formatString: 0.00
+		lineageTag: 1630e2e9-7966-457d-9d7b-e025db38576f
+		summarizeBy: sum
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Line Number' = LEFT(dwproductionfeedback[dwcostcenters.costcenter_number_and_name],3)
+		lineageTag: afeb3c26-380f-4743-afe9-5150ce9bead5
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column Machine_Count = ```
+			
+			CALCULATE(
+			    DISTINCTCOUNT(dwproductionfeedback[Line Number]),
+			    ALLEXCEPT(dwproductionfeedback, dwproductionfeedback[dwproductionorders.job_number])
+			)
+			
+			```
+		formatString: 0
+		lineageTag: da1cf610-ad37-44af-b1e5-5adbcce0cf35
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Job number' = dwproductionfeedback[dwproductionorders.job_number]
+		lineageTag: 0302fd4e-fb75-4768-b1fc-f3397de429f8
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Unit Price' = RELATED(dwproductionorders[Unit Price])
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		displayFolder: .Calcs
+		lineageTag: 78fc312f-68bc-451d-bddb-cdb17151d8c6
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column 'Invoice Status' = RELATED(dwproductionorders[Invoice Status])
+		lineageTag: 38fcc7e9-30da-40ab-bb9c-be42dfd89236
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Quantity Produced/Machines' = dwproductionfeedback[quantity_produced]/dwproductionfeedback[Machine_Count]
+		formatString: 0.0
+		displayFolder: .Calcs
+		lineageTag: 5905644a-e2fe-4385-a24f-7170fda7b3c3
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Total_quantity_produced adjusted for # of machines' =
+			
+			CALCULATE(
+			    SUM(dwproductionfeedback[Quantity Produced/Machines]),
+			    ALLEXCEPT(dwproductionfeedback, dwproductionfeedback[dwproductionorders.job_number]),
+			    dwproductionfeedback[Line Number] <> BLANK()
+			)
+		lineageTag: 4f96d390-9002-4cde-8b9b-a6ad8f2a6585
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column '$ Value' = dwproductionfeedback[Quantity Produced/Machines]*dwproductionfeedback[Unit Price]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Calcs
+		lineageTag: 21a9dd55-f36a-4d5b-9b56-cacee1f73447
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column 'Pre Est. Contribution $' = IF(ISBLANK(dwproductionfeedback[$ Value]),BLANK(),dwproductionfeedback[$ Value]-dwproductionfeedback[Estimated Full Cost])
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Calcs
+		lineageTag: 100db5d2-2d00-447e-847f-00f72365a17b
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column 'Width in feet' = dwproductionfeedback[entry_width]/16/12
+		lineageTag: 1e44cb9e-b000-4daf-8a5d-2a1f47e2218b
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Length in feet' = dwproductionfeedback[entry_length]/16/12
+		lineageTag: a1a2a59a-f9f6-405a-84d9-eee3a9128040
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Sq Ft per Box' = dwproductionfeedback[Width in feet]*dwproductionfeedback[Length in feet]
+		formatString: 0.0
+		lineageTag: dd491dd7-bbfd-43b9-9cab-40c7429a5c1a
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'total sq ft' = dwproductionfeedback[Sq Ft per Box]*dwproductionfeedback[quantity_fed_in]
+		formatString: 0.00
+		lineageTag: 46491444-bf75-45d9-8c20-ca1bf955f598
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Customer Name'
+		dataType: string
+		lineageTag: bcf8aad7-318c-432f-993c-273f572cda57
+		summarizeBy: none
+		sourceColumn: Customer Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column '$ Contribution / Order Hour' = IFERROR(IF(dwproductionfeedback[Order Hours]<.5,BLANK(),dwproductionfeedback[Pre Est. Contribution $]/dwproductionfeedback[Order Hours]),BLANK())
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Calcs
+		lineageTag: aaf4ba63-dff2-4065-a7d6-c7cf67f603d2
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column 'Estimated Labor Cost' = RELATED(espOrder[Pre Labor Cost (Per Unit)])*dwproductionfeedback[Quantity Produced/Machines]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Pre Costs
+		lineageTag: 85177de3-6305-4f54-9f90-4ae34d471f6e
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Estimated Material Cost' = RELATED(espOrder[Pre Material Cost (Per Unit)])*dwproductionfeedback[Quantity Produced/Machines]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Pre Costs
+		lineageTag: 05c6c024-b0fa-4049-b04d-f3e91942f8a1
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Estimated Freight Cost' = RELATED(espOrder[Pre Freight Cost (Per Unit)])*dwproductionfeedback[Quantity Produced/Machines]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Pre Costs
+		lineageTag: 00fdc5b2-0c82-4c26-822e-477568513c36
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Estimated Direct Cost' = RELATED(espOrder[Pre Other Direct Cost (Per Unit)])*dwproductionfeedback[Quantity Produced/Machines]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Pre Costs
+		lineageTag: 57dac7bf-873b-44ca-8303-4465ba248244
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Estimated Full Cost' = RELATED(espOrder[Pre Full Cost (Per Unit)])*dwproductionfeedback[Quantity Produced/Machines]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Pre Costs
+		lineageTag: 4113c0ec-a0d6-40f9-a76b-e4656b56d445
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column 'Post Full Cost' = RELATED(espOrder[Post Full Cost (Per Unit)])*dwproductionfeedback[Quantity Produced/Machines]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Post Costs
+		lineageTag: 6c2e92b2-8ee9-41f4-bf88-7c07a18c9f61
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Post Labor Cost' = RELATED(espOrder[Post Labor Cost (Per Unit)])*dwproductionfeedback[Quantity Produced/Machines]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Post Costs
+		lineageTag: a6eb582f-f3af-4bd9-932c-c6fc2fbf06a8
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Post Material Cost' = RELATED(espOrder[Post Material Cost (Per Unit)])*dwproductionfeedback[Quantity Produced/Machines]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Post Costs
+		lineageTag: 384b9ac5-7e78-46b9-bda6-fbee94c1986a
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Post Freight Cost' = RELATED(espOrder[Post Freight Cost (Per Unit)])*dwproductionfeedback[Quantity Produced/Machines]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Post Costs
+		lineageTag: 6466d886-d39c-4c40-8ca5-8ca0621defcb
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Post Direct Cost' = RELATED(espOrder[Post Other Direct Cost (Per Unit)])*dwproductionfeedback[Quantity Produced/Machines]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Post Costs
+		lineageTag: ec607d88-1a65-439c-a757-38e6225df746
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Post Est. Contribution $' = IF(ISBLANK(dwproductionfeedback[$ Value]),BLANK(),dwproductionfeedback[$ Value]-dwproductionfeedback[Post Full Cost])
+		displayFolder: .Calcs
+		lineageTag: 1562b0f7-13ad-4a5e-add4-ec8b9c2c38b2
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Pre-Post Full Cost Variance' = dwproductionfeedback[Estimated Full Cost]-dwproductionfeedback[Post Full Cost]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Variance
+		lineageTag: b903a9d1-c846-4493-978a-59267732b99c
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Pre-Post Material Variance' = dwproductionfeedback[Estimated Material Cost]-dwproductionfeedback[Post Material Cost]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Variance
+		lineageTag: 21b434f5-0700-4d68-aefc-d3b4fba26fec
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Pre-Post Labor Variance' = dwproductionfeedback[Estimated Labor Cost]-dwproductionfeedback[Post Labor Cost]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Variance
+		lineageTag: c1f3687c-d8bf-4242-bc81-efd9e7db25b9
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Pre-Post Freight Variance' = dwproductionfeedback[Estimated Freight Cost]-dwproductionfeedback[Post Freight Cost]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Variance
+		lineageTag: 10765c1d-fcc6-48c7-bbd2-33258edfcbc9
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Pre-Post Direct Variance' = dwproductionfeedback[Estimated Direct Cost]-dwproductionfeedback[Post Direct Cost]
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: .Variance
+		lineageTag: 6dce13c8-dbd5-46da-9cac-455abcc667d2
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Has Post Costs' = IF(dwproductionfeedback[Post Full Cost]=0 ||dwproductionfeedback[Post Full Cost] = BLANK(),FALSE(),TRUE())
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 6b1c98a0-5e07-418c-8ddb-76a7e3c30f8a
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	partition dwproductionfeedback = m
+		mode: import
+		source =
+				let
+				    Source = Sql.Databases("192.168.1.12"),
+				    kdw_master = Source{[Name="kdw_master"]}[Data],
+				    dbo_dwproductionfeedback = kdw_master{[Schema="dbo",Item="dwproductionfeedback"]}[Data],
+				    #"Expanded dwcostcenters" = Table.ExpandRecordColumn(dbo_dwproductionfeedback, "dwcostcenters", {"costcenter_number", "costcenter_name", "costcenter_number_and_name"}, {"dwcostcenters.costcenter_number", "dwcostcenters.costcenter_name", "dwcostcenters.costcenter_number_and_name"}),
+				    #"Filtered Rows" = Table.SelectRows(#"Expanded dwcostcenters", each ([dwcostcenters.costcenter_number] = 130 or [dwcostcenters.costcenter_number] = 131 or [dwcostcenters.costcenter_number] = 132 or [dwcostcenters.costcenter_number] = 133 or [dwcostcenters.costcenter_number] = 142 or [dwcostcenters.costcenter_number] = 144 or [dwcostcenters.costcenter_number] = 146 or [dwcostcenters.costcenter_number] = 154)),
+				    #"Expanded dwproductionorders" = Table.ExpandRecordColumn(#"Filtered Rows", "dwproductionorders", {"job_number"}, {"dwproductionorders.job_number"}),
+				    #"Removed Columns" = Table.RemoveColumns(#"Expanded dwproductionorders",{"mas_paper_1", "mas_paper_2", "mas_paper_3", "mas_paper_4", "mas_paper_5", "mas_width_1", "mas_width_2", "mas_width_3", "mas_width_4", "mas_width_5", "mirror_scoring", "num_of_folds", "number_of_inks_printed", "number_of_pallets", "number_samples", "position_was_in_lineup"}),
+				    #"Expanded dwcustomer" = Table.ExpandRecordColumn(#"Removed Columns", "dwcustomer", {"customer_full_name"}, {"dwcustomer.customer_full_name"}),
+				    #"Renamed Columns" = Table.RenameColumns(#"Expanded dwcustomer",{{"dwcustomer.customer_full_name", "Customer Name"}}),
+				    #"Removed Columns1" = Table.RemoveColumns(#"Renamed Columns",{"target_availability", "target_oee", "target_performance", "target_quality", "target_setup_time", "target_speed", "target_speed_unit", "weight_entry", "weight_entry_unit", "weight_exit", "weight_exit_unit", "weight_produced", "weight_produced_unit"})
+				in
+				    #"Removed Columns1"
+
+	annotation PBI_ResultType = Table
+
+	annotation PBI_NavigationStepName = Navigation
+

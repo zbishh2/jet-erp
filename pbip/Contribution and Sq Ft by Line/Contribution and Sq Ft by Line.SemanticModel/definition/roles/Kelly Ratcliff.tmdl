@@ -1,0 +1,5 @@
+role 'Kelly Ratcliff'
+	modelPermission: read
+
+	annotation PBI_Id = 4564469fae0345cea578c713fd4282d8
+

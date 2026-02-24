@@ -1,0 +1,609 @@
+table crc8e_repairrequest
+	lineageTag: a07cdf7d-c063-4596-a1df-bd0113850cbc
+
+	column 'Repair Request'
+		dataType: string
+		lineageTag: 147199d6-ea58-4ec3-b80a-0f4c335fcf5c
+		summarizeBy: none
+		sourceColumn: crc8e_repairrequestid
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Created On'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: ed7d5700-d5db-4b69-9883-5efe2110aff8
+		summarizeBy: none
+		sourceColumn: createdon
+
+		variation Variation
+			isDefault
+			relationship: 467731d9-ac24-4635-a45c-f7eb395ed92a
+			defaultHierarchy: LocalDateTable_fc9f36f3-c90e-44ed-a3bd-f48c1d757bca.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column createdby
+		dataType: string
+		lineageTag: 7b520d05-cf00-4661-9375-f243683cbe74
+		summarizeBy: none
+		sourceColumn: createdby
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Modified On'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 83eb882e-e5f3-4fa5-86c3-c1cc31e8d1e1
+		summarizeBy: none
+		sourceColumn: modifiedon
+
+		variation Variation
+			isDefault
+			relationship: 39d5173b-c457-4d7a-be51-198bf5a86929
+			defaultHierarchy: LocalDateTable_03376951-b2e2-4c37-9870-52785a1f2587.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column modifiedby
+		dataType: string
+		lineageTag: 17ff3bb8-e87b-420f-aee6-1506004ef650
+		summarizeBy: none
+		sourceColumn: modifiedby
+
+		annotation SummarizationSetBy = Automatic
+
+	column createdonbehalfby
+		dataType: string
+		lineageTag: a206a3f3-89e5-40c5-b23f-d61043d52fa6
+		summarizeBy: none
+		sourceColumn: createdonbehalfby
+
+		annotation SummarizationSetBy = Automatic
+
+	column modifiedonbehalfby
+		dataType: string
+		lineageTag: b4814720-520f-470e-b37d-41c2be1851f5
+		summarizeBy: none
+		sourceColumn: modifiedonbehalfby
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Created By'
+		dataType: string
+		lineageTag: 9353b393-ce54-4018-a75f-e82fca302cf5
+		summarizeBy: none
+		sourceColumn: createdbyname
+
+		annotation SummarizationSetBy = Automatic
+
+	column createdbyyominame
+		dataType: string
+		lineageTag: edea4742-f9ea-414e-8d60-cf2d76d201f0
+		summarizeBy: none
+		sourceColumn: createdbyyominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Created By (Delegate)'
+		dataType: string
+		lineageTag: 5f5a554d-a762-4bc8-9fc2-0c88288c5cc5
+		summarizeBy: none
+		sourceColumn: createdonbehalfbyname
+
+		annotation SummarizationSetBy = Automatic
+
+	column createdonbehalfbyyominame
+		dataType: string
+		lineageTag: b9a86a1f-4baa-4eda-b2dc-eed514bc8ce1
+		summarizeBy: none
+		sourceColumn: createdonbehalfbyyominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Modified By'
+		dataType: string
+		lineageTag: 2527d20f-ca40-4220-821f-093af20ecd45
+		summarizeBy: none
+		sourceColumn: modifiedbyname
+
+		annotation SummarizationSetBy = Automatic
+
+	column modifiedbyyominame
+		dataType: string
+		lineageTag: fd4a3e9a-caef-453e-8c9f-0681c1674768
+		summarizeBy: none
+		sourceColumn: modifiedbyyominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Modified By (Delegate)'
+		dataType: string
+		lineageTag: 5194a5eb-7db1-456b-9b08-76be297f5a4c
+		summarizeBy: none
+		sourceColumn: modifiedonbehalfbyname
+
+		annotation SummarizationSetBy = Automatic
+
+	column modifiedonbehalfbyyominame
+		dataType: string
+		lineageTag: adc5276b-e757-4757-8959-29d8e1964487
+		summarizeBy: none
+		sourceColumn: modifiedonbehalfbyyominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column ownerid
+		dataType: string
+		lineageTag: 7db20cfd-fca6-493b-8da3-eb45a0566272
+		summarizeBy: none
+		sourceColumn: ownerid
+
+		annotation SummarizationSetBy = Automatic
+
+	column Owner
+		dataType: string
+		lineageTag: a2f23804-3059-497c-9af4-7094513345f3
+		summarizeBy: none
+		sourceColumn: owneridname
+
+		annotation SummarizationSetBy = Automatic
+
+	column owneridyominame
+		dataType: string
+		lineageTag: 0ff3a77f-daf4-4162-8cce-36304874751c
+		summarizeBy: none
+		sourceColumn: owneridyominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column owningbusinessunit
+		dataType: string
+		lineageTag: a7a390a3-a250-42fc-9ea0-dcef1c432479
+		summarizeBy: none
+		sourceColumn: owningbusinessunit
+
+		annotation SummarizationSetBy = Automatic
+
+	column owninguser
+		dataType: string
+		lineageTag: 731be982-17d9-4a81-8f0b-ad0b9e22c4bb
+		summarizeBy: none
+		sourceColumn: owninguser
+
+		annotation SummarizationSetBy = Automatic
+
+	column owningteam
+		dataType: string
+		lineageTag: 4a518c3c-2d7c-435c-9973-9d349901fce1
+		summarizeBy: none
+		sourceColumn: owningteam
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Owning Business Unit'
+		dataType: string
+		lineageTag: 71ed7842-d767-4570-989e-b7c00c7eff63
+		summarizeBy: none
+		sourceColumn: owningbusinessunitname
+
+		annotation SummarizationSetBy = Automatic
+
+	column Status
+		dataType: int64
+		formatString: 0
+		lineageTag: 2f04b58e-3c9e-4781-8026-2e7b22de1ac8
+		summarizeBy: sum
+		sourceColumn: statecode
+
+		annotation SummarizationSetBy = Automatic
+
+	column statecodename
+		dataType: string
+		lineageTag: b59d69ff-7ca9-4908-afcb-2df75b8eb98a
+		summarizeBy: none
+		sourceColumn: statecodename
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Status Reason'
+		dataType: int64
+		formatString: 0
+		lineageTag: f37cd158-f545-4069-bc1f-217390072abf
+		summarizeBy: sum
+		sourceColumn: statuscode
+
+		annotation SummarizationSetBy = Automatic
+
+	column statuscodename
+		dataType: string
+		lineageTag: 65bb1673-8cf1-43bc-8612-c152f91438be
+		summarizeBy: none
+		sourceColumn: statuscodename
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Import Sequence Number'
+		dataType: int64
+		formatString: 0
+		lineageTag: 3d02141a-1146-4206-b3ea-abc71bcd81f1
+		summarizeBy: sum
+		sourceColumn: importsequencenumber
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Record Created On'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: b71bafe3-3e08-41b6-b30a-6608a5826d54
+		summarizeBy: none
+		sourceColumn: overriddencreatedon
+
+		variation Variation
+			isDefault
+			relationship: ac2e503e-62ba-4e1e-ba5a-e109911b8521
+			defaultHierarchy: LocalDateTable_687241a3-f2f8-47ec-9121-a16eb5c93d4e.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Time Zone Rule Version Number'
+		dataType: int64
+		formatString: 0
+		lineageTag: d59dbe90-f2cc-46a3-81e8-f7a24248972e
+		summarizeBy: sum
+		sourceColumn: timezoneruleversionnumber
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'UTC Conversion Time Zone Code'
+		dataType: int64
+		formatString: 0
+		lineageTag: 1d1b303c-be46-4ada-bcd8-358b15f35d40
+		summarizeBy: count
+		sourceColumn: utcconversiontimezonecode
+
+		annotation SummarizationSetBy = Automatic
+
+	column Name
+		dataType: string
+		lineageTag: 9259fb61-aba8-4d23-b332-73431817b712
+		summarizeBy: none
+		sourceColumn: crc8e_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Date Submitted'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 2e1ce8c7-c280-47a6-b849-c44bbd19ba91
+		summarizeBy: none
+		sourceColumn: crc8e_datesubmitted
+
+		variation Variation
+			isDefault
+			relationship: 1e5d98ff-34d5-48e4-a48c-1b2234f64be4
+			defaultHierarchy: LocalDateTable_d42ba8af-fbd1-4ba5-9400-9b5f0dc06391.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_equipment
+		dataType: string
+		lineageTag: 6ba53d8a-a8c9-45e7-b12d-bdc919d9e22a
+		summarizeBy: none
+		sourceColumn: crc8e_equipment
+
+		annotation SummarizationSetBy = Automatic
+
+	column Equipment
+		dataType: string
+		lineageTag: 5763749a-57e7-4d29-9ba5-a973d47261ab
+		summarizeBy: none
+		sourceColumn: crc8e_equipmentname
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_requestedby
+		dataType: string
+		lineageTag: 1b587763-f225-496e-80bb-e7c73726ba15
+		summarizeBy: none
+		sourceColumn: crc8e_requestedby
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Requested By'
+		dataType: string
+		lineageTag: fa5176b7-2fe0-4c9f-85df-2eaa19cfd473
+		summarizeBy: none
+		sourceColumn: crc8e_requestedbyname
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_approvedby
+		dataType: string
+		lineageTag: ca6c6000-6907-46e3-9353-17cb5e377dd6
+		summarizeBy: none
+		sourceColumn: crc8e_approvedby
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Approved By'
+		dataType: string
+		lineageTag: b8d0dda8-7fa2-4b5a-8f01-ff6014ff4758
+		summarizeBy: none
+		sourceColumn: crc8e_approvedbyname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Description of Problem'
+		dataType: string
+		lineageTag: 5f2e4527-55db-49ba-ba07-342caffdefb4
+		summarizeBy: none
+		sourceColumn: crc8e_descriptionofproblem
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_top10
+		dataType: int64
+		formatString: 0
+		lineageTag: e29cc483-e032-4533-ab73-d9906865a5ad
+		summarizeBy: sum
+		sourceColumn: crc8e_top10
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Top 10'
+		dataType: string
+		lineageTag: b25ec870-edf0-497f-9489-dfb11ef21694
+		summarizeBy: none
+		sourceColumn: crc8e_top10name
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_area
+		dataType: string
+		lineageTag: 72d384de-ab60-44d4-bf4d-bc3ec6a411a4
+		summarizeBy: none
+		sourceColumn: crc8e_area
+
+		annotation SummarizationSetBy = Automatic
+
+	column Area
+		dataType: string
+		lineageTag: 55c626c1-f87f-4717-9f28-3e4a8943b82c
+		summarizeBy: none
+		sourceColumn: crc8e_areaname
+
+		annotation SummarizationSetBy = Automatic
+
+	column Notes
+		dataType: string
+		lineageTag: 5032a7b9-28bc-47e7-96ff-a94a9985b3e8
+		summarizeBy: none
+		sourceColumn: crc8e_notes
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Comments (if any)'
+		dataType: string
+		lineageTag: a5308072-2c7d-4983-bfb6-469e0ee171b2
+		summarizeBy: none
+		sourceColumn: crc8e_commentsifany
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Work Performed'
+		dataType: string
+		lineageTag: fabf7d8a-0558-44a0-bed7-6741a4012e82
+		summarizeBy: none
+		sourceColumn: crc8e_workperformed
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_workperformedby
+		dataType: string
+		lineageTag: a4f3434e-a768-4790-8446-4e4788af31b2
+		summarizeBy: none
+		sourceColumn: crc8e_workperformedby
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Work Performed By'
+		dataType: string
+		lineageTag: a8bfb6e9-8a9c-40a6-9072-0e4667e54448
+		summarizeBy: none
+		sourceColumn: crc8e_workperformedbyname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Date Job Completed'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 3214495d-9809-4c3a-b2cf-f6f6b2bc76d2
+		summarizeBy: none
+		sourceColumn: crc8e_datejobcompleted
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_maintenancetechapproval
+		dataType: string
+		lineageTag: a4494a0b-c8b9-4ec6-bb94-f417258e969c
+		summarizeBy: none
+		sourceColumn: crc8e_maintenancetechapproval
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Maintenance Tech Approval'
+		dataType: string
+		lineageTag: 9c94e77d-556b-433e-8ea0-ade5e786774a
+		summarizeBy: none
+		sourceColumn: crc8e_maintenancetechapprovalname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Time Spent Repairing (hrs)'
+		dataType: double
+		lineageTag: 6c62e5a1-cb29-463a-acd7-6ee17c48d0d0
+		summarizeBy: sum
+		sourceColumn: crc8e_timespentrepairinghrs
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column crc8e_pictureoperatorid
+		dataType: string
+		lineageTag: 3fc88bc4-073f-4149-8135-5f3bf7e3a1d3
+		summarizeBy: none
+		sourceColumn: crc8e_pictureoperatorid
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_pictureoperator_url
+		dataType: string
+		lineageTag: 2f6bd9bb-31db-4a5c-acaf-b24d6287b359
+		summarizeBy: none
+		sourceColumn: crc8e_pictureoperator_url
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_picturefrommaintenancetechid
+		dataType: string
+		lineageTag: 0ce9c6d3-73ed-4d4f-88d7-6e8293ff9d0c
+		summarizeBy: none
+		sourceColumn: crc8e_picturefrommaintenancetechid
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_picturefrommaintenancetech_url
+		dataType: string
+		lineageTag: d0b92639-1b49-46c5-b683-360d7d71e275
+		summarizeBy: none
+		sourceColumn: crc8e_picturefrommaintenancetech_url
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Week Start Date (Date Submitted)'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: a745d913-46e1-4248-821d-1687aad20fce
+		summarizeBy: none
+		sourceColumn: crc8e_weekstartdatedatesubmitted
+
+		variation Variation
+			isDefault
+			relationship: 6431a0d2-469c-4d60-a9a9-e193fe1ff440
+			defaultHierarchy: LocalDateTable_9ca45e3d-b20a-4473-a918-44856f584d08.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_washhandsbeforebeginningmaintenance
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: a8ee2ccd-5f30-45bf-aad5-549e59a86f60
+		summarizeBy: none
+		sourceColumn: crc8e_washhandsbeforebeginningmaintenance
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Wash hands before beginning maintenance'
+		dataType: string
+		lineageTag: 896547ed-801c-46ed-b1df-3aa69789d6a5
+		summarizeBy: none
+		sourceColumn: crc8e_washhandsbeforebeginningmaintenancename
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_uponcompletionalltoolingisremovedfromthear
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: fc16aba0-09ff-43f4-a6c7-b8c6fa4534d1
+		summarizeBy: none
+		sourceColumn: crc8e_uponcompletionalltoolingisremovedfromthear
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Upon completion all tooling is removed from area'
+		dataType: string
+		lineageTag: e2f68a20-0bc1-41cd-9624-4272b13c40ea
+		summarizeBy: none
+		sourceColumn: crc8e_uponcompletionalltoolingisremovedfromthearname
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_areaequipmentworkedoniscleanofanycontamina
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: b5650dab-08da-4e62-ae8b-62ac77860470
+		summarizeBy: none
+		sourceColumn: crc8e_areaequipmentworkedoniscleanofanycontamina
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Area/equipment worked on is clean of contaminates'
+		dataType: string
+		lineageTag: 2f9a84ad-a9ac-4e10-a22a-7a642b0e47d3
+		summarizeBy: none
+		sourceColumn: crc8e_areaequipmentworkedoniscleanofanycontaminaname
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_toolsarecleanedandputaway
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: e4f12fb4-f72d-455c-b94f-8ec439e8d522
+		summarizeBy: none
+		sourceColumn: crc8e_toolsarecleanedandputaway
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Tools are cleaned and put away'
+		dataType: string
+		lineageTag: 6ae7f3cd-a036-49cf-ab28-049219a55096
+		summarizeBy: none
+		sourceColumn: crc8e_toolsarecleanedandputawayname
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_washhandsaftercompletingmaintenance
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: a2f902d2-e66a-4b0f-b68a-4ab6255f2bca
+		summarizeBy: none
+		sourceColumn: crc8e_washhandsaftercompletingmaintenance
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Wash hands after completing maintenance'
+		dataType: string
+		lineageTag: fc5f75d9-4720-4f47-8c78-58ece4a34140
+		summarizeBy: none
+		sourceColumn: crc8e_washhandsaftercompletingmaintenancename
+
+		annotation SummarizationSetBy = Automatic
+
+	column crc8e_reactiveproactive
+		dataType: int64
+		formatString: 0
+		lineageTag: cf6f66ae-f4f8-46b4-b4fa-6e7ad790e899
+		summarizeBy: sum
+		sourceColumn: crc8e_reactiveproactive
+
+		annotation SummarizationSetBy = Automatic
+
+	column Reactive/Proactive
+		dataType: string
+		lineageTag: 97b8ffc5-a99c-400b-a6f0-609f4ceb500c
+		summarizeBy: none
+		sourceColumn: crc8e_reactiveproactivename
+
+		annotation SummarizationSetBy = Automatic
+
+	partition crc8e_repairrequest = m
+		mode: import
+		source =
+				let
+				    Source = CommonDataService.Database("orgb25ca9e8.crm.dynamics.com"),
+				    dbo_crc8e_repairrequest = Source{[Schema="dbo",Item="crc8e_repairrequest"]}[Data]
+				in
+				    dbo_crc8e_repairrequest
+

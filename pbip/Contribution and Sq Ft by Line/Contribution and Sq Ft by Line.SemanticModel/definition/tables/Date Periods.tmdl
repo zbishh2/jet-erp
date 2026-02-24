@@ -1,0 +1,74 @@
+table 'Date Periods'
+	lineageTag: 1c94181d-b81d-4dcc-b28a-4a4718fa9b5d
+
+	column Type
+		lineageTag: 3669c665-0d9a-4971-b7db-fa093ab64ade
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Type]
+
+		annotation SummarizationSetBy = Automatic
+
+	column Sort
+		formatString: 0
+		lineageTag: fb955e74-c6c7-488e-9fd7-d8596a73976d
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Sort]
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Week Type' = If('Date Periods'[Type] = "MTD" || 'Date Periods'[Type]="Last Month" ,BLANK(),'Date Periods'[Type])
+		lineageTag: bd93d919-d3ae-45de-8881-7f9c178f0b5a
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column Date
+		formatString: Short Date
+		lineageTag: cdbd8e22-634c-476d-a6de-434963c1c58b
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: ReportDates[Date]
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	partition 'Date Periods' = calculated
+		mode: import
+		source =
+				
+				UNION (
+				    ADDCOLUMNS (DATESMTD ( 'ReportDates'[Date] ), "Type", "MTD", "Sort", 1),
+				    ADDCOLUMNS (DATESQTD ( 'ReportDates'[Date] ), "Type", "QTD", "Sort", 2),
+				    ADDCOLUMNS (DATESYTD ( 'ReportDates'[Date] ), "Type", "YTD", "Sort", 3),
+				    ADDCOLUMNS (
+				        PREVIOUSMONTH (DATESMTD ( 'ReportDates'[Date] )),
+				        "Type", "Last Month",
+				        "Sort", 4
+				    ),
+				    ADDCOLUMNS (
+				        PREVIOUSQUARTER (DATESQTD ( 'ReportDates'[Date] )),
+				        "Type", "Last Qtr",
+				        "Sort", 5
+				    ),
+				    ADDCOLUMNS (
+				        PREVIOUSYEAR (DATESYTD ( 'ReportDates'[Date] )),
+				        "Type", "Last Year",
+				        "Sort", 6
+				    ),
+				    ADDCOLUMNS (
+				        CALENDAR (MIN ( espInvoice[transactiondate - Copy] ), MAX ( espInvoice[transactiondate - Copy] )),
+				        "Type", "All Time",
+				        "Sort", 7
+				    ),
+				    ADDCOLUMNS (
+				        CALENDAR (MIN ( 'ReportDates'[Date] ), MAX ( 'ReportDates'[Date] )),
+				        "Type", "Custom",
+				        "Sort", 8
+				    )
+				)
+
+	annotation PBI_Id = e0450361619648a6869b69d0efc96c52
+

@@ -1,0 +1,1027 @@
+table '.Measures'
+	lineageTag: 95430e8b-5623-4dcb-b719-b886153d27e5
+
+	measure 'OEE %' = iferror([Speed to Optimum %]*[Uptime %]*[Quality %],BLANK())
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: OEE
+		lineageTag: bc06165a-149a-4eb1-a905-6dbd2cd04718
+
+	measure 'Order Hours' = IFERROR(sum(dwproductionfeedback[Order Duration])/60/60,BLANK())
+		formatString: 0.00
+		displayFolder: Order
+		lineageTag: a33f3416-8bee-4bc8-b93b-b3b081e257a2
+
+	measure 'Average Setup Minutes' = ([Setup Hours]/[Setup Count])*60
+		displayFolder: Setup
+		lineageTag: e05a2892-9526-4071-87af-c4de164a0223
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure speed = sum(dwproductionfeedback[quantity_fed])/sum(dwproductionfeedback[actual run hours])
+		formatString: 0
+		displayFolder: Speed
+		lineageTag: 1f4f0f72-8581-43c9-b001-96885fcbea6b
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Speed to Optimum %' = IFERROR([Speed Sheets Per Hour]/[Optimum Run Speed],BLANK())
+		formatString: 0.00%;-0.00%;0.00%
+		displayFolder: Speed
+		lineageTag: d21b7e2e-c69a-4a6c-aa22-0fe0ba1b82d9
+
+	measure 'Uptime %' = IFERROR([Uptime Hours]/[Run Hours],BLANK())
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Uptime
+		lineageTag: 1e9a256f-0b30-450b-902f-c6741cbb0a2b
+
+	measure 'Produced Sheets' = SUM(dwproductionfeedback[Sheets Produced])
+		formatString: 0
+		displayFolder: Quality
+		lineageTag: c931bfe2-985d-4e4c-bd22-024c4d67797c
+
+	measure 'Prerun Waste' = SUM(dwproductionfeedback[prerun_waste])
+		formatString: 0
+		displayFolder: Quality
+		lineageTag: 71b002f6-7076-422b-af46-cb38d8724177
+
+	measure 'Quantity Fed' = SUM(dwproductionfeedback[quantity_fed])
+		formatString: 0
+		displayFolder: Order
+		lineageTag: 722384a8-5ef8-499c-a8b4-5fa9a45cfe43
+
+	measure 'Number out' = MAX(dwproductionfeedback[Number Out])
+		formatString: 0
+		displayFolder: Order
+		lineageTag: 717da624-0565-48b3-be58-6e1e5bb9c7d7
+
+	measure 'Reported Wasted Quantity' = ```
+			
+			SUM(dwproductionfeedback[rolled up wasted quantity reported])
+			
+			```
+		formatString: 0
+		displayFolder: Quality
+		lineageTag: cb10941b-34f5-45a7-8d42-b95717077601
+
+	measure 'Downtime Closed During Run' = SUM(dwdowntimes[Run Closed downtime hours])
+		formatString: 0.00
+		displayFolder: Downtime
+		lineageTag: 5cea10f6-0c14-4967-b541-7cc2ad404ed3
+
+	measure 'Setup Hours (Including Downtime During Setup)' = [Setup Seconds (Including Downtime During Setup)]/60/60
+		formatString: 0.00
+		displayFolder: Setup
+		lineageTag: 72cc6591-ebdf-45e1-a53b-279b2f4a7c92
+
+	measure 'Run Hours' = [Order Hours]-[Setup Hours]
+		formatString: 0.00
+		displayFolder: Uptime
+		lineageTag: af4c0ff6-dd90-4b78-91f8-5c9162185775
+
+	measure 'Setup Count' = COUNT(dwproductionfeedback[setup_duration_minutes])
+		formatString: 0
+		displayFolder: Setup
+		lineageTag: 3b615fae-da93-49cf-9b5d-da031d6bc0cc
+
+	measure 'Order Minutes' = [Order Hours]*60
+		displayFolder: Order
+		lineageTag: 68145cdb-6217-43e1-bf5f-0628c32a92b3
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Setup %' = [Setup Hours]/[Order Hours]
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Setup
+		lineageTag: 99394a9d-31a2-4ec4-a837-595774e1156b
+
+	measure 'Speed Sheets Per Hour' = SUM(dwproductionfeedback[quantity_fed_in])/[Uptime Hours]
+		displayFolder: Speed
+		lineageTag: cc50ff8c-3f4e-4830-b36e-9b86d3aa5b30
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Optimum Run Speed' = IF([Uptime Hours]<.02,BLANK(),AVERAGE(dwproductionfeedback[dwcostcenters.optimum_run_speed]))
+		formatString: 0
+		displayFolder: Speed
+		lineageTag: 2fb9974a-dac5-4b00-ae44-819f938a54c6
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Planned Run Speed' = MAX(dwproductionfeedback[planned_run_speed])
+		formatString: 0
+		displayFolder: Speed
+		lineageTag: fcfa7a36-99be-443a-b616-53dddea9bfe0
+
+	measure 'Target Speed' = average(dwproductionfeedback[target_speed])
+		formatString: 0
+		displayFolder: Speed
+		lineageTag: 2d395cde-91f5-46dc-bf00-6a9a143e01c5
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Actual Speed' = average(dwproductionfeedback[Actual Speed])
+		formatString: 0
+		displayFolder: Speed
+		lineageTag: 9b40a885-ca90-4491-98d8-d090adc8d6e2
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Downtime %' = ([Downtime Open]+[Downtime Closed])/[Order Hours]
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Downtime
+		lineageTag: d90b44a4-9d0d-466a-80a8-f91a2a8b5d5a
+
+	measure 'Speed to Target %' = [Actual Speed]/[Target Speed]
+		formatString: 0%;-0%;0%
+		displayFolder: Speed
+		lineageTag: 0b9994ba-b714-4724-bba7-cccf6cc941d6
+
+	measure 'Speed to Planned %' = [Actual Speed]/[Planned Run Speed]
+		formatString: 0%;-0%;0%
+		displayFolder: Speed
+		lineageTag: 8542ce2f-32bc-43af-a1b9-59b9ca2d0869
+
+	measure 'Total Time Spent on Maintenance' = SUM(crc8e_repairrequest[Time Spent Repairing (hrs)]) + SUM(crc8e_wearpartactivity[Time taken to do]) + SUM(crc8e_workorders[Time Taken to do (hrs)])
+		displayFolder: Maintenance
+		lineageTag: 5b67ba5b-2a02-4b75-b469-f6ba3fb7b5dc
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Time Spent Reactive' = SUM(crc8e_repairrequest[Time Spent Repairing (hrs)])
+		displayFolder: Maintenance
+		lineageTag: 2de6a9f1-3ae5-420e-8fb8-cc0adb11bb6a
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Time Spent Proactive' = SUM(crc8e_wearpartactivity[Time taken to do]) + SUM(crc8e_workorders[Time Taken to do (hrs)])
+		displayFolder: Maintenance
+		lineageTag: 3c40957a-9300-4b6e-abeb-86cf89536581
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Maintenance Proactive %' = [Time Spent Proactive]/[Total Time Spent on Maintenance]
+		formatString: 0.00%;-0.00%;0.00%
+		displayFolder: Maintenance
+		lineageTag: c246e44e-6652-46f7-bf30-291d2c8ae3e0
+
+	measure 'Maintenance Reactive %' = [Time Spent Reactive]/[Total Time Spent on Maintenance]
+		formatString: 0.00%;-0.00%;0.00%
+		displayFolder: Maintenance
+		lineageTag: 4a2468e7-97e2-45f8-b961-ff8687c1884d
+
+	measure 'Uptime Hours' = [Run Hours]-[Downtime Open]-[Downtime Closed]
+		displayFolder: Uptime
+		lineageTag: fafb3db3-df13-4d26-81cf-99922b962237
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Quality %' = IFERROR([Produced Sheets]/([Produced Sheets]+[Reported Wasted Quantity]),BLANK())
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Quality
+		lineageTag: ce413767-3f6d-45e8-8635-6f6ec04360c8
+
+	measure 'Converted Sq Ft' = SUM(dwproductionfeedback[total sq ft])
+		displayFolder: Sq Ft
+		lineageTag: 2a5f977a-e97f-48e3-803a-40561222f90b
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Sq Ft per Order Hour' = [Converted Sq Ft]/[Order Hours]
+		displayFolder: Sq Ft
+		lineageTag: 809eb1f7-76b3-4898-8994-b24221ddeae7
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Sq Ft per Machine Hour (Uptime Hours)' = [Converted Sq Ft]/[Uptime Hours]
+		displayFolder: Sq Ft
+		lineageTag: 6b7a9637-8d17-444c-b922-01a914e0f12e
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Sq Ft Entry' = SUM(dwproductionfeedback[total sq ft entry])
+		displayFolder: Sq Ft
+		lineageTag: 0d25eb66-5773-4d45-99d9-f715df3adb54
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Count_Days = ```
+			DISTINCTCOUNT(dwproductionfeedback[feedback_report_date])
+			
+			```
+		formatString: 0
+		displayFolder: Date/Time Logic
+		lineageTag: ef4bfe24-fd13-4dbd-b141-4dab98231e65
+
+	measure 'Sq Ft per Day' = [Converted Sq Ft]/[Count_Days]
+		displayFolder: Sq Ft
+		lineageTag: e51edaf1-ce73-4437-8596-3c572e476554
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Order Hours per Day' = [Order Hours]/[Count_Days]
+		displayFolder: Order
+		lineageTag: b17c1d4e-0b86-4d5a-86e1-2826a1a8af35
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Waste from Log' = SUM(dwwaste[Wasted Quantity])
+		formatString: 0
+		displayFolder: Quality
+		lineageTag: 8efcf4d4-855a-41b3-b380-58f847ad8d4e
+
+	measure SoQ = DATE( YEAR( TODAY() ), ( QUARTER( TODAY() ) - 1 ) * 3 + 1, 1 )
+		formatString: General Date
+		displayFolder: Date/Time Logic
+		lineageTag: 1f6b9fc4-dcf5-487e-bdf3-49c6f5eff8a7
+
+	measure SoLQ = DATE( YEAR( TODAY() ), ( QUARTER( TODAY() ) - 1 ) * 2 + 1, 1 )
+		formatString: General Date
+		displayFolder: Date/Time Logic
+		lineageTag: b6cebd61-b9d5-47b3-9850-ac3d832b20c0
+
+	measure EoQ = DATE( YEAR( TODAY() ), QUARTER( TODAY() ) * 3 + 1, 1 ) - 1
+		formatString: General Date
+		displayFolder: Date/Time Logic
+		lineageTag: 52b7ade7-45a3-4f7f-8b02-b34886c5519b
+
+	measure EoLQ = DATE( YEAR( TODAY() ), QUARTER( TODAY() ) * 2 + 2, 1 ) - 1
+		formatString: General Date
+		displayFolder: Date/Time Logic
+		lineageTag: 497f238e-736c-41ac-9322-83307c1f4e32
+
+	measure 'OEE Best Quarter' = ```
+			
+			VAR MinDate = 
+			    EDATE([SoQ], -12) -- 12 months (4 quarters) before SoQ
+			VAR MaxDate = 
+			    [SoQ] -- SoQ is the max date
+			VAR MaxOEEQuarter =
+			    MAXX(
+			        SUMMARIZE(
+			            FILTER(
+			                ALL(dwdate),
+			                dwdate[date] >= MinDate && dwdate[date] <= MaxDate -- Restrict dates to 1-year window
+			            ),
+			            dwdate[Year],
+			            dwdate[Quarter],
+			            "QuarterOEE", CALCULATE([OEE %])
+			        ),
+			        [QuarterOEE]
+			    )
+			RETURN
+			    MaxOEEQuarter
+			```
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Month Over Month
+		lineageTag: 1db2131c-1909-424e-8459-f396ffdbf207
+
+	measure 'OEE Current Quarter' =
+			
+			CALCULATE(
+			    [OEE %],
+			    FILTER(
+			        ALL(dwdate),
+			        dwdate[date] >= [SoQ] && dwdate[date] <= [EoQ]
+			    )
+			)
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Month Over Month
+		lineageTag: 1e78e456-b069-4c95-8f5b-46ad6981e149
+
+	measure 'OEE Last Quarter' =
+			
+			CALCULATE(
+			    [OEE %],
+			    FILTER(
+			        ALL(dwdate),
+			        dwdate[date] >= [SoLQ] && dwdate[date] <= [EoLQ]
+			    )
+			)
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Month Over Month
+		lineageTag: 6cdcedb5-7bc4-48ac-a2aa-c4704983a848
+
+	measure 'OEE Difference to Best' = [OEE Current Quarter]- [OEE Best Quarter]
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Month Over Month
+		lineageTag: c168cb0a-e4b9-470e-ac99-b3e3c0d4db83
+
+	measure 'OEE Difference to Last' = [OEE Current Quarter]- [OEE Last Quarter]
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Month Over Month
+		lineageTag: 3121725c-12ec-490f-8078-638ff8eaffa9
+
+	measure CurrentQuarterOEE = ```
+			
+			    CALCULATE(
+			        [OEE %],
+			        DATESQTD(dwdate[date])
+			    )
+			```
+		displayFolder: OEE
+		lineageTag: 74b02c08-e65b-47e4-b76b-bfaa19b2a179
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure LastQuarterOEE = ```
+			
+			    CALCULATE(
+			        [OEE %],
+			        DATESQTD(PREVIOUSQUARTER(dwdate[date]))
+			    )
+			```
+		displayFolder: OEE
+		lineageTag: e8e8dd99-a0a2-4f60-abc4-458307d1c61d
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'OEE Difference QoQ' = ```
+			IF(
+			        NOT ISBLANK([LastQuarterOEE]),
+			        [CurrentQuarterOEE] - [LastQuarterOEE],
+			        BLANK()
+			    )
+			    
+			```
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Month Over Month
+		lineageTag: e070ff8f-2d5f-46d2-a95c-5bfa7316d60f
+
+	measure 'Run Time (From Kiwi)' = SUM(dwproductionfeedback[run_duration_minutes])/60
+		displayFolder: Uptime
+		lineageTag: 9c4b4481-54ea-497b-acd2-f721cd591f42
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Downtime Open During Setup' = SUM(dwdowntimes[Setup Open downtime hours])
+		formatString: 0.00
+		displayFolder: Downtime
+		lineageTag: 941cda50-91de-42f6-a25a-823aa71726fa
+
+	measure 'Setup Hours' = [Setup Hours (Including Downtime During Setup)]-[Downtime Setup]
+		displayFolder: Setup
+		lineageTag: 948b21b3-f070-423f-99b7-9875695e8bc4
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Order Hours (hh:mm)' = ```
+			
+			VAR OrderHrs = [Order Hours]
+			RETURN 
+			IF(
+			    OrderHrs = 0 || ISBLANK(OrderHrs),
+			    BLANK(),
+			    TIME(INT(OrderHrs), MOD(OrderHrs * 60, 60), 0)
+			)
+			
+			```
+		formatString: hh:nn
+		displayFolder: Order
+		lineageTag: f40c8033-0d36-4103-98fd-27cfc905df30
+
+		annotation PBI_FormatHint = {"isDateTimeCustom":true}
+
+	measure 'Run Hours (hh:mm)' = ```
+			
+			VAR RunHrs = [Run Hours]
+			RETURN 
+			IF(
+			    RunHrs = 0 || ISBLANK(RunHrs),
+			    BLANK(),
+			    TIME(INT(RunHrs), MOD(RunHrs * 60, 60), 0)
+			)
+			
+			```
+		formatString: hh:nn
+		displayFolder: Uptime
+		lineageTag: ecbe2ca4-e1dc-4c58-87f8-6ee164b94a06
+
+		annotation PBI_FormatHint = {"isDateTimeCustom":true}
+
+	measure 'Downtime Open' = SUM(dwdowntimes[Open Downtime Hours])
+		displayFolder: Downtime
+		lineageTag: 202da954-6671-4f9a-a407-78c09d5d26f1
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Downtime During Run (hh:mm)' = ```
+			
+			VAR DowntimeHrs = [Downtime Closed During Run]
+			RETURN 
+			IF(
+			    DowntimeHrs = 0 || ISBLANK(DowntimeHrs),
+			    BLANK(),
+			    TIME(INT(DowntimeHrs), MOD(DowntimeHrs * 60, 60), 0)
+			)
+			
+			```
+		formatString: hh:nn
+		displayFolder: Downtime
+		lineageTag: 220da84a-4769-447c-a399-8bfeebced396
+
+		annotation PBI_FormatHint = {"isDateTimeCustom":true}
+
+	measure 'Downtime Open (hh:mm)' = ```
+			
+			VAR TotalDowntime = [Downtime Open]
+			RETURN 
+			IF(
+			    TotalDowntime = 0 || ISBLANK(TotalDowntime),
+			    BLANK(),
+			    TIME(INT(TotalDowntime), MOD(TotalDowntime * 60, 60), 0)
+			)
+			
+			```
+		formatString: hh:nn
+		displayFolder: Downtime
+		lineageTag: dd588cf3-3dd5-4fc0-b9b7-da96042ec5dd
+
+		annotation PBI_FormatHint = {"isDateTimeCustom":true}
+
+	measure 'Uptime Hours (hh:mm)' = ```
+			
+			VAR Uptime = [Uptime Hours]
+			RETURN 
+			IF(
+			    Uptime = 0 || ISBLANK(Uptime),
+			    BLANK(),
+			    TIME(INT(Uptime), MOD(Uptime * 60, 60), 0)
+			)
+			
+			```
+		formatString: hh:nn
+		displayFolder: Uptime
+		lineageTag: 846a6f21-f9f8-45c9-a8cd-7f9a9f7fce81
+
+		annotation PBI_FormatHint = {"isDateTimeCustom":true}
+
+	measure 'Downtime During Setup (hh:mm)' = ```
+			
+			VAR SetupDowntime = [Downtime Open During Setup]
+			RETURN 
+			IF(
+			    SetupDowntime = 0 || ISBLANK(SetupDowntime),
+			    BLANK(),
+			    TIME(INT(SetupDowntime), MOD(SetupDowntime * 60, 60), 0)
+			)
+			
+			```
+		formatString: hh:nn
+		displayFolder: Downtime
+		lineageTag: 6097e1e9-6655-44a7-8aa5-5de0ea175518
+
+		annotation PBI_FormatHint = {"isDateTimeCustom":true}
+
+	measure 'Downtime Closed During Setup' = SUM(dwdowntimes[Setup Closed downtime hours])
+		displayFolder: Downtime
+		lineageTag: b49a9af3-c254-4f7d-9c1f-aa344bb119e8
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Downtime Setup' = [Downtime Open During Setup]+[Downtime Closed During Setup]
+		displayFolder: Downtime
+		lineageTag: bdb66047-806e-44e8-be3a-8f2da9873697
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Downtime Closed' = SUM(dwdowntimes[Closed downtime hours])
+		displayFolder: Downtime
+		lineageTag: 3219b7f0-0466-4e12-b2fe-cbde5111b3d8
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Downtime Open During Run' = SUM(dwdowntimes[Run Open downtime hours])
+		displayFolder: Downtime
+		lineageTag: 1727c31a-cdb7-490a-a666-17f94ba7edd6
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Downtime During Run' = [Downtime Open During Run]+[Downtime Closed During Run]
+		displayFolder: Downtime
+		lineageTag: 084a9fc4-c355-438d-a554-8c1cda6ed2a4
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Downtime Hours' = [Downtime Closed]+[Downtime Open]
+		displayFolder: Downtime
+		lineageTag: 57ba89ab-2c32-458d-96b7-3bba429910e7
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Actual Run Hours (From Kiwi)' = SUM(dwproductionfeedback[actual run hours])
+		displayFolder: Uptime
+		lineageTag: 53155cbe-79b6-4a42-9d13-25264d823f1a
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Number of Setups' = COUNT(dwproductionfeedback[actual_setup_duration_minutes])
+		formatString: 0
+		displayFolder: Setup
+		lineageTag: 5be90adc-8736-48be-86ee-90282523665c
+
+	measure StartOfLastMonth = ```
+			
+			DATE(YEAR(TODAY()), MONTH(TODAY())-1, 1)
+			
+			
+			```
+		formatString: General Date
+		displayFolder: Date/Time Logic
+		lineageTag: 3a646289-d695-488b-a5fb-9ecc38560975
+
+	measure EndOfLastMonth =
+			
+			EOMONTH(TODAY(), -1)
+		formatString: General Date
+		displayFolder: Date/Time Logic
+		lineageTag: 2e12b387-9e06-43ce-b045-045498317702
+
+	measure 'OEE Last Month' = ```
+			
+			CALCULATE(
+			    [OEE %],
+			    FILTER(
+			        ALL(dwdate),
+			        dwdate[date] >= [StartOfLastMonth] && dwdate[date] <= [EndOfLastMonth]
+			    )
+			)
+			
+			```
+		formatString: 0.00%;-0.00%;0.00%
+		displayFolder: Month Over Month
+		lineageTag: aac02b91-b07c-444b-8f48-d11f3929e783
+
+	measure StartOfTwoMonthsAgo = ```
+			
+			DATE(YEAR(TODAY()), MONTH(TODAY())-2, 1)
+			
+			
+			```
+		formatString: General Date
+		displayFolder: Date/Time Logic
+		lineageTag: 2974fb44-86f6-45f5-8687-e36998840299
+
+	measure EndOfTwoMonthsAgo =
+			
+			EOMONTH(TODAY(), -2)
+		formatString: General Date
+		displayFolder: Date/Time Logic
+		lineageTag: cba06ac9-a137-4d10-bd4b-b8800deeab04
+
+	measure 'OEE 2 Months Ago' = ```
+			
+			CALCULATE(
+			    [OEE %],
+			    FILTER(
+			        ALL(dwdate),
+			        dwdate[date] >= [StartOfTwoMonthsAgo] && dwdate[date] <= [EndOfTwoMonthsAgo]
+			    )
+			)
+			
+			```
+		formatString: 0.00%;-0.00%;0.00%
+		displayFolder: Month Over Month
+		lineageTag: 022c9175-e4d1-49cf-be98-c917c8affe1b
+
+	measure 'OEE % Change Last Month' = ```
+			
+			DIVIDE([OEE Last Month] - [OEE 2 Months Ago], [OEE 2 Months Ago])
+			
+			```
+		formatString: 0.00%;-0.00%;0.00%
+		displayFolder: Month Over Month
+		lineageTag: 799b0978-8717-4671-ae1b-26a52ff848ea
+
+	measure 'OEE Change Status' = ```
+			
+			VAR Change = DIVIDE([OEE Last Month] - [OEE 2 Months Ago], [OEE 2 Months Ago])
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        Change > 0, "▲ OEE Improved",
+			        Change < 0, "▼ OEE Declined",
+			        "➔ OEE Was Sustained"
+			    )
+			
+			```
+		displayFolder: Month Over Month
+		lineageTag: e8ed2077-f91e-49ec-aaa3-7eb557820b29
+
+	measure 'OEE Change % Formatted' = ```
+			
+			VAR Change = 
+			    DIVIDE([OEE Last Month] - [OEE 2 Months Ago], [OEE 2 Months Ago])
+			
+			RETURN
+			    FORMAT(Change, "0.0%")
+			
+			```
+		displayFolder: Month Over Month
+		lineageTag: 206891ec-5dad-4cb5-aac9-194c5ea228bb
+
+	measure 'OEE Change Arrow SVG' = ```
+			
+			VAR Change = [OEE Last Month] - [OEE 2 Months Ago]
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        Change > 0, 
+			            "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><polygon points='10,0 0,20 20,20' style='fill:green;' /></svg>",
+			        Change < 0, 
+			            "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><polygon points='0,0 20,0 10,20' style='fill:red;' /></svg>",
+			        "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><rect width='20' height='5' y='7' style='fill:gray;' /></svg>"
+			    )
+			
+			```
+		displayFolder: Month Over Month
+		lineageTag: ec41766f-ac15-47b5-bf7b-97f1552db3da
+		dataCategory: ImageUrl
+
+	measure 'OEE Change Last Month' = [OEE Last Month] - [OEE 2 Months Ago]
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Month Over Month
+		lineageTag: f749f5e6-8d71-4459-adff-179dfb838792
+
+	measure 'Speed Last Month' = ```
+			
+			CALCULATE(
+			    [Speed to Optimum %],
+			    FILTER(
+			        ALL(dwdate),
+			        dwdate[date] >= [StartOfLastMonth] && dwdate[date] <= [EndOfLastMonth]
+			    )
+			)
+			
+			```
+		displayFolder: Speed
+		lineageTag: 1c37db8d-6b43-41ff-899c-9acaba3b76cd
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Speed 2 Months Ago' =
+			
+			CALCULATE(
+			    [Speed to Optimum %],
+			    FILTER(
+			        ALL(dwdate),
+			        dwdate[date] >= [StartOfTwoMonthsAgo] && dwdate[date] <= [EndOfTwoMonthsAgo]
+			    )
+			)
+		displayFolder: Speed
+		lineageTag: 627b46de-5269-4906-8bcf-129a5c79d3a6
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Speed % Change Last Month' =
+			
+			DIVIDE([Speed Last Month] - [Speed 2 Months Ago], [Speed 2 Months Ago])
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Speed
+		lineageTag: aaf58faf-2599-4209-bc8d-5eab7c4a16f6
+
+	measure 'Quality Last Month' =
+			
+			CALCULATE(
+			    [Quality %],
+			    FILTER(
+			        ALL(dwdate),
+			        dwdate[date] >= [StartOfLastMonth] && dwdate[date] <= [EndOfLastMonth]
+			    )
+			)
+		displayFolder: Month Over Month
+		lineageTag: 5ecf2223-fe02-4d36-8146-3c460ac38cd5
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Quality 2 Months Ago' =
+			
+			CALCULATE(
+			    [Quality %],
+			    FILTER(
+			        ALL(dwdate),
+			        dwdate[date] >= [StartOfTwoMonthsAgo] && dwdate[date] <= [EndOfTwoMonthsAgo]
+			    )
+			)
+		displayFolder: Month Over Month
+		lineageTag: 44bb477e-f2a4-41b1-a310-cab5973ae3f5
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Quality % Change Last Month' = ```
+			
+			DIVIDE([Quality Last Month] - [Quality 2 Months Ago], [Quality 2 Months Ago])
+			
+			```
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Month Over Month
+		lineageTag: d336680f-570f-41d7-9625-9df6b8655b2b
+
+	measure 'Uptime Last Month' =
+			
+			CALCULATE(
+			    [Uptime %],
+			    FILTER(
+			        ALL(dwdate),
+			        dwdate[date] >= [StartOfLastMonth] && dwdate[date] <= [EndOfLastMonth]
+			    )
+			)
+		displayFolder: Uptime
+		lineageTag: a5601166-85bc-409d-8d21-34d50a00ae8c
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Uptime 2 Months Ago' =
+			
+			CALCULATE(
+			    [Uptime %],
+			    FILTER(
+			        ALL(dwdate),
+			        dwdate[date] >= [StartOfTwoMonthsAgo] && dwdate[date] <= [EndOfTwoMonthsAgo]
+			    )
+			)
+		displayFolder: Uptime
+		lineageTag: 111f43ab-2ab0-477c-b07e-e53c695b2e83
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Uptime % Change Last Month' =
+			
+			DIVIDE([Uptime Last Month] - [Uptime 2 Months Ago], [Uptime 2 Months Ago])
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Uptime
+		lineageTag: 5510f921-9374-477b-b59e-09c341688e36
+
+	measure 'Speed Change Status' = ```
+			
+			    SWITCH(
+			        TRUE(),
+			        [Speed % Change Last Month] >= 0, "▲ Speed Improved",
+			        [Speed % Change Last Month] < 0, "▼ Speed Declined",
+			        "➔ Speed Was Sustained"
+			    )
+			```
+		displayFolder: Speed
+		lineageTag: cce6d865-2e81-4e91-a114-e690b1159a5f
+
+	measure 'Quality Change Status' = ```
+			
+			    SWITCH(
+			        TRUE(),
+			        [Quality % Change Last Month] >= 0, "▲ Quality Improved",
+			        [Quality % Change Last Month] < 0, "▼ Quality Declined",
+			        "➔ Quality Was Sustained"
+			    )
+			```
+		displayFolder: Month Over Month
+		lineageTag: 859e4f38-493c-4bc3-92e0-05c5739ef3d3
+
+	measure 'Uptime Change Status' = ```
+			
+			    SWITCH(
+			        TRUE(),
+			        [Uptime % Change Last Month] >= 0, "▲ Uptime Improved",
+			        [Uptime % Change Last Month] < 0, "▼ Uptime Declined",
+			        "➔ Uptime Was Sustained"
+			    )
+			```
+		displayFolder: Uptime
+		lineageTag: 540be8ee-6333-4679-8a3f-8f8c2d4c53b6
+
+	measure 'CAR Value Last Year' = ```
+			
+			CALCULATE(
+			    SUM(espIssueItem[Total Loss]),
+			    SAMEPERIODLASTYEAR(dwdate[date])
+			)
+			
+			```
+		formatString: \$#,0;(\$#,0);\$#,0
+		displayFolder: Quality
+		lineageTag: 4438dcc2-687d-4a72-90d3-df927ff399c3
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	measure LastMonthText = ```
+			
+			VAR LastMonthDate = EOMONTH(TODAY(), -1)
+			RETURN FORMAT(LastMonthDate, "MMMM YYYY")
+			
+			```
+		displayFolder: Date/Time Logic
+		lineageTag: 5f4eb854-cb8e-4129-b292-5d3cdf85402d
+
+	measure 'Total Sales' = SUM(espInvoiceLine[Total Sales])
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		displayFolder: Sales
+		lineageTag: 563bc112-7cc3-4af0-be0d-4659a3dd8b49
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	measure 'Last Years Sales' = ```
+			
+			CALCULATE(
+			    SUM(espInvoiceLine[Total Sales]), 
+			    SAMEPERIODLASTYEAR(dwdate[Date]),
+			    ALL(espInvoiceLine)
+			)
+			
+			```
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		displayFolder: Sales
+		lineageTag: 96460786-a489-471a-8af7-da46b4eefae3
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	measure 'This Year Sales' = ```
+			
+			CALCULATE(
+			    SUM(espInvoiceLine[Total Sales]),
+			    YEAR(dwdate[Date]) = YEAR(TODAY())
+			)
+			
+			
+			```
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		displayFolder: Sales
+		lineageTag: ee5e89af-c47d-4c95-b51d-eaddf2b6bee3
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	measure '% Change vs Last Year' = ```
+			
+			DIVIDE(
+			    [Total Sales] - [Last Years Sales], 
+			    [Last Years Sales]
+			)
+			
+			```
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Sales
+		lineageTag: e775f85d-daf0-42bf-be7a-d46a01c2b8e1
+
+	measure LastQuarterText = ```
+			
+			VAR CurrentMonth = MONTH(TODAY())
+			VAR CurrentQuarter = QUOTIENT(CurrentMonth - 1, 3) + 1
+			VAR LastQuarter = 
+			    IF(CurrentQuarter = 1, 4, CurrentQuarter - 1)
+			RETURN
+			    SWITCH(
+			        LastQuarter,
+			        1, "1st Quarter Performance Award",
+			        2, "2nd Quarter Performance Award",
+			        3, "3rd Quarter Performance Award",
+			        4, "4th Quarter Performance Award"
+			    )
+			
+			```
+		displayFolder: Date/Time Logic
+		lineageTag: e4ef3087-7d89-4f49-8c1d-89d9e7438d4b
+
+	measure 'Max Line/Spec Speed' = AVERAGE(dwproductionfeedback[Max Line/Spec Speed])
+		displayFolder: Speed
+		lineageTag: 2f66f46d-0c0f-46ec-840a-3342b3a8393d
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Speed to Line/Spec Max %' = [Actual Speed]/[Max Line/Spec Speed]
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Speed
+		lineageTag: 8f0bf27d-6a93-4090-b44b-67389dae8e10
+
+	measure 'Speed to Spec Standard %' = [Actual Speed]/[Max Line/Spec Speed]
+		displayFolder: Speed
+		lineageTag: 0e770a42-9278-4eb8-b98f-5e61bf5f5a8c
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Sheets Per Hour' = SUM(dwproductionfeedback[quantity_fed_in])/SUM(dwproductionfeedback[actual run hours])
+		displayFolder: Speed
+		lineageTag: a18b5343-e698-4d88-a2c1-b98ae017271c
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Speed Change Last Month' = [Speed Last Month] - [Speed 2 Months Ago]
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Month Over Month
+		lineageTag: 352f5112-2dde-4c26-8224-b0a5db8bed39
+
+	measure 'Quality Change Last Month' = [Quality Last Month] - [Quality 2 Months Ago]
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Month Over Month
+		lineageTag: 4044ccd9-460f-419e-8c28-404d23d376b4
+
+	measure 'Uptime Change Last Month' = [Uptime Last Month]-[Uptime 2 Months Ago]
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Month Over Month
+		lineageTag: cc91d064-d1d2-4096-bccc-5de439f7c664
+
+	measure SetupChangeInSeconds = ```
+			
+			FORMAT([Setup Change Last Month] * 60, "0") & " Seconds"
+			
+			```
+		displayFolder: Setup
+		lineageTag: 82a31d74-95b0-452b-8a08-cd5b84adfcfb
+
+	measure 'Setup Seconds (Including Downtime During Setup)' = SUM(dwproductionfeedback[Setup duration (including downtime)])
+		formatString: 0
+		displayFolder: Setup
+		lineageTag: 9e5ae6d2-7f8e-43f8-bb06-b125cd91fa91
+
+	measure 'AVG Setup Last Month' =
+			
+			CALCULATE(
+			    [Average Setup Minutes],
+			    FILTER(
+			        ALL(dwdate),
+			        dwdate[date] >= [StartOfLastMonth] && dwdate[date] <= [EndOfLastMonth]
+			    )
+			)
+		displayFolder: Setup
+		lineageTag: 07bc0aca-1d32-44d6-88cf-79d55591526f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'AVG Setup 2 Months Ago' =
+			
+			CALCULATE(
+			    [Average Setup Minutes],
+			    FILTER(
+			        ALL(dwdate),
+			        dwdate[date] >= [StartOfTwoMonthsAgo] && dwdate[date] <= [EndOfTwoMonthsAgo]
+			    )
+			)
+		displayFolder: Setup
+		lineageTag: 48c18be7-eb14-409f-8c2f-5888094214c0
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'AVG Setup % Change Last Month' =
+			
+			DIVIDE([AVG Setup Last Month] - [AVG Setup 2 Months Ago], [AVG Setup 2 Months Ago])
+		displayFolder: Setup
+		lineageTag: 1bf9ccc6-bce8-4e59-935c-c33f2759c47f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Setup Change Last Month' = [AVG Setup Last Month] - [AVG Setup 2 Months Ago]
+		displayFolder: Setup
+		lineageTag: a3e824d7-cb78-4574-9127-0f60b397fe7f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Setup Change Status' = ```
+			
+			    SWITCH(
+			        TRUE(),
+			        [AVG Setup % Change Last Month] >= 0, "▼ Setup Time Increased",
+			        [AVG Setup % Change Last Month] < 0, "▲ Setup Time Decreased",
+			        "➔ Setup Time Was Sustained"
+			    )
+			```
+		displayFolder: Setup
+		lineageTag: 8e400bec-33a7-437b-82f8-6b8fa220bf11
+
+	measure MSF = [Converted Sq Ft]/1000
+		displayFolder: Sq Ft
+		lineageTag: 55101a0c-b540-4019-bbf0-43ec4d4da751
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Full Sheets In' = SUM(dwproductionfeedback[Full Sheets In])
+		displayFolder: Sq Ft
+		lineageTag: 0a6e4f2b-f33d-42a3-beb7-3ec04da18737
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Sq Ft Per Blank' = [Sq Ft Entry]/[Full Sheets In]
+		displayFolder: Sq Ft
+		lineageTag: 6a999b94-e728-4fe6-ab3e-1dcb397f332e
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Speed Sheets Per Order Hour' = SUM(dwproductionfeedback[quantity_fed_in])/[Order Hours]
+		lineageTag: c8355873-ab81-4880-bd17-b902babcce76
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Speed to Optimum % (Order Hours)' = IFERROR([Speed Sheets Per Order Hour]/[Optimum Run Speed],BLANK())
+		formatString: 0.00%;-0.00%;0.00%
+		lineageTag: b1bdf875-2fc1-4996-8864-a7d0a76d8e08
+
+	column Value
+		formatString: 0
+		lineageTag: 738e1e7c-793e-4e5a-97d0-85a9c93d58a0
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Value]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition '.Measures' = calculated
+		mode: import
+		source = Row("Value", BLANK())
+
+	annotation PBI_Id = fa21ade3916a4dc38799449a825ff41e
+

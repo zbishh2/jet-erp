@@ -1,0 +1,87 @@
+table ReportDates
+	lineageTag: ad8b4242-1149-4a9d-9893-67a3b938e992
+
+	column Date
+		formatString: Short Date
+		lineageTag: 00014858-2d40-4254-9a3b-afb12cfa092d
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Date]
+
+		variation Variation
+			isDefault
+			relationship: 0a32c5e4-be31-44e5-9f1d-47ef61d24df9
+			defaultHierarchy: LocalDateTable_b2a5fa55-d35c-45e9-8eeb-989c5483815d.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Year = Year('ReportDates'[Date])
+		formatString: 0
+		lineageTag: 2f7e2d6b-8aef-4c42-9941-6a6efb0360c9
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column Quarter = "Q" & FORMAT(Quarter(ReportDates[Date]),"")
+		lineageTag: e81cbbc8-e922-44a8-a960-39d313010575
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column Month = FORMAT(ReportDates[Date],"mmm YYYY")
+		lineageTag: 7467f054-31a0-4688-ad93-98cbd3b4f51f
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column WeekStartDate = ```
+			ReportDates[Date] - WEEKDAY(ReportDates[Date],1)+2
+			
+			```
+		formatString: General Date
+		lineageTag: d5b62636-442b-4dda-991f-4db5e4b918d9
+		summarizeBy: none
+
+		variation Variation
+			isDefault
+			relationship: bc9de21a-f7b1-4255-96e7-824b21559b02
+			defaultHierarchy: LocalDateTable_b78457f4-4059-4185-9c90-72df30fe3d7f.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	hierarchy 'Date Hierarchy'
+		lineageTag: 2482fc38-37d2-40c2-b8e0-4f633472d6c3
+
+		level Date
+			lineageTag: a04bfe5f-b8fc-402b-91c9-fc0b7289dbe7
+			column: Date
+
+		level Year
+			lineageTag: 334b425b-816b-4ab0-819d-f9b82b7d445f
+			column: Year
+
+		level Quarter
+			lineageTag: a065d3a7-cfc1-433c-9027-dfed73507d82
+			column: Quarter
+
+		level Month
+			lineageTag: 2b013270-82b6-45dd-b3cf-cd3f159b87bc
+			column: Month
+
+		level WeekStartDate
+			lineageTag: a41db316-6fed-432b-a72e-8a291f3f6a1f
+			column: WeekStartDate
+
+	partition ReportDates = calculated
+		mode: import
+		source =
+				
+				CALENDAR (
+				    MIN ( espInvoice[transactiondate - Copy] ),
+				    MAX ( espInvoice[transactiondate - Copy] )-- any anchor date you want
+				)
+
+	annotation PBI_Id = 4affdcedcf154fb0a559889d598d67d4
+

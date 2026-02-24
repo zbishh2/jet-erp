@@ -1,0 +1,31 @@
+table PlantManagerExpectations
+	lineageTag: 2dab2efe-9871-4358-bd2d-d09b3e34f878
+
+	column Expectation
+		dataType: string
+		lineageTag: e4d68cff-6ec4-4049-bfce-e501e6fc5c37
+		summarizeBy: none
+		sourceColumn: Expectation
+
+		annotation SummarizationSetBy = Automatic
+
+	column Order
+		dataType: string
+		lineageTag: a3f5c211-7b81-4233-8dcf-d6a3a04e633e
+		summarizeBy: none
+		sourceColumn: Order
+
+		annotation SummarizationSetBy = Automatic
+
+	partition PlantManagerExpectations = m
+		mode: import
+		source =
+				let
+				    Source = Excel.Workbook(Web.Contents("https://jetcontainercompany.sharepoint.com/sites/ContinuousImprovement/Shared%20Documents/General/Employee%20of%20the%20Month,%20COGs,%20Upcoming%20Shutdowns.xlsx"), null, true),
+				    PlantManagerExpectations_Table = Source{[Item="PlantManagerExpectations",Kind="Table"]}[Data],
+				    #"Changed Type" = Table.TransformColumnTypes(PlantManagerExpectations_Table,{{"Expectation", type text}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Table
+
