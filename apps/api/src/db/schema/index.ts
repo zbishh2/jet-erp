@@ -18,3 +18,7 @@ export * from './user-organization-module'
 export * from './erp-quote'
 export * from './sales-budget'
 export * from './holiday'
+
+// Audit & security schemas
+export * from './audit-log'
+export * from './auth-event'
