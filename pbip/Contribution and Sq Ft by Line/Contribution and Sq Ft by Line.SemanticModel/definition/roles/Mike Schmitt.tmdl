@@ -1,5 +1,0 @@
-role 'Mike Schmitt'
-	modelPermission: read
-
-	annotation PBI_Id = 9c6340e482934f399fc1ab1952726b9b
-

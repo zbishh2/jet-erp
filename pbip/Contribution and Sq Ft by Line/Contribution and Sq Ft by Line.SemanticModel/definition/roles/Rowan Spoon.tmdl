@@ -1,5 +1,0 @@
-role 'Rowan Spoon'
-	modelPermission: read
-
-	annotation PBI_Id = d4e43e50ac1e424685d48ebc6215e557
-

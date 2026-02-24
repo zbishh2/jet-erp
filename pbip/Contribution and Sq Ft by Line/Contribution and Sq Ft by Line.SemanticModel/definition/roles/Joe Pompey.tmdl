@@ -1,5 +1,0 @@
-role 'Joe Pompey'
-	modelPermission: read
-
-	annotation PBI_Id = 23886a027a40444a87de818e81b76a08
-

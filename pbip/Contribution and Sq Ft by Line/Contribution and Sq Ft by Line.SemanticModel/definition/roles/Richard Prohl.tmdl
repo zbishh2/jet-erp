@@ -1,5 +1,0 @@
-role 'Richard Prohl'
-	modelPermission: read
-
-	annotation PBI_Id = 1bb14cb7911b40d6a4fc3c84edeb9af5
-
