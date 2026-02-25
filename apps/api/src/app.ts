@@ -14,6 +14,7 @@ import { sqFtDashboardRoutes } from './routes/sqft-dashboard'
 import { contributionDashboardRoutes } from './routes/contribution-dashboard'
 import { costVarianceDashboardRoutes } from './routes/cost-variance-dashboard'
 import { invoiceCostVarianceDashboardRoutes } from './routes/invoice-cost-variance-dashboard'
+import { mrpDashboardRoutes } from './routes/mrp-dashboard'
 import { adminRoutes } from './routes/admin'
 import { authMiddleware } from './middleware/auth'
 import { tenantMiddleware } from './middleware/tenant'
@@ -112,6 +113,7 @@ export function createApp() {
   erpApp.route('/contribution', contributionDashboardRoutes)
   erpApp.route('/cost-variance', costVarianceDashboardRoutes)
   erpApp.route('/invoice-cost-variance', invoiceCostVarianceDashboardRoutes)
+  erpApp.route('/mrp', mrpDashboardRoutes)
   erpApp.route('/admin', adminRoutes)
   erpApp.route('/', kiwiplanRoutes)
   app.route('/erp', erpApp)

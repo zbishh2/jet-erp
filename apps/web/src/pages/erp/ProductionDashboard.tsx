@@ -18,15 +18,7 @@ import {
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Input } from "@/components/ui/input"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import {
   Table,
   TableBody,
@@ -51,10 +43,10 @@ import {
   RefreshCw,
   Info,
   ChevronDown,
-  Search,
   X,
 } from "lucide-react"
 import {
+  useProductionDateLimits,
   useQualitySummary,
   useQualityByMachine,
   useQualityByShift,
@@ -75,6 +67,14 @@ import {
   useShifts,
 } from "@/api/hooks/useProductionDashboard"
 import type { Granularity, QualityDetail, SpeedDetail, UptimeDetail, OeeDetail } from "@/api/hooks/useProductionDashboard"
+import { TimePresetBar } from "@/components/ui/time-preset-bar"
+import {
+  type TimeWindow,
+  type DateRange,
+  getDefaultPreset,
+  getTimeWindowRange as sharedGetTimeWindowRange,
+  isValidPreset,
+} from "@/lib/time-presets"
 
 type DashboardTab = "quality" | "speed" | "uptime" | "oee"
 
@@ -99,8 +99,6 @@ function usePersistedState<T>(key: string, defaultValue: T): [T, (val: T | ((pre
   return [value, setPersisted]
 }
 
-type TimePeriod = "ytd" | "last-year" | "this-month" | "custom" | "last-4w" | "last-12w" | "last-26w" | "weeks-ytd"
-
 function formatNumber(value: number, decimals = 0): string {
   return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: decimals,
@@ -110,64 +108,6 @@ function formatNumber(value: number, decimals = 0): string {
 
 function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`
-}
-
-function alignToMonday(date: Date): Date {
-  const d = new Date(date)
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
-  return d
-}
-
-function fmtDate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
-}
-
-function getDateRange(period: TimePeriod, year: number): { startDate: string; endDate: string } {
-  const now = new Date()
-  const currentYear = now.getFullYear()
-  switch (period) {
-    case "ytd":
-      return {
-        startDate: `${currentYear}-01-01`,
-        endDate: `${currentYear}-${String(now.getMonth() + 2).padStart(2, "0")}-01`,
-      }
-    case "last-year":
-      return {
-        startDate: `${currentYear - 1}-01-01`,
-        endDate: `${currentYear}-01-01`,
-      }
-    case "this-month": {
-      const nextMonth = now.getMonth() + 2
-      const nextYear = nextMonth > 12 ? currentYear + 1 : currentYear
-      return {
-        startDate: `${currentYear}-${String(now.getMonth() + 1).padStart(2, "0")}-01`,
-        endDate: `${nextYear}-${String(nextMonth > 12 ? 1 : nextMonth).padStart(2, "0")}-01`,
-      }
-    }
-    case "custom":
-      return {
-        startDate: `${year}-01-01`,
-        endDate: `${year + 1}-01-01`,
-      }
-    case "last-4w":
-    case "last-12w":
-    case "last-26w":
-    case "weeks-ytd": {
-      const today = new Date()
-      const tomorrow = new Date(today)
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      const end = fmtDate(tomorrow)
-      const monday = alignToMonday(today)
-      if (period === "weeks-ytd") {
-        const jan1 = new Date(today.getFullYear(), 0, 1)
-        return { startDate: fmtDate(alignToMonday(jan1)), endDate: end }
-      }
-      const offset = period === "last-4w" ? 28 : period === "last-12w" ? 84 : 182
-      const start = new Date(monday)
-      start.setDate(start.getDate() - offset)
-      return { startDate: fmtDate(start), endDate: end }
-    }
-  }
 }
 
 function getPeriodLabel(period: string, granularity: string): string {
@@ -228,11 +168,9 @@ function KpiCard({ title, value, description, trend, tooltip }: KpiCardProps) {
 export default function ProductionDashboard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const currentYear = new Date().getFullYear()
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [period, setPeriod] = usePersistedState<TimePeriod>("period", "custom")
-  const [year, setYear] = usePersistedState<number>("year", currentYear)
+  const [timeWindow, setTimeWindow] = usePersistedState<TimeWindow>("timeWindow", "last-6m")
   const [machineFilter, setMachineFilter] = usePersistedState<string>("machineFilter", "all")
   const [shiftFilter, setShiftFilter] = usePersistedState<string>("shiftFilter", "all")
   const [granularity, setGranularity] = usePersistedState<Granularity>("granularity", "monthly")
@@ -246,17 +184,13 @@ export default function ProductionDashboard() {
   const [speedChartTab, setSpeedChartTab] = usePersistedState<string>("speedChartTab", "speedToOptimum")
   const [uptimeChartTab, setUptimeChartTab] = usePersistedState<string>("uptimeChartTab", "uptimePct")
   const [oeeChartTab, setOeeChartTab] = usePersistedState<string>("oeeChartTab", "oeePct")
+  const [customStart, setCustomStart] = usePersistedState<string>("customStart", "")
+  const [customEnd, setCustomEnd] = usePersistedState<string>("customEnd", "")
 
   // Speed detail slicers
   const [speedCustomerFilter, setSpeedCustomerFilter] = useState<string>("all")
   const [speedSpecFilter, setSpeedSpecFilter] = useState<string>("all")
   const [speedJobFilter, setSpeedJobFilter] = useState<string>("all")
-  const [speedCustomerSearch, setSpeedCustomerSearch] = useState("")
-  const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false)
-  const [speedSpecSearch, setSpeedSpecSearch] = useState("")
-  const [specPopoverOpen, setSpecPopoverOpen] = useState(false)
-  const [speedJobSearch, setSpeedJobSearch] = useState("")
-  const [jobPopoverOpen, setJobPopoverOpen] = useState(false)
 
   // Clear selected period and speed detail slicers when major filters change
   useEffect(() => {
@@ -264,28 +198,34 @@ export default function ProductionDashboard() {
     setSpeedCustomerFilter("all")
     setSpeedSpecFilter("all")
     setSpeedJobFilter("all")
-    setSpeedCustomerSearch("")
-    setSpeedSpecSearch("")
-    setSpeedJobSearch("")
-  }, [period, year, granularity, machineFilter, shiftFilter, dashboardTab])
+  }, [timeWindow, granularity, machineFilter, shiftFilter, dashboardTab])
 
-  // Switch to weekly presets when granularity is weekly
+  // Switch presets when granularity changes
   const prevGranularityRef = useRef(granularity)
   useEffect(() => {
     if (prevGranularityRef.current === granularity) return
     prevGranularityRef.current = granularity
-    if (granularity === "weekly") {
-      setPeriod("last-12w")
-    } else {
-      setPeriod("ytd")
+    setTimeWindow(getDefaultPreset(granularity))
+  }, [granularity, setTimeWindow])
+
+  // Validate persisted timeWindow against current granularity
+  useEffect(() => {
+    if (!isValidPreset(timeWindow, granularity)) {
+      setTimeWindow(getDefaultPreset(granularity))
     }
-  }, [granularity, setPeriod])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { startDate, endDate } = getDateRange(period, year)
+  const prodDateLimits = useProductionDateLimits()
+  const prodLimits = prodDateLimits.data?.data?.[0]
+  const customRange: DateRange | null = customStart && customEnd ? { startDate: customStart, endDate: customEnd } : null
 
-  // For yearly granularity, widen the date range to 5 years
-  const summaryStart = granularity === "yearly" ? `${currentYear - 4}-01-01` : startDate
-  const summaryEnd = granularity === "yearly" ? `${currentYear + 1}-01-01` : endDate
+  const { startDate, endDate } = useMemo(
+    () => sharedGetTimeWindowRange(timeWindow, prodLimits ? { minDate: prodLimits.minDate, maxDate: prodLimits.maxDate } : null, customRange),
+    [timeWindow, prodLimits?.minDate, prodLimits?.maxDate, customRange]
+  )
+
+  const summaryStart = startDate
+  const summaryEnd = endDate
 
   const activeMachine = machineFilter !== "all" ? machineFilter : undefined
   const activeShift = shiftFilter !== "all" ? shiftFilter : undefined
@@ -962,8 +902,7 @@ export default function ProductionDashboard() {
   }, [groupedOeeDetailData])
 
   const resetFilters = useCallback(() => {
-    setPeriod("custom")
-    setYear(currentYear)
+    setTimeWindow(getDefaultPreset("monthly"))
     setMachineFilter("all")
     setShiftFilter("all")
     setGranularity("monthly")
@@ -978,11 +917,8 @@ export default function ProductionDashboard() {
     setSpeedCustomerFilter("all")
     setSpeedSpecFilter("all")
     setSpeedJobFilter("all")
-    setSpeedCustomerSearch("")
-    setSpeedSpecSearch("")
-    setSpeedJobSearch("")
     setGroupByDims(["feedbackDate", "jobNum", "customerName", "specNumber", "lineNumber"])
-  }, [currentYear, setPeriod, setYear, setMachineFilter, setShiftFilter, setGranularity, setTableSort, setTableTab, setDashboardTab, setQualityChartTab, setSpeedChartTab, setUptimeChartTab, setOeeChartTab, setGroupByDims])
+  }, [setTimeWindow, setMachineFilter, setShiftFilter, setGranularity, setTableSort, setTableTab, setDashboardTab, setQualityChartTab, setSpeedChartTab, setUptimeChartTab, setOeeChartTab, setGroupByDims])
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true)
@@ -1062,71 +998,33 @@ export default function ProductionDashboard() {
           </Button>
         )}
         <div className="ml-auto flex items-center gap-2">
-          <Select value={machineFilter} onValueChange={setMachineFilter}>
-            <SelectTrigger className="w-[200px] h-8 text-xs">
-              <SelectValue placeholder="All Machines" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Machines</SelectItem>
-              {machines.map((m) => (
-                <SelectItem key={m.machineNumber} value={String(m.machineNumber)}>
-                  {m.machineName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={machineFilter}
+            onValueChange={setMachineFilter}
+            options={machines.map((m) => String(m.machineNumber))}
+            placeholder="All Machines"
+            searchPlaceholder="Search machines..."
+            width="w-[200px]"
+            getLabel={(v) => machines.find((m) => String(m.machineNumber) === v)?.machineName ?? v}
+          />
 
-          <Select value={shiftFilter} onValueChange={setShiftFilter}>
-            <SelectTrigger className="w-[120px] h-8 text-xs">
-              <SelectValue placeholder="All Shifts" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Shifts</SelectItem>
-              {shifts.map((s) => (
-                <SelectItem key={s.shiftName} value={s.shiftName}>
-                  {s.shiftName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={shiftFilter}
+            onValueChange={setShiftFilter}
+            options={shifts.map((s) => s.shiftName)}
+            placeholder="All Shifts"
+            searchPlaceholder="Search shifts..."
+            width="w-[120px]"
+          />
 
-          <Select value={period} onValueChange={(v) => setPeriod(v as TimePeriod)}>
-            <SelectTrigger className="w-[120px] h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {granularity === "weekly" ? (
-                <>
-                  <SelectItem value="last-4w">Last 4W</SelectItem>
-                  <SelectItem value="last-12w">Last 12W</SelectItem>
-                  <SelectItem value="last-26w">Last 26W</SelectItem>
-                  <SelectItem value="weeks-ytd">Weeks YTD</SelectItem>
-                </>
-              ) : (
-                <>
-                  <SelectItem value="ytd">YTD</SelectItem>
-                  <SelectItem value="this-month">This Month</SelectItem>
-                  <SelectItem value="last-year">Last Year</SelectItem>
-                  <SelectItem value="custom">Full Year</SelectItem>
-                </>
-              )}
-            </SelectContent>
-          </Select>
-
-          {period === "custom" && (
-            <Select value={String(year)} onValueChange={(v) => setYear(parseInt(v, 10))}>
-              <SelectTrigger className="w-[90px] h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[currentYear, currentYear - 1, currentYear - 2, currentYear - 3].map((y) => (
-                  <SelectItem key={y} value={String(y)}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          <TimePresetBar
+            granularity={granularity}
+            value={timeWindow}
+            onChange={setTimeWindow}
+            dateLimits={prodLimits ? { minDate: prodLimits.minDate, maxDate: prodLimits.maxDate } : null}
+            customRange={customRange}
+            onCustomRangeChange={(s, e) => { setCustomStart(s); setCustomEnd(e) }}
+          />
 
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetFilters} title="Reset filters">
             <RotateCcw className="h-4 w-4" />
@@ -1973,130 +1871,40 @@ export default function ProductionDashboard() {
             </div>
             {isSpeed && (
               <div className="flex items-center gap-2 flex-wrap">
-                {/* Customer slicer (searchable) */}
-                <Popover open={customerPopoverOpen} onOpenChange={setCustomerPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-7 w-[160px] text-xs justify-between font-normal">
-                      <span className="truncate">{speedCustomerFilter === "all" ? "All Customers" : speedCustomerFilter}</span>
-                      <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[220px] p-2" align="start">
-                    <div className="relative mb-2">
-                      <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        placeholder="Search customers..."
-                        value={speedCustomerSearch}
-                        onChange={(e) => setSpeedCustomerSearch(e.target.value)}
-                        className="h-7 pl-7 text-xs"
-                      />
-                    </div>
-                    <div className="max-h-[200px] overflow-y-auto space-y-0.5">
-                      <button
-                        className={`w-full text-left text-xs px-2 py-1 rounded hover:bg-background-hover ${speedCustomerFilter === "all" ? "bg-background-selected font-medium" : ""}`}
-                        onClick={() => { setSpeedCustomerFilter("all"); setSpeedCustomerSearch(""); setCustomerPopoverOpen(false) }}
-                      >
-                        All Customers
-                      </button>
-                      {speedDetailSlicerOptions.customers
-                        .filter((c) => !speedCustomerSearch || c.toLowerCase().includes(speedCustomerSearch.toLowerCase()))
-                        .map((c) => (
-                          <button
-                            key={c}
-                            className={`w-full text-left text-xs px-2 py-1 rounded hover:bg-background-hover ${speedCustomerFilter === c ? "bg-background-selected font-medium" : ""}`}
-                            onClick={() => { setSpeedCustomerFilter(c); setSpeedCustomerSearch(""); setCustomerPopoverOpen(false) }}
-                          >
-                            {c}
-                          </button>
-                        ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                {/* Spec slicer (searchable) */}
-                <Popover open={specPopoverOpen} onOpenChange={setSpecPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-7 w-[140px] text-xs justify-between font-normal">
-                      <span className="truncate">{speedSpecFilter === "all" ? "All Specs" : speedSpecFilter}</span>
-                      <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[200px] p-2" align="start">
-                    <div className="relative mb-2">
-                      <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        placeholder="Search specs..."
-                        value={speedSpecSearch}
-                        onChange={(e) => setSpeedSpecSearch(e.target.value)}
-                        className="h-7 pl-7 text-xs"
-                      />
-                    </div>
-                    <div className="max-h-[200px] overflow-y-auto space-y-0.5">
-                      <button
-                        className={`w-full text-left text-xs px-2 py-1 rounded hover:bg-background-hover ${speedSpecFilter === "all" ? "bg-background-selected font-medium" : ""}`}
-                        onClick={() => { setSpeedSpecFilter("all"); setSpeedSpecSearch(""); setSpecPopoverOpen(false) }}
-                      >
-                        All Specs
-                      </button>
-                      {speedDetailSlicerOptions.specs
-                        .filter((s) => !speedSpecSearch || s.toLowerCase().includes(speedSpecSearch.toLowerCase()))
-                        .map((s) => (
-                          <button
-                            key={s}
-                            className={`w-full text-left text-xs px-2 py-1 rounded hover:bg-background-hover ${speedSpecFilter === s ? "bg-background-selected font-medium" : ""}`}
-                            onClick={() => { setSpeedSpecFilter(s); setSpeedSpecSearch(""); setSpecPopoverOpen(false) }}
-                          >
-                            {s}
-                          </button>
-                        ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                {/* Job slicer (searchable) */}
-                <Popover open={jobPopoverOpen} onOpenChange={setJobPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-7 w-[140px] text-xs justify-between font-normal">
-                      <span className="truncate">{speedJobFilter === "all" ? "All Jobs" : speedJobFilter}</span>
-                      <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[200px] p-2" align="start">
-                    <div className="relative mb-2">
-                      <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        placeholder="Search jobs..."
-                        value={speedJobSearch}
-                        onChange={(e) => setSpeedJobSearch(e.target.value)}
-                        className="h-7 pl-7 text-xs"
-                      />
-                    </div>
-                    <div className="max-h-[200px] overflow-y-auto space-y-0.5">
-                      <button
-                        className={`w-full text-left text-xs px-2 py-1 rounded hover:bg-background-hover ${speedJobFilter === "all" ? "bg-background-selected font-medium" : ""}`}
-                        onClick={() => { setSpeedJobFilter("all"); setSpeedJobSearch(""); setJobPopoverOpen(false) }}
-                      >
-                        All Jobs
-                      </button>
-                      {speedDetailSlicerOptions.jobs
-                        .filter((j) => !speedJobSearch || j.toLowerCase().includes(speedJobSearch.toLowerCase()))
-                        .map((j) => (
-                          <button
-                            key={j}
-                            className={`w-full text-left text-xs px-2 py-1 rounded hover:bg-background-hover ${speedJobFilter === j ? "bg-background-selected font-medium" : ""}`}
-                            onClick={() => { setSpeedJobFilter(j); setSpeedJobSearch(""); setJobPopoverOpen(false) }}
-                          >
-                            {j}
-                          </button>
-                        ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                <SearchableSelect
+                  value={speedCustomerFilter}
+                  onValueChange={setSpeedCustomerFilter}
+                  options={speedDetailSlicerOptions.customers}
+                  placeholder="All Customers"
+                  searchPlaceholder="Search customers..."
+                  width="w-[160px]"
+                  popoverWidth="w-[220px]"
+                />
+                <SearchableSelect
+                  value={speedSpecFilter}
+                  onValueChange={setSpeedSpecFilter}
+                  options={speedDetailSlicerOptions.specs}
+                  placeholder="All Specs"
+                  searchPlaceholder="Search specs..."
+                  width="w-[140px]"
+                  popoverWidth="w-[200px]"
+                />
+                <SearchableSelect
+                  value={speedJobFilter}
+                  onValueChange={setSpeedJobFilter}
+                  options={speedDetailSlicerOptions.jobs}
+                  placeholder="All Jobs"
+                  searchPlaceholder="Search jobs..."
+                  width="w-[140px]"
+                  popoverWidth="w-[200px]"
+                />
                 {/* Clear all slicers */}
                 {(speedCustomerFilter !== "all" || speedSpecFilter !== "all" || speedJobFilter !== "all") && (
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-7 px-1.5 text-xs text-muted-foreground"
-                    onClick={() => { setSpeedCustomerFilter("all"); setSpeedSpecFilter("all"); setSpeedJobFilter("all"); setSpeedCustomerSearch(""); setSpeedSpecSearch(""); setSpeedJobSearch("") }}
+                    onClick={() => { setSpeedCustomerFilter("all"); setSpeedSpecFilter("all"); setSpeedJobFilter("all") }}
                   >
                     <X className="h-3.5 w-3.5" />
                   </Button>

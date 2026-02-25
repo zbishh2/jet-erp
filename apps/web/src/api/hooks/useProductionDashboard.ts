@@ -206,6 +206,19 @@ export interface Shift {
   shiftName: string
 }
 
+export interface ProductionDateLimits {
+  minDate: string | null
+  maxDate: string | null
+}
+
+export function useProductionDateLimits() {
+  return useQuery({
+    queryKey: ["production", "date-limits"],
+    queryFn: () => apiFetch<{ data: ProductionDateLimits[] }>("/erp/production/date-limits"),
+    staleTime: 1000 * 60 * 30,
+  })
+}
+
 export function useQualitySummary(
   startDate: string,
   endDate: string,

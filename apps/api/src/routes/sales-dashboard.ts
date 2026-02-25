@@ -159,6 +159,31 @@ const SALES_SQL = {
   `,
 }
 
+// GET /api/erp/sales/date-limits
+salesDashboardRoutes.get('/date-limits', async (c) => {
+  const client = getClient(c.env)
+  if (!client) {
+    return c.json({ error: 'Kiwiplan gateway not configured' }, 503)
+  }
+
+  try {
+    const sql = `
+      SELECT
+        CONVERT(VARCHAR(10), MIN(CAST(inv.transactiondate AS DATE)), 23) as minDate,
+        CONVERT(VARCHAR(10), MAX(CAST(inv.transactiondate AS DATE)), 23) as maxDate
+      FROM espInvoice inv
+      WHERE inv.invoicestatus = 'Final'
+    `
+    const result = await client.rawQuery(sql, {})
+    return c.json(result)
+  } catch (err) {
+    if (err instanceof KiwiplanError) {
+      return c.json({ error: err.message }, err.statusCode as 400)
+    }
+    throw err
+  }
+})
+
 // GET /api/erp/sales/summary?startDate=&endDate=&granularity=monthly|weekly|yearly&rep=Name
 salesDashboardRoutes.get('/summary', async (c) => {
   const client = getClient(c.env)

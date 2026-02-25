@@ -945,6 +945,34 @@ const PRODUCTION_SQL = {
   },
 }
 
+// GET /api/erp/production/date-limits
+productionDashboardRoutes.get('/date-limits', async (c) => {
+  const client = getClient(c.env)
+  if (!client) {
+    return c.json({ error: 'Kiwiplan gateway not configured' }, 503)
+  }
+
+  try {
+    const sql = `
+      SELECT
+        CONVERT(VARCHAR(10), MIN(CAST(pf.feedback_report_date AS DATE)), 23) as minDate,
+        CONVERT(VARCHAR(10), MAX(CAST(pf.feedback_report_date AS DATE)), 23) as maxDate
+      FROM dwproductionfeedback pf
+      INNER JOIN dwcostcenters cc
+        ON pf.feedback_costcenter_id = cc.costcenter_id
+      WHERE pf.actual_run_duration_minutes != 0
+        AND cc.costcenter_number IN (130, 131, 132, 133, 142, 144, 146, 154)
+    `
+    const result = await client.rawQuery(sql, {}, 'kdw')
+    return c.json(result)
+  } catch (err) {
+    if (err instanceof KiwiplanError) {
+      return c.json({ error: err.message }, err.statusCode as 400)
+    }
+    throw err
+  }
+})
+
 // GET /api/erp/production/quality-summary?startDate=&endDate=&granularity=&machine=&shift=
 productionDashboardRoutes.get('/quality-summary', async (c) => {
   const client = getClient(c.env)

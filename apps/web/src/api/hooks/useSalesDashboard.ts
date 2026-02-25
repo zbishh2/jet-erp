@@ -41,6 +41,19 @@ export interface SalesBudget {
   budgetedContribution: number
 }
 
+export interface SalesDateLimits {
+  minDate: string | null
+  maxDate: string | null
+}
+
+export function useSalesDateLimits() {
+  return useQuery({
+    queryKey: ["sales", "date-limits"],
+    queryFn: () => apiFetch<{ data: SalesDateLimits[] }>("/erp/sales/date-limits"),
+    staleTime: 1000 * 60 * 30,
+  })
+}
+
 export function useSalesSummary(startDate: string, endDate: string, granularity: Granularity = "monthly", rep?: string) {
   return useQuery({
     queryKey: ["sales", "summary", startDate, endDate, granularity, rep ?? "all"],

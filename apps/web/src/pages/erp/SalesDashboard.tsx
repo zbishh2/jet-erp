@@ -17,13 +17,7 @@ import {
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import {
   Table,
   TableBody,
@@ -49,6 +43,7 @@ import {
   ChevronRight,
 } from "lucide-react"
 import {
+  useSalesDateLimits,
   useSalesSummary,
   useSalesByRep,
   useSalesDetail,
@@ -57,6 +52,14 @@ import {
   useHolidays,
 } from "@/api/hooks/useSalesDashboard"
 import type { SalesDetailRow, Granularity } from "@/api/hooks/useSalesDashboard"
+import { TimePresetBar } from "@/components/ui/time-preset-bar"
+import {
+  type TimeWindow,
+  type DateRange,
+  getDefaultPreset,
+  getTimeWindowRange as sharedGetTimeWindowRange,
+  isValidPreset,
+} from "@/lib/time-presets"
 
 function usePersistedState<T>(key: string, defaultValue: T): [T, (val: T | ((prev: T) => T)) => void] {
   const storageKey = `sales-dash:${key}`
@@ -78,7 +81,6 @@ function usePersistedState<T>(key: string, defaultValue: T): [T, (val: T | ((pre
   return [value, setPersisted]
 }
 
-type TimePeriod = "ytd" | "last-year" | "this-month" | "custom" | "last-4w" | "last-12w" | "last-26w" | "weeks-ytd"
 type Quarter = "all" | "Q1" | "Q2" | "Q3" | "Q4"
 
 const QUARTER_MONTHS: Record<string, number[]> = {
@@ -116,64 +118,6 @@ function formatNumber(value: number, decimals = 0): string {
 
 function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`
-}
-
-function alignToMonday(date: Date): Date {
-  const d = new Date(date)
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
-  return d
-}
-
-function fmtDate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
-}
-
-function getDateRange(period: TimePeriod, year: number): { startDate: string; endDate: string } {
-  const now = new Date()
-  const currentYear = now.getFullYear()
-  switch (period) {
-    case "ytd":
-      return {
-        startDate: `${currentYear}-01-01`,
-        endDate: `${currentYear}-${String(now.getMonth() + 2).padStart(2, "0")}-01`,
-      }
-    case "last-year":
-      return {
-        startDate: `${currentYear - 1}-01-01`,
-        endDate: `${currentYear}-01-01`,
-      }
-    case "this-month": {
-      const nextMonth = now.getMonth() + 2
-      const nextYear = nextMonth > 12 ? currentYear + 1 : currentYear
-      return {
-        startDate: `${currentYear}-${String(now.getMonth() + 1).padStart(2, "0")}-01`,
-        endDate: `${nextYear}-${String(nextMonth > 12 ? 1 : nextMonth).padStart(2, "0")}-01`,
-      }
-    }
-    case "custom":
-      return {
-        startDate: `${year}-01-01`,
-        endDate: `${year + 1}-01-01`,
-      }
-    case "last-4w":
-    case "last-12w":
-    case "last-26w":
-    case "weeks-ytd": {
-      const today = new Date()
-      const tomorrow = new Date(today)
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      const end = fmtDate(tomorrow)
-      const monday = alignToMonday(today)
-      if (period === "weeks-ytd") {
-        const jan1 = new Date(today.getFullYear(), 0, 1)
-        return { startDate: fmtDate(alignToMonday(jan1)), endDate: end }
-      }
-      const offset = period === "last-4w" ? 28 : period === "last-12w" ? 84 : 182
-      const start = new Date(monday)
-      start.setDate(start.getDate() - offset)
-      return { startDate: fmtDate(start), endDate: end }
-    }
-  }
 }
 
 function getPeriodLabel(period: string, granularity: string): string {
@@ -236,12 +180,13 @@ function KpiCard({ title, value, description, trend, tooltip }: KpiCardProps) {
 export default function SalesDashboard() {
   const navigate = useNavigate()
   const currentYear = new Date().getFullYear()
-  const [period, setPeriod] = usePersistedState<TimePeriod>("period", "custom")
-  const [year, setYear] = usePersistedState<number>("year", currentYear)
+  const [timeWindow, setTimeWindow] = usePersistedState<TimeWindow>("timeWindow", "last-6m")
   const [quarter, setQuarter] = usePersistedState<Quarter>("quarter", "all")
   const [repFilter, setRepFilter] = usePersistedState<string>("repFilter", "all")
   const [chartMode, setChartMode] = usePersistedState<"budget" | "yoy">("chartMode", "budget")
   const [granularity, setGranularity] = usePersistedState<Granularity>("granularity", "monthly")
+  const [customStart, setCustomStart] = usePersistedState<string>("customStart", "")
+  const [customEnd, setCustomEnd] = usePersistedState<string>("customEnd", "")
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
   const [budgetMonth, setBudgetMonth] = useState<string>(() => {
     const now = new Date()
@@ -251,29 +196,42 @@ export default function SalesDashboard() {
   // Clear selected month when major filters change so it doesn't go stale
   useEffect(() => {
     setSelectedMonth(null)
-  }, [period, year, quarter, granularity])
+  }, [timeWindow, quarter, granularity])
 
-  // Switch to weekly presets when granularity is weekly
+  // Switch presets when granularity changes
   const prevGranularityRef = useRef(granularity)
   useEffect(() => {
     if (prevGranularityRef.current === granularity) return
     prevGranularityRef.current = granularity
-    if (granularity === "weekly") {
-      setPeriod("last-12w")
-    } else {
-      setPeriod("ytd")
-    }
-  }, [granularity, setPeriod])
+    setTimeWindow(getDefaultPreset(granularity))
+  }, [granularity, setTimeWindow])
 
-  // Keep budgetMonth in sync with selected year
+  // Validate persisted timeWindow against current granularity
+  useEffect(() => {
+    if (!isValidPreset(timeWindow, granularity)) {
+      setTimeWindow(getDefaultPreset(granularity))
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const salesDateLimits = useSalesDateLimits()
+  const salesLimits = salesDateLimits.data?.data?.[0]
+  const customRange: DateRange | null = customStart && customEnd ? { startDate: customStart, endDate: customEnd } : null
+
+  const { startDate, endDate } = useMemo(
+    () => sharedGetTimeWindowRange(timeWindow, salesLimits ? { minDate: salesLimits.minDate, maxDate: salesLimits.maxDate } : null, customRange),
+    [timeWindow, salesLimits?.minDate, salesLimits?.maxDate, customRange]
+  )
+
+  // Keep budgetMonth in sync with selected date range
   useEffect(() => {
     const now = new Date()
-    const m = year === now.getFullYear() ? now.getMonth() + 1 : 1
-    setBudgetMonth(`${year}-${String(m).padStart(2, "0")}`)
-  }, [year])
+    const rangeYear = new Date(startDate || now.toISOString()).getFullYear()
+    const m = rangeYear === now.getFullYear() ? now.getMonth() + 1 : 1
+    setBudgetMonth(`${rangeYear}-${String(m).padStart(2, "0")}`)
+  }, [startDate])
 
-  const { startDate, endDate } = getDateRange(period, year)
-  const budgetYear = period === "last-year" ? String(year - 1) : String(year)
+  // Derive budget year from the date range start
+  const budgetYear = String(new Date(startDate || new Date().toISOString()).getFullYear())
 
   // Prior year date range for YOY
   const priorYearStart = useMemo(() => {
@@ -285,9 +243,8 @@ export default function SalesDashboard() {
     return `${d.getFullYear() - 1}-${String(d.getMonth() + 1).padStart(2, "0")}-01`
   }, [endDate])
 
-  // For yearly granularity, widen the date range to 5 years
-  const summaryStart = granularity === "yearly" ? `${currentYear - 4}-01-01` : startDate
-  const summaryEnd = granularity === "yearly" ? `${currentYear + 1}-01-01` : endDate
+  const summaryStart = startDate
+  const summaryEnd = endDate
 
   const activeRep = repFilter !== "all" ? repFilter : undefined
 
@@ -327,8 +284,8 @@ export default function SalesDashboard() {
   const holidaysQuery = useHolidays(startDate, endDate)
 
   // Seasonality: full prior-year data for projection model
-  const viewingCurrentYear = period === "ytd" || period === "this-month" ||
-    (period === "custom" && year === currentYear)
+  const viewingCurrentYear = timeWindow === "ytd" || timeWindow === `year-${currentYear}` ||
+    (timeWindow === "custom" && startDate.startsWith(String(currentYear)))
   const seasonalityY1Query = useSalesSummary(
     `${currentYear - 1}-01-01`, `${currentYear}-01-01`, "monthly", activeRep
   )
@@ -613,7 +570,7 @@ export default function SalesDashboard() {
 
     return Array.from({ length: 12 }, (_, i) => {
       const m = i + 1
-      const monthKey = `${year}-${String(m).padStart(2, "0")}`
+      const monthKey = `${currentYear}-${String(m).padStart(2, "0")}`
       const actual = summaryData.find((d) => d.period === monthKey)
       const isCompleted = m < currentMonth
       const projected = impliedAnnual * (seasonalityIndices.indices.get(m) ?? 1 / 12)
@@ -633,7 +590,7 @@ export default function SalesDashboard() {
         priorYear: py?.totalSales ?? 0,
       }
     })
-  }, [viewingCurrentYear, granularity, summaryData, seasonalityIndices, year, budgetByPeriod, priorYearByPeriod])
+  }, [viewingCurrentYear, granularity, summaryData, seasonalityIndices, currentYear, budgetByPeriod, priorYearByPeriod])
 
   // KPI calculations (react to selectedMonth)
   const kpis = useMemo(() => {
@@ -968,8 +925,7 @@ export default function SalesDashboard() {
   }
 
   const resetFilters = useCallback(() => {
-    setPeriod("custom")
-    setYear(currentYear)
+    setTimeWindow(getDefaultPreset("monthly"))
     setQuarter("all")
     setRepFilter("all")
     setChartMode("budget")
@@ -978,7 +934,7 @@ export default function SalesDashboard() {
     setDetailSort({ key: "invoiceDate", dir: "desc" })
     setDetailTab("detail")
     setGroupByDims(["invoiceDate", "customerName", "repName", "invoiceNumber"])
-  }, [currentYear, setPeriod, setYear, setQuarter, setRepFilter, setChartMode, setGranularity, setDetailSort, setDetailTab, setGroupByDims])
+  }, [setTimeWindow, setQuarter, setRepFilter, setChartMode, setGranularity, setDetailSort, setDetailTab, setGroupByDims])
 
   // Rep bar chart data
   const repBarData = useMemo(() => repData.map((r) => ({
@@ -1065,57 +1021,23 @@ export default function SalesDashboard() {
           )}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <Select value={repFilter} onValueChange={setRepFilter}>
-            <SelectTrigger className="w-[160px] h-8 text-xs">
-              <SelectValue placeholder="All Reps" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Reps</SelectItem>
-              {sortedReps.map((name) => (
-                <SelectItem key={name} value={name}>
-                  {name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={repFilter}
+            onValueChange={setRepFilter}
+            options={sortedReps}
+            placeholder="All Reps"
+            searchPlaceholder="Search reps..."
+            width="w-[160px]"
+          />
 
-          <Select value={period} onValueChange={(v) => setPeriod(v as TimePeriod)}>
-            <SelectTrigger className="w-[120px] h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {granularity === "weekly" ? (
-                <>
-                  <SelectItem value="last-4w">Last 4W</SelectItem>
-                  <SelectItem value="last-12w">Last 12W</SelectItem>
-                  <SelectItem value="last-26w">Last 26W</SelectItem>
-                  <SelectItem value="weeks-ytd">Weeks YTD</SelectItem>
-                </>
-              ) : (
-                <>
-                  <SelectItem value="ytd">YTD</SelectItem>
-                  <SelectItem value="this-month">This Month</SelectItem>
-                  <SelectItem value="last-year">Last Year</SelectItem>
-                  <SelectItem value="custom">Full Year</SelectItem>
-                </>
-              )}
-            </SelectContent>
-          </Select>
-
-          {period === "custom" && (
-            <Select value={String(year)} onValueChange={(v) => setYear(parseInt(v, 10))}>
-              <SelectTrigger className="w-[90px] h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[currentYear, currentYear - 1, currentYear - 2, currentYear - 3].map((y) => (
-                  <SelectItem key={y} value={String(y)}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          <TimePresetBar
+            granularity={granularity}
+            value={timeWindow}
+            onChange={setTimeWindow}
+            dateLimits={salesLimits ? { minDate: salesLimits.minDate, maxDate: salesLimits.maxDate } : null}
+            customRange={customRange}
+            onCustomRangeChange={(s, e) => { setCustomStart(s); setCustomEnd(e) }}
+          />
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetFilters} title="Reset filters">
             <RotateCcw className="h-4 w-4" />
           </Button>
@@ -1535,19 +1457,14 @@ export default function SalesDashboard() {
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
-                  <Select value={repFilter} onValueChange={setRepFilter}>
-                    <SelectTrigger className="w-[150px] h-7 text-xs">
-                      <SelectValue placeholder="All Reps" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Reps</SelectItem>
-                      {sortedReps.map((name) => (
-                        <SelectItem key={name} value={name}>
-                          {name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={repFilter}
+                    onValueChange={setRepFilter}
+                    options={sortedReps}
+                    placeholder="All Reps"
+                    searchPlaceholder="Search reps..."
+                    width="w-[150px]"
+                  />
                 </>
               )}
             </div>

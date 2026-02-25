@@ -17,13 +17,7 @@ import {
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import {
   Table,
   TableBody,
@@ -48,8 +42,17 @@ import {
   useContributionFilterOptions,
 } from "@/api/hooks/useContributionDashboard"
 import type { ContributionGranularity } from "@/api/hooks/useContributionDashboard"
-
-type TimeWindow = "all-time" | "last-qtr" | "last-year" | "qtd" | "ytd" | "last-4w" | "last-12w" | "last-26w" | "weeks-ytd"
+import { TimePresetBar } from "@/components/ui/time-preset-bar"
+import {
+  type TimeWindow,
+  type DateRange,
+  getDefaultPreset,
+  getTimeWindowRange as sharedGetTimeWindowRange,
+  isValidPreset,
+  formatDateISO,
+  addDays,
+  parseISODate,
+} from "@/lib/time-presets"
 type ContributionChartTab = "contributionPerOrderHour" | "contribution"
 
 interface KpiCardProps {
@@ -123,85 +126,6 @@ function formatPercent(ratio: number, decimals = 1): string {
   return `${formatNumber(ratio * 100, decimals)}%`
 }
 
-function formatDateISO(date: Date): string {
-  return date.toISOString().slice(0, 10)
-}
-
-function addDays(date: Date, days: number): Date {
-  const d = new Date(date)
-  d.setDate(d.getDate() + days)
-  return d
-}
-
-function alignToMonday(date: Date): Date {
-  const d = new Date(date)
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
-  return d
-}
-
-function parseISODate(value: string): Date {
-  const [y, m, d] = value.split("-").map(Number)
-  return new Date(y, (m || 1) - 1, d || 1)
-}
-
-function startOfQuarter(date: Date): Date {
-  const month = date.getMonth()
-  const quarterStartMonth = Math.floor(month / 3) * 3
-  return new Date(date.getFullYear(), quarterStartMonth, 1)
-}
-
-function getTimeWindowRange(window: TimeWindow, minDate?: string | null, maxDate?: string | null): { startDate: string; endDate: string } {
-  const now = new Date()
-  const maxDataDate = maxDate ? parseISODate(maxDate) : null
-  const anchorDate = maxDataDate && maxDataDate <= now ? maxDataDate : now
-  const dataEndExclusive = maxDate ? formatDateISO(addDays(parseISODate(maxDate), 1)) : formatDateISO(addDays(now, 1))
-  const anchorYear = anchorDate.getFullYear()
-
-  if (window === "last-4w" || window === "last-12w" || window === "last-26w" || window === "weeks-ytd") {
-    const thisMonday = alignToMonday(now)
-    if (window === "last-4w") return { startDate: formatDateISO(addDays(thisMonday, -28)), endDate: dataEndExclusive }
-    if (window === "last-12w") return { startDate: formatDateISO(addDays(thisMonday, -84)), endDate: dataEndExclusive }
-    if (window === "last-26w") return { startDate: formatDateISO(addDays(thisMonday, -182)), endDate: dataEndExclusive }
-    const jan1 = new Date(now.getFullYear(), 0, 1)
-    return { startDate: formatDateISO(alignToMonday(jan1)), endDate: dataEndExclusive }
-  }
-
-  if (window === "all-time") {
-    return {
-      startDate: minDate || `${anchorYear - 10}-01-01`,
-      endDate: dataEndExclusive,
-    }
-  }
-
-  if (window === "last-year") {
-    return {
-      startDate: `${anchorYear - 1}-01-01`,
-      endDate: `${anchorYear}-01-01`,
-    }
-  }
-
-  if (window === "last-qtr") {
-    const thisQuarterStart = startOfQuarter(anchorDate)
-    const lastQuarterEnd = thisQuarterStart
-    const lastQuarterStart = new Date(lastQuarterEnd.getFullYear(), lastQuarterEnd.getMonth() - 3, 1)
-    return {
-      startDate: formatDateISO(lastQuarterStart),
-      endDate: formatDateISO(lastQuarterEnd),
-    }
-  }
-
-  if (window === "qtd") {
-    return {
-      startDate: formatDateISO(startOfQuarter(anchorDate)),
-      endDate: dataEndExclusive,
-    }
-  }
-
-  return {
-    startDate: `${anchorYear}-01-01`,
-    endDate: dataEndExclusive,
-  }
-}
 
 function getPeriodLabel(period: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(period)) {
@@ -293,26 +217,32 @@ export default function ContributionDashboard() {
   const [granularity, setGranularity] = usePersistedState<ContributionGranularity>("granularity", "weekly")
   const [tableSort, setTableSort] = usePersistedState<{ key: string; dir: "asc" | "desc" }>("tableSort", { key: "feedbackDate", dir: "desc" })
   const [groupByDims, setGroupByDims] = usePersistedState<string[]>("groupByDims", ["feedbackDate", "jobNumber", "customerName", "specNumber", "lineNumber"])
+  const [customStart, setCustomStart] = usePersistedState<string>("customStart", "")
+  const [customEnd, setCustomEnd] = usePersistedState<string>("customEnd", "")
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null)
 
-  // Switch to weekly presets when granularity is weekly
+  // Switch presets when granularity changes
   const prevGranularityRef = useRef(granularity)
   useEffect(() => {
     if (prevGranularityRef.current === granularity) return
     prevGranularityRef.current = granularity
-    if (granularity === "weekly") {
-      setTimeWindow("last-12w")
-    } else {
-      setTimeWindow("ytd")
-    }
+    setTimeWindow(getDefaultPreset(granularity as any))
   }, [granularity, setTimeWindow])
+
+  // Validate persisted timeWindow against current granularity
+  useEffect(() => {
+    if (!isValidPreset(timeWindow, granularity as any)) {
+      setTimeWindow(getDefaultPreset(granularity as any))
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const dateLimits = useContributionDateLimits()
   const limits = dateLimits.data?.data?.[0]
+  const customRange: DateRange | null = customStart && customEnd ? { startDate: customStart, endDate: customEnd } : null
 
   const { startDate, endDate } = useMemo(
-    () => getTimeWindowRange(timeWindow, limits?.minDate, limits?.maxDate),
-    [timeWindow, limits?.minDate, limits?.maxDate]
+    () => sharedGetTimeWindowRange(timeWindow, limits ? { minDate: limits.minDate, maxDate: limits.maxDate } : null, customRange),
+    [timeWindow, limits?.minDate, limits?.maxDate, customRange]
   )
 
   const activeLine = lineFilter !== "all" ? lineFilter : undefined
@@ -626,67 +556,42 @@ export default function ContributionDashboard() {
         </Button>
         <span className="text-sm font-medium">Contribution Dashboard</span>
 
-        <div className="flex items-center gap-1 ml-2">
-          {(granularity === "weekly" ? [
-            { key: "last-4w", label: "Last 4W" },
-            { key: "last-12w", label: "Last 12W" },
-            { key: "last-26w", label: "Last 26W" },
-            { key: "weeks-ytd", label: "Weeks YTD" },
-          ] : [
-            { key: "all-time", label: "All Time" },
-            { key: "last-qtr", label: "Last Qtr" },
-            { key: "last-year", label: "Last Year" },
-            { key: "qtd", label: "QTD" },
-            { key: "ytd", label: "YTD" },
-          ]).map((option) => (
-            <Button
-              key={option.key}
-              variant={timeWindow === option.key ? "default" : "outline"}
-              size="sm"
-              className="h-7 px-2.5 text-xs"
-              onClick={() => setTimeWindow(option.key as TimeWindow)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
+        <TimePresetBar
+          granularity={granularity as any}
+          value={timeWindow}
+          onChange={setTimeWindow}
+          dateLimits={limits ? { minDate: limits.minDate, maxDate: limits.maxDate } : null}
+          customRange={customRange}
+          onCustomRangeChange={(s, e) => { setCustomStart(s); setCustomEnd(e) }}
+        />
 
         <div className="ml-auto flex items-center gap-2">
-          <Select value={lineFilter} onValueChange={setLineFilter}>
-            <SelectTrigger className="w-[150px] h-8 text-xs">
-              <SelectValue placeholder="Line Number" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Lines</SelectItem>
-              {(filterOptions?.lineNumbers ?? []).map((line) => (
-                <SelectItem key={line} value={line}>{line}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={lineFilter}
+            onValueChange={setLineFilter}
+            options={filterOptions?.lineNumbers ?? []}
+            placeholder="All Lines"
+            searchPlaceholder="Search lines..."
+            width="w-[150px]"
+          />
 
-          <Select value={customerFilter} onValueChange={setCustomerFilter}>
-            <SelectTrigger className="w-[240px] h-8 text-xs">
-              <SelectValue placeholder="Customer" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Customers</SelectItem>
-              {(filterOptions?.customers ?? []).map((customer) => (
-                <SelectItem key={customer} value={customer}>{customer}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={customerFilter}
+            onValueChange={setCustomerFilter}
+            options={filterOptions?.customers ?? []}
+            placeholder="All Customers"
+            searchPlaceholder="Search customers..."
+            width="w-[240px]"
+          />
 
-          <Select value={specFilter} onValueChange={setSpecFilter}>
-            <SelectTrigger className="w-[140px] h-8 text-xs">
-              <SelectValue placeholder="Spec" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Specs</SelectItem>
-              {(filterOptions?.specs ?? []).map((spec) => (
-                <SelectItem key={spec} value={spec}>{spec}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={specFilter}
+            onValueChange={setSpecFilter}
+            options={filterOptions?.specs ?? []}
+            placeholder="All Specs"
+            searchPlaceholder="Search specs..."
+            width="w-[140px]"
+          />
 
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetFilters}>
             <RotateCcw className="h-4 w-4" />

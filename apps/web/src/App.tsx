@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate, Outlet } from "react-router-dom"
 import { MainLayout } from "@/components/layout"
-import { ErpCustomers, ErpQuotes, ErpQuoteForm, SalesDashboard, SqFtDashboard, ContributionDashboard, CostVarianceDashboard, SqlExplorer, ProductionDashboard, UserManagement } from "@/pages/erp"
+import { ErpCustomers, ErpQuotes, ErpQuoteForm, SalesDashboard, SqFtDashboard, ContributionDashboard, CostVarianceDashboard, SqlExplorer, ProductionDashboard, MrpDashboard, UserManagement } from "@/pages/erp"
 import { Login } from "@/pages/Login"
 import { Signup } from "@/pages/Signup"
 import { ForgotPassword } from "@/pages/ForgotPassword"
@@ -125,6 +125,7 @@ function App() {
           {/* Production — any role */}
           <Route path="/erp/production" element={<ProductionDashboard />} />
           <Route path="/erp/sqft" element={<SqFtDashboard />} />
+          <Route path="/erp/mrp" element={<MrpDashboard />} />
 
           {/* Estimating — ESTIMATOR or ADMIN */}
           <Route path="/erp/quotes" element={<RoleGuard requiredRoles={["ESTIMATOR", "ADMIN"]}><ErpQuotes /></RoleGuard>} />

@@ -13,13 +13,7 @@ import {
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import {
   Table,
   TableBody,
@@ -49,9 +43,19 @@ import {
   useInvoiceCostVarianceFilterOptions,
 } from "@/api/hooks/useInvoiceCostVarianceDashboard"
 import type { CostVarianceGranularity } from "@/api/hooks/useCostVarianceDashboard"
+import { TimePresetBar } from "@/components/ui/time-preset-bar"
+import {
+  type TimeWindow,
+  type DateRange,
+  getDefaultPreset,
+  getTimeWindowRange as sharedGetTimeWindowRange,
+  isValidPreset,
+  formatDateISO,
+  addDays,
+  parseISODate,
+} from "@/lib/time-presets"
 
 type DataSource = "production" | "invoice"
-type TimeWindow = "last-7" | "last-14" | "last-30" | "mtd" | "qtd" | "ytd" | "last-4w" | "last-12w" | "last-26w" | "weeks-ytd"
 type ChartTab = "calendar" | "area"
 type CostType = "full" | "material" | "labor" | "freight" | "hours-order" | "hours-uptime"
 type DetailTab = "costs" | "hours"
@@ -125,51 +129,6 @@ function formatNumber(value: number, decimals = 0): string {
   return new Intl.NumberFormat("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value)
 }
 
-function formatDateISO(date: Date): string {
-  return date.toISOString().slice(0, 10)
-}
-
-function addDays(date: Date, days: number): Date {
-  const d = new Date(date)
-  d.setDate(d.getDate() + days)
-  return d
-}
-
-function alignToMonday(date: Date): Date {
-  const d = new Date(date)
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
-  return d
-}
-
-function parseISODate(value: string): Date {
-  const [y, m, d] = value.split("-").map(Number)
-  return new Date(y, (m || 1) - 1, d || 1)
-}
-
-function startOfQuarter(date: Date): Date {
-  const month = date.getMonth()
-  const quarterStartMonth = Math.floor(month / 3) * 3
-  return new Date(date.getFullYear(), quarterStartMonth, 1)
-}
-
-function getTimeWindowRange(window: TimeWindow, _minDate?: string | null, maxDate?: string | null): { startDate: string; endDate: string } {
-  const now = new Date()
-  const dataEndExclusive = maxDate ? formatDateISO(addDays(parseISODate(maxDate), 1)) : formatDateISO(addDays(now, 1))
-  if (window === "last-4w" || window === "last-12w" || window === "last-26w" || window === "weeks-ytd") {
-    const thisMonday = alignToMonday(now)
-    if (window === "last-4w") return { startDate: formatDateISO(addDays(thisMonday, -28)), endDate: dataEndExclusive }
-    if (window === "last-12w") return { startDate: formatDateISO(addDays(thisMonday, -84)), endDate: dataEndExclusive }
-    if (window === "last-26w") return { startDate: formatDateISO(addDays(thisMonday, -182)), endDate: dataEndExclusive }
-    const jan1 = new Date(now.getFullYear(), 0, 1)
-    return { startDate: formatDateISO(alignToMonday(jan1)), endDate: dataEndExclusive }
-  }
-  if (window === "last-7") return { startDate: formatDateISO(addDays(now, -7)), endDate: dataEndExclusive }
-  if (window === "last-14") return { startDate: formatDateISO(addDays(now, -14)), endDate: dataEndExclusive }
-  if (window === "last-30") return { startDate: formatDateISO(addDays(now, -30)), endDate: dataEndExclusive }
-  if (window === "mtd") return { startDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`, endDate: dataEndExclusive }
-  if (window === "qtd") return { startDate: formatDateISO(startOfQuarter(now)), endDate: dataEndExclusive }
-  return { startDate: `${now.getFullYear()}-01-01`, endDate: dataEndExclusive }
-}
 
 function getPeriodLabel(period: string, granularity: CostVarianceGranularity): string {
   if (granularity === "yearly") return period
@@ -373,7 +332,7 @@ export default function CostVarianceDashboard() {
   const cfg = VARIANT_CONFIG[dataSource]
 
   // Per-variant persisted state
-  const [timeWindow, setTimeWindow] = usePersistedState<TimeWindow>(cfg.storagePrefix, "timeWindow", "last-7")
+  const [timeWindow, setTimeWindow] = usePersistedState<TimeWindow>(cfg.storagePrefix, "timeWindow", "last-14d")
   const [granularity, setGranularity] = usePersistedState<CostVarianceGranularity>(cfg.storagePrefix, "granularity", "daily")
   const [chartTab, setChartTab] = usePersistedState<ChartTab>(cfg.storagePrefix, "chartTab", "area")
   const [costType, setCostType] = usePersistedState<CostType>(cfg.storagePrefix, "costType", "full")
@@ -382,19 +341,25 @@ export default function CostVarianceDashboard() {
   const [specFilter, setSpecFilter] = usePersistedState<string>(cfg.storagePrefix, "specFilter", "all")
   const [tableSort, setTableSort] = usePersistedState<{ key: string; dir: "asc" | "desc" }>(cfg.storagePrefix, "tableSort", { key: cfg.defaultSortKey, dir: "desc" })
   const [groupByDims, setGroupByDims] = usePersistedState<string[]>(cfg.storagePrefix, "groupByDims", cfg.defaultGroupByDims)
+  const [customStart, setCustomStart] = usePersistedState<string>(cfg.storagePrefix, "customStart", "")
+  const [customEnd, setCustomEnd] = usePersistedState<string>(cfg.storagePrefix, "customEnd", "")
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null)
+  const customRange: DateRange | null = customStart && customEnd ? { startDate: customStart, endDate: customEnd } : null
 
-  // Switch to weekly presets when granularity is weekly
+  // Switch presets when granularity changes
   const prevGranularityRef = useRef(granularity)
   useEffect(() => {
     if (prevGranularityRef.current === granularity) return
     prevGranularityRef.current = granularity
-    if (granularity === "weekly") {
-      setTimeWindow("last-12w")
-    } else {
-      setTimeWindow("last-7")
-    }
+    setTimeWindow(getDefaultPreset(granularity as any))
   }, [granularity, setTimeWindow])
+
+  // Validate persisted timeWindow against current granularity (handles old localStorage values)
+  useEffect(() => {
+    if (!isValidPreset(timeWindow, granularity as any)) {
+      setTimeWindow(getDefaultPreset(granularity as any))
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix, "detailTab", "costs")
   const [hoursSort, setHoursSort] = usePersistedState<{ key: string; dir: "asc" | "desc" }>(cfg.storagePrefix, "hoursSort", { key: cfg.defaultSortKey, dir: "desc" })
@@ -407,8 +372,8 @@ export default function CostVarianceDashboard() {
   const prodDateLimits = useCostVarianceDateLimits()
   const prodLimits = prodDateLimits.data?.data?.[0]
   const prodTimeRange = useMemo(
-    () => dataSource === "production" ? getTimeWindowRange(timeWindow, prodLimits?.minDate, prodLimits?.maxDate) : { startDate: "", endDate: "" },
-    [dataSource, timeWindow, prodLimits?.minDate, prodLimits?.maxDate]
+    () => dataSource === "production" ? sharedGetTimeWindowRange(timeWindow, prodLimits ? { minDate: prodLimits.minDate, maxDate: prodLimits.maxDate } : null, customRange) : { startDate: "", endDate: "" },
+    [dataSource, timeWindow, prodLimits?.minDate, prodLimits?.maxDate, customRange]
   )
   const prodActiveLine = lineFilter !== "all" ? lineFilter : undefined
   const prodActiveCustomer = dataSource === "production" && customerFilter !== "all" ? customerFilter : undefined
@@ -435,8 +400,8 @@ export default function CostVarianceDashboard() {
   const invDateLimits = useInvoiceCostVarianceDateLimits()
   const invLimits = invDateLimits.data?.data?.[0]
   const invTimeRange = useMemo(
-    () => dataSource === "invoice" ? getTimeWindowRange(timeWindow, invLimits?.minDate, invLimits?.maxDate) : { startDate: "", endDate: "" },
-    [dataSource, timeWindow, invLimits?.minDate, invLimits?.maxDate]
+    () => dataSource === "invoice" ? sharedGetTimeWindowRange(timeWindow, invLimits ? { minDate: invLimits.minDate, maxDate: invLimits.maxDate } : null, customRange) : { startDate: "", endDate: "" },
+    [dataSource, timeWindow, invLimits?.minDate, invLimits?.maxDate, customRange]
   )
   const invActiveCustomer = dataSource === "invoice" && customerFilter !== "all" ? customerFilter : undefined
   const invActiveSpec = dataSource === "invoice" && specFilter !== "all" ? specFilter : undefined
@@ -735,7 +700,7 @@ export default function CostVarianceDashboard() {
   }, [setHoursSort])
 
   const resetFilters = useCallback(() => {
-    setTimeWindow("last-7")
+    setTimeWindow(getDefaultPreset("daily"))
     setGranularity("daily")
     setCostType("full")
     setLineFilter("all")
@@ -809,70 +774,44 @@ export default function CostVarianceDashboard() {
 
         <span className="mx-1 text-border">|</span>
 
-        <div className="flex items-center gap-1">
-          {(granularity === "weekly" ? [
-            { key: "last-4w", label: "Last 4W" },
-            { key: "last-12w", label: "Last 12W" },
-            { key: "last-26w", label: "Last 26W" },
-            { key: "weeks-ytd", label: "Weeks YTD" },
-          ] : [
-            { key: "last-7", label: "Last 7 Days" },
-            { key: "last-14", label: "Last 14 Days" },
-            { key: "last-30", label: "Last 30 Days" },
-            { key: "mtd", label: "MTD" },
-            { key: "qtd", label: "QTD" },
-            { key: "ytd", label: "YTD" },
-          ]).map((option) => (
-            <Button
-              key={option.key}
-              variant={timeWindow === option.key ? "default" : "outline"}
-              size="sm"
-              className="h-7 px-2.5 text-xs"
-              onClick={() => setTimeWindow(option.key as TimeWindow)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
+        <TimePresetBar
+          granularity={granularity as any}
+          value={timeWindow}
+          onChange={setTimeWindow}
+          dateLimits={dataSource === "production" && prodLimits ? { minDate: prodLimits.minDate, maxDate: prodLimits.maxDate } : dataSource === "invoice" && invLimits ? { minDate: invLimits.minDate, maxDate: invLimits.maxDate } : null}
+          customRange={customRange}
+          onCustomRangeChange={(s, e) => { setCustomStart(s); setCustomEnd(e) }}
+        />
 
         <div className="ml-auto flex items-center gap-2">
           {cfg.hasLineFilter && (
-            <Select value={lineFilter} onValueChange={setLineFilter}>
-              <SelectTrigger className="w-[150px] h-8 text-xs">
-                <SelectValue placeholder="Line Number" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Lines</SelectItem>
-                {((filterOptions as unknown as Record<string, unknown>)?.lineNumbers as string[] ?? []).map((line) => (
-                  <SelectItem key={line} value={line}>{line}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={lineFilter}
+              onValueChange={setLineFilter}
+              options={(filterOptions as unknown as Record<string, unknown>)?.lineNumbers as string[] ?? []}
+              placeholder="All Lines"
+              searchPlaceholder="Search lines..."
+              width="w-[150px]"
+            />
           )}
 
-          <Select value={customerFilter} onValueChange={setCustomerFilter}>
-            <SelectTrigger className="w-[240px] h-8 text-xs">
-              <SelectValue placeholder="Customer" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Customers</SelectItem>
-              {((filterOptions as unknown as Record<string, unknown>)?.customers as string[] ?? []).map((customer) => (
-                <SelectItem key={customer} value={customer}>{customer}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={customerFilter}
+            onValueChange={setCustomerFilter}
+            options={(filterOptions as unknown as Record<string, unknown>)?.customers as string[] ?? []}
+            placeholder="All Customers"
+            searchPlaceholder="Search customers..."
+            width="w-[240px]"
+          />
 
-          <Select value={specFilter} onValueChange={setSpecFilter}>
-            <SelectTrigger className="w-[140px] h-8 text-xs">
-              <SelectValue placeholder="Spec" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Specs</SelectItem>
-              {((filterOptions as unknown as Record<string, unknown>)?.specs as string[] ?? []).map((spec) => (
-                <SelectItem key={spec} value={spec}>{spec}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={specFilter}
+            onValueChange={setSpecFilter}
+            options={(filterOptions as unknown as Record<string, unknown>)?.specs as string[] ?? []}
+            placeholder="All Specs"
+            searchPlaceholder="Search specs..."
+            width="w-[140px]"
+          />
 
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetFilters}>
             <RotateCcw className="h-4 w-4" />
