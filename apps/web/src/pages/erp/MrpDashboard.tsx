@@ -37,7 +37,6 @@ import {
 import {
   ArrowLeft,
   Info,
-  ChevronDown,
   ChevronUp,
   Search,
 } from "lucide-react"
@@ -177,7 +176,7 @@ export default function MrpDashboard() {
 
   // Persisted state
   const [granularity, setGranularity] = usePersistedState<MrpGranularity>("granularity", "week")
-  const [horizon, setHorizon] = usePersistedState<number>("horizon", 12)
+  const [horizon] = usePersistedState<number>("horizon", 12)
   const [valueMode, setValueMode] = usePersistedState<ValueMode>("valueMode", "qty")
   const [companyFilter, setCompanyFilter] = usePersistedState<string>("company", "all")
   const [specSearch, setSpecSearch] = usePersistedState<string>("specSearch", "")
@@ -404,9 +403,12 @@ export default function MrpDashboard() {
                           name="Worst Projected"
                           isAnimationActive={false}
                           cursor="pointer"
-                          onClick={(data: { specNumber: string }) => {
-                            setSelectedSpec(data.specNumber)
-                            setDetailOpen(true)
+                          onClick={(_data, _index, e) => {
+                            const payload = (e as unknown as { specNumber?: string })
+                            if (payload.specNumber) {
+                              setSelectedSpec(payload.specNumber)
+                              setDetailOpen(true)
+                            }
                           }}
                         />
                       </BarChart>
