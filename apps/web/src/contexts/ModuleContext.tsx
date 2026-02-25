@@ -20,11 +20,13 @@ interface ModulesResponse {
 const DOMAIN_MODULE_MAP: Record<string, string> = {
   'app.leangoqms.com': 'qms',
   'app.leangomaintenance.com': 'maintenance',
+  'app.leango5s.com': '5s',
 }
 
 const DOMAIN_PRODUCT_NAMES: Record<string, string> = {
   qms: 'LeanGo QMS',
   maintenance: 'LeanGo Maintenance',
+  '5s': 'LeanGo 5S',
 }
 
 function getModuleFromHostname(): string | null {
@@ -85,6 +87,9 @@ export function ModuleProvider({ children }: ModuleProviderProps) {
     }
     if (pathname.startsWith('/ci')) {
       return 'ci'
+    }
+    if (pathname.startsWith('/5s')) {
+      return '5s'
     }
     if (pathname.startsWith('/erp')) {
       return 'erp'
@@ -172,6 +177,7 @@ export function ModuleProvider({ children }: ModuleProviderProps) {
       qms: '/qms/ncr',
       maintenance: '/maintenance/work-orders',
       ci: '/ci',
+      '5s': '/5s',
       erp: '/erp/quotes',
       pr: '/pr/reports',
     }

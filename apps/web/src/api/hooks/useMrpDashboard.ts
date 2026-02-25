@@ -3,7 +3,6 @@ import { apiFetch } from "@/api/client"
 
 export type MrpGranularity = "day" | "week" | "2week" | "month"
 export type HealthState = "good" | "adequate" | "belowMin" | "shortage"
-export type ValueMode = "qty" | "cost" | "price"
 
 export interface SpecBucket {
   projected: number
@@ -24,10 +23,23 @@ export interface MrpSpec {
   unitPrice: number
   last30DayUsage: number
   avg30DayUsage90: number
+  minMonthsOfSupply: number | null
+  maxMonthsOfSupply: number | null
+  onHandMonthsOfSupply: number | null
+  hasOrders: boolean
+  hasMinOrMax: boolean
   shortageDate: string | null
   belowMinDate: string | null
   hasPastDues: boolean
   buckets: SpecBucket[]
+}
+
+export interface MrpTotals {
+  totalOnHand: number
+  totalMinQty: number
+  totalMaxQty: number
+  totalLast30d: number
+  totalAvg30d: number
 }
 
 export interface MrpKpis {
@@ -45,16 +57,8 @@ export interface MrpProjectionResponse {
   bucketLabels: string[]
   bucketDates: string[]
   specs: MrpSpec[]
+  totals: MrpTotals
   kpis: MrpKpis
-}
-
-export interface HealthSummaryRow {
-  label: string
-  date: string
-  good: number
-  adequate: number
-  belowMin: number
-  shortage: number
 }
 
 export interface MrpOrder {
@@ -85,10 +89,12 @@ export function useMrpProjection(
   horizon: number,
   company: string,
   spec: string,
-  filters: string[]
+  filters: string[],
+  hasOrders?: string,
+  hasMinOrMax?: string
 ) {
   return useQuery({
-    queryKey: ["mrp", "projection", granularity, horizon, company, spec, filters.join(",")],
+    queryKey: ["mrp", "projection", granularity, horizon, company, spec, filters.join(","), hasOrders, hasMinOrMax],
     queryFn: () => {
       const params = new URLSearchParams({
         granularity,
@@ -97,28 +103,9 @@ export function useMrpProjection(
       if (company && company !== "all") params.set("company", company)
       if (spec) params.set("spec", spec)
       if (filters.length > 0) params.set("filter", filters.join(","))
+      if (hasOrders && hasOrders !== "all") params.set("hasOrders", hasOrders)
+      if (hasMinOrMax && hasMinOrMax !== "all") params.set("hasMinOrMax", hasMinOrMax)
       return apiFetch<MrpProjectionResponse>(`/erp/mrp/projection?${params}`)
-    },
-    staleTime: 1000 * 60 * 5,
-  })
-}
-
-export function useMrpHealthSummary(
-  granularity: MrpGranularity,
-  horizon: number,
-  company: string,
-  spec: string
-) {
-  return useQuery({
-    queryKey: ["mrp", "health-summary", granularity, horizon, company, spec],
-    queryFn: () => {
-      const params = new URLSearchParams({
-        granularity,
-        horizon: String(horizon),
-      })
-      if (company && company !== "all") params.set("company", company)
-      if (spec) params.set("spec", spec)
-      return apiFetch<{ data: HealthSummaryRow[] }>(`/erp/mrp/health-summary?${params}`)
     },
     staleTime: 1000 * 60 * 5,
   })
@@ -139,7 +126,7 @@ export function useMrpSpecDetail(specNumber: string | null) {
 export function useMrpFilterOptions() {
   return useQuery({
     queryKey: ["mrp", "filter-options"],
-    queryFn: () => apiFetch<{ companies: string[] }>("/erp/mrp/filter-options"),
+    queryFn: () => apiFetch<{ companies: string[]; specs: string[] }>("/erp/mrp/filter-options"),
     staleTime: 1000 * 60 * 30,
   })
 }

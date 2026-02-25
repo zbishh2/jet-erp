@@ -232,8 +232,8 @@ meRoutes.get('/permissions', async (c) => {
   const auth = c.get('auth') as AuthContext
   const db = c.get('db')
 
-  // Get module code from header, default to 'qms' for backward compat
-  const moduleCode = c.req.header('X-Module-Code') || 'qms'
+  // Prefer request header, then module context, then ERP as the default module
+  const moduleCode = c.req.header('X-Module-Code') || auth.moduleCode || 'erp'
 
   // If module context is already set (from module middleware), use those roles
   if (auth.moduleRoles && auth.moduleRoles.length > 0) {
@@ -306,7 +306,7 @@ meRoutes.get('/permissions', async (c) => {
 meRoutes.get('/nav-preferences', async (c) => {
   const auth = c.get('auth') as AuthContext
   const db = c.get('db')
-  const moduleCode = c.req.query('moduleCode') || 'qms'
+  const moduleCode = c.req.query('moduleCode') || auth.moduleCode || 'erp'
 
   const prefs = await db
     .select()
@@ -383,6 +383,20 @@ meRoutes.put('/nav-preferences', async (c) => {
 
 // Helper: Default nav items for each module
 function getDefaultNavItems(moduleCode: string): any[] {
+  if (moduleCode === 'erp') {
+    return [
+      { key: 'production', label: 'OEE Dashboard', path: '/erp/production', icon: 'Activity', visible: true, order: 0 },
+      { key: 'sqft', label: 'Sq Ft Dashboard', path: '/erp/sqft', icon: 'Ruler', visible: true, order: 1 },
+      { key: 'mrp', label: 'MRP & Inventory', path: '/erp/mrp', icon: 'Package', visible: true, order: 2 },
+      { key: 'sales', label: 'Sales Dashboard', path: '/erp/sales', icon: 'TrendingUp', visible: true, order: 3 },
+      { key: 'contribution', label: 'Contribution Dashboard', path: '/erp/contribution', icon: 'DollarSign', visible: true, order: 4 },
+      { key: 'cost-variance', label: 'Cost Variance', path: '/erp/cost-variance', icon: 'ArrowLeftRight', visible: true, order: 5 },
+      { key: 'quotes', label: 'Quotes', path: '/erp/quotes', icon: 'FileSpreadsheet', visible: true, order: 6 },
+      { key: 'customers', label: 'Customers', path: '/erp/customers', icon: 'Factory', visible: true, order: 7 },
+      { key: 'sql-explorer', label: 'SQL Explorer', path: '/erp/sql-explorer', icon: 'Terminal', visible: true, order: 8 },
+      { key: 'users', label: 'User Management', path: '/erp/admin/users', icon: 'Users', visible: true, order: 9 },
+    ]
+  }
   if (moduleCode === 'qms') {
     return [
       { key: 'ncr', label: 'NCRs', path: '/qms/ncr', icon: 'AlertTriangle', visible: true, order: 0 },
@@ -390,6 +404,24 @@ function getDefaultNavItems(moduleCode: string): any[] {
       { key: 'ca', label: 'Corrective Actions', path: '/qms/ca', icon: 'CheckCircle', visible: true, order: 2 },
       { key: 'iso-audits', label: 'ISO Audits', path: '/qms/iso-audits', icon: 'ClipboardCheck', visible: true, order: 3 },
       { key: 'audit-schedule', label: 'Audit Schedule', path: '/qms/audit-schedule', icon: 'Calendar', visible: true, order: 4 },
+    ]
+  }
+  if (moduleCode === 'ci') {
+    return [
+      { key: 'ideas', label: 'Ideas', path: '/ci/ideas', icon: 'Lightbulb', visible: true, order: 0 },
+      { key: 'projects', label: 'Projects', path: '/ci/projects', icon: 'ListTodo', visible: true, order: 1 },
+      { key: 'actions', label: 'Action Plans', path: '/ci/actions', icon: 'CheckSquare', visible: true, order: 2 },
+      { key: 'audits', label: 'Audits', path: '/ci/audits', icon: 'ClipboardCheck', visible: true, order: 3 },
+      { key: 'walks', label: 'Gemba Walks', path: '/ci/walks', icon: 'Map', visible: true, order: 4 },
+    ]
+  }
+  if (moduleCode === '5s') {
+    return [
+      { key: 'boards', label: '5S Boards', path: '/5s/boards', icon: 'LayoutGrid', visible: true, order: 0 },
+      { key: 'audits', label: '5S Audits', path: '/5s/audits', icon: 'ClipboardCheck', visible: true, order: 1 },
+      { key: 'actions', label: 'Action Plans', path: '/5s/actions', icon: 'CheckSquare', visible: true, order: 2 },
+      { key: 'scores', label: 'Scorecards', path: '/5s/scorecards', icon: 'BarChart3', visible: true, order: 3 },
+      { key: 'areas', label: 'Areas', path: '/5s/areas', icon: 'MapPin', visible: true, order: 4 },
     ]
   }
   if (moduleCode === 'maintenance') {

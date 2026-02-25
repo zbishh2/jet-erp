@@ -266,13 +266,6 @@ function toDateKey(value: unknown): string {
   return raw
 }
 
-function addDays(dateKey: string, days: number): string {
-  const [y, m, d] = dateKey.split('-').map(Number)
-  const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1))
-  dt.setUTCDate(dt.getUTCDate() + days)
-  return dt.toISOString().slice(0, 10)
-}
-
 function periodKeyFromDate(dateKey: string, granularity: string): string {
   if (granularity === 'daily') return dateKey
   if (granularity === 'yearly') return dateKey.slice(0, 4)

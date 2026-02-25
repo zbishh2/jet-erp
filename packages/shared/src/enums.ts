@@ -183,6 +183,7 @@ export const ModuleRoles = {
   qms:         ['ADMIN', 'QUALITY', 'PROCESS_OWNER', 'APPROVER', 'REPORTER'],
   maintenance: ['ADMIN', 'TECHNICIAN', 'PLANNER', 'VIEWER'],
   ci:          ['ADMIN', 'FACILITATOR', 'CONTRIBUTOR', 'VIEWER'],
+  '5s':        ['ADMIN', 'FACILITATOR', 'CONTRIBUTOR', 'VIEWER'],
   erp:         ['ADMIN', 'FINANCE', 'ESTIMATOR', 'VIEWER'],
   pr:          ['ADMIN', 'REPORTER'],
 } as const;
@@ -205,6 +206,12 @@ export const ModuleRoleDescriptions: Record<string, Record<string, string>> = {
     ADMIN: 'Full access to CI module',
     FACILITATOR: 'Manage action plans, audits, and walks',
     CONTRIBUTOR: 'Submit ideas and participate',
+    VIEWER: 'View-only access',
+  },
+  '5s': {
+    ADMIN: 'Full access to 5S module',
+    FACILITATOR: 'Manage 5S boards, audits, and actions',
+    CONTRIBUTOR: 'Contribute to 5S improvements and action items',
     VIEWER: 'View-only access',
   },
   erp: {

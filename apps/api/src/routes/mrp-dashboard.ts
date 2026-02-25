@@ -49,6 +49,11 @@ interface SpecRow {
   unitPrice: number
   last30DayUsage: number
   avg30DayUsage90: number
+  minMonthsOfSupply: number | null
+  maxMonthsOfSupply: number | null
+  onHandMonthsOfSupply: number | null
+  hasOrders: boolean
+  hasMinOrMax: boolean
   shortageDate: string | null
   belowMinDate: string | null
   hasPastDues: boolean
@@ -60,61 +65,57 @@ interface SpecRow {
 const MRP_SQL = {
   inventory: `
     SELECT
-      pd.specnumber AS specNumber,
+      pd.designnumber AS specNumber,
       co.name AS companyName,
-      pd.customerspecnumber AS customerSpec,
+      ISNULL(pd.customerSpec, '') AS customerSpec,
       ISNULL(con.firstname + ' ' + con.lastname, '') AS salesRep,
-      ISNULL(sl.totalphysical, 0) AS onHand,
-      ISNULL(sl.minimumstockqty, 0) AS minQty,
-      ISNULL(sl.maximumstockqty, 0) AS maxQty
+      SUM(ISNULL(sl.totalphysical, 0)) AS onHand,
+      SUM(ISNULL(sl.minimumlevel, 0)) AS minQty,
+      SUM(ISNULL(sl.maximumlevel, 0)) AS maxQty
     FROM fgsStockLine sl
     INNER JOIN ebxProductDesign pd ON sl.productdesignID = pd.ID
     INNER JOIN orgCompany co ON pd.companyID = co.ID
     LEFT JOIN orgContact con ON co.salesContactID = con.ID
     WHERE sl.storedescription IN ('Jet Container', 'Plant Store')
       AND sl.totalphysical IS NOT NULL
-    ORDER BY pd.specnumber
+    GROUP BY pd.designnumber, co.name, pd.customerSpec, con.firstname, con.lastname
+    ORDER BY pd.designnumber
   `,
 
   orders: `
     SELECT
       o.jobnumber AS jobNum,
-      pd.specnumber AS specNumber,
-      o.remainingquantity AS remainingQty,
-      CONVERT(VARCHAR(10), o.duedate, 23) AS dueDate,
-      o.mrptype AS mrpType,
+      o.designnumber AS specNumber,
+      (ISNULL(o.orderedquantity, 0) - ISNULL(o.shippedquantity, 0) - ISNULL(o.scrappedquantity, 0) + ISNULL(o.returnedquantity, 0)) AS remainingQty,
+      CONVERT(VARCHAR(10), ISNULL(o.duedate, o.originalduedate), 23) AS dueDate,
       o.jobnumber AS jobNumber
     FROM espOrder o
-    INNER JOIN ebxProductDesign pd ON o.productdesignID = pd.ID
-    WHERE o.remainingquantity > 0
-      AND o.orderstatus NOT IN ('Closed', 'Cancelled')
+    WHERE o.cancelleddate IS NULL
+      AND o.orderstatus IN ('Part shipped', 'Work In Progress')
+      AND (ISNULL(o.orderedquantity, 0) - ISNULL(o.shippedquantity, 0) - ISNULL(o.scrappedquantity, 0) + ISNULL(o.returnedquantity, 0)) > 0
     ORDER BY o.duedate
   `,
 
   prices: `
     SELECT
-      pd.specnumber AS specNumber,
-      pp.fullcost / 1000.0 AS unitCost,
-      pp.actualprice / 1000.0 AS unitPrice
+      pd.designnumber AS specNumber,
+      pp.fullcost AS unitCost,
+      pp.actualprice AS unitPrice
     FROM ebxProductPrice pp
-    INNER JOIN ebxProductDesign pd ON pp.productdesignID = pd.ID
-    WHERE pp.activedate = (
-      SELECT MAX(pp2.activedate)
-      FROM ebxProductPrice pp2
-      WHERE pp2.productdesignID = pp.productdesignID
-    )
+    INNER JOIN ebxProductDesign pd ON pp.productDesignID = pd.ID
+    WHERE pp.expiryDate IS NULL
   `,
 
   usage: `
     SELECT
-      pd.specnumber AS specNumber,
-      SUM(CASE WHEN di.deliverydate >= DATEADD(DAY, -30, GETDATE()) THEN di.quantity ELSE 0 END) AS last30d,
-      SUM(CASE WHEN di.deliverydate >= DATEADD(DAY, -90, GETDATE()) THEN di.quantity ELSE 0 END) / 3.0 AS avg30d90
+      o.designnumber AS specNumber,
+      SUM(CASE WHEN d.despatchdate >= DATEADD(DAY, -30, GETDATE()) THEN di.quantity ELSE 0 END) AS last30d,
+      SUM(CASE WHEN d.despatchdate >= DATEADD(DAY, -90, GETDATE()) THEN di.quantity ELSE 0 END) / 3.0 AS avg30d90
     FROM espDocketItem di
     INNER JOIN espDocket d ON di.docketID = d.ID
-    INNER JOIN ebxProductDesign pd ON di.productdesignID = pd.ID
-    WHERE di.deliverydate >= DATEADD(DAY, -90, GETDATE())
-    GROUP BY pd.specnumber
+    INNER JOIN espOrder o ON di.orderID = o.ID
+    WHERE d.despatchdate >= DATEADD(DAY, -90, GETDATE())
+    GROUP BY o.designnumber
   `,
 
   companies: `
@@ -127,36 +128,45 @@ const MRP_SQL = {
     ORDER BY co.name
   `,
 
+  specs: `
+    SELECT DISTINCT pd.designnumber AS specNumber
+    FROM fgsStockLine sl
+    INNER JOIN ebxProductDesign pd ON sl.productdesignID = pd.ID
+    WHERE sl.storedescription IN ('Jet Container', 'Plant Store')
+      AND sl.totalphysical IS NOT NULL
+    ORDER BY pd.designnumber
+  `,
+
   specDetail_orders: `
     SELECT
       o.jobnumber AS jobNum,
-      o.remainingquantity AS remainingQty,
-      CONVERT(VARCHAR(10), o.duedate, 23) AS dueDate,
-      o.mrptype AS mrpType,
+      (ISNULL(o.orderedquantity, 0) - ISNULL(o.shippedquantity, 0) - ISNULL(o.scrappedquantity, 0) + ISNULL(o.returnedquantity, 0)) AS remainingQty,
+      CONVERT(VARCHAR(10), ISNULL(o.duedate, o.originalduedate), 23) AS dueDate,
+      CASE WHEN LEFT(o.jobnumber, 1) = 'C' THEN 'Demand' ELSE 'MO' END AS mrpType,
       co.name AS companyName,
       o.orderstatus AS orderStatus
     FROM espOrder o
-    INNER JOIN ebxProductDesign pd ON o.productdesignID = pd.ID
-    LEFT JOIN orgCompany co ON pd.companyID = co.ID
-    WHERE pd.specnumber = @spec
-      AND o.remainingquantity > 0
-      AND o.orderstatus NOT IN ('Closed', 'Cancelled')
+    LEFT JOIN orgCompany co ON o.companyID = co.ID
+    WHERE o.designnumber = @spec
+      AND o.cancelleddate IS NULL
+      AND o.orderstatus IN ('Part shipped', 'Work In Progress')
+      AND (ISNULL(o.orderedquantity, 0) - ISNULL(o.shippedquantity, 0) - ISNULL(o.scrappedquantity, 0) + ISNULL(o.returnedquantity, 0)) > 0
     ORDER BY o.duedate
   `,
 
   specDetail_shipLog: `
     SELECT TOP 50
-      pd.specnumber AS specNumber,
-      CONVERT(VARCHAR(10), d.docketdate, 23) AS shipDate,
+      o.designnumber AS specNumber,
+      CONVERT(VARCHAR(10), d.despatchdate, 23) AS shipDate,
       di.quantity AS qty,
       co.name AS companyName,
       d.docketnumber AS docketNumber
     FROM espDocketItem di
     INNER JOIN espDocket d ON di.docketID = d.ID
-    INNER JOIN ebxProductDesign pd ON di.productdesignID = pd.ID
-    LEFT JOIN orgCompany co ON d.companyID = co.ID
-    WHERE pd.specnumber = @spec
-    ORDER BY d.docketdate DESC
+    INNER JOIN espOrder o ON di.orderID = o.ID
+    LEFT JOIN orgCompany co ON o.companyID = co.ID
+    WHERE o.designnumber = @spec
+    ORDER BY d.despatchdate DESC
   `,
 }
 
@@ -273,7 +283,9 @@ function computeProjection(
   buckets: BucketDef[],
   companyFilter: string | undefined,
   specFilter: string | undefined,
-  activeFilters: string[]
+  activeFilters: string[],
+  hasOrdersFilter: string | undefined,
+  hasMinOrMaxFilter: string | undefined
 ) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -362,11 +374,27 @@ function computeProjection(
       specBuckets.push({ projected: runningBalance, demand, supply, health })
     }
 
+    // Compute Months of Supply
+    const avg30d = usage.avg30d90
+    const minMonthsOfSupply = avg30d > 0 ? minQty / avg30d : null
+    const maxMonthsOfSupply = avg30d > 0 ? maxQty / avg30d : null
+    const onHandMonthsOfSupply = avg30d > 0 ? onHand / avg30d : null
+
+    // Compute flags
+    const hasOrdersFlag = orders.length > 0
+    const hasMinOrMaxFlag = minQty > 0 || maxQty > 0
+
     // Apply active filters
     if (activeFilters.includes('shortage') && !hasShortage) continue
     if (activeFilters.includes('belowMin') && !hasBelowMin) continue
     if (activeFilters.includes('hasOrders') && orders.length === 0) continue
     if (activeFilters.includes('pastDue') && !hasPastDues) continue
+
+    // Apply hasOrders / hasMinOrMax query param filters
+    if (hasOrdersFilter === 'true' && !hasOrdersFlag) continue
+    if (hasOrdersFilter === 'false' && hasOrdersFlag) continue
+    if (hasMinOrMaxFilter === 'true' && !hasMinOrMaxFlag) continue
+    if (hasMinOrMaxFilter === 'false' && hasMinOrMaxFlag) continue
 
     onHandCost += onHand * prices.unitCost
     onHandPrice += onHand * prices.unitPrice
@@ -386,6 +414,11 @@ function computeProjection(
       unitPrice: prices.unitPrice,
       last30DayUsage: usage.last30d,
       avg30DayUsage90: usage.avg30d90,
+      minMonthsOfSupply,
+      maxMonthsOfSupply,
+      onHandMonthsOfSupply,
+      hasOrders: hasOrdersFlag,
+      hasMinOrMax: hasMinOrMaxFlag,
       shortageDate,
       belowMinDate,
       hasPastDues,
@@ -413,10 +446,27 @@ function computeProjection(
     projected4wPrice += Math.max(0, proj) * spec.unitPrice
   }
 
+  // Compute totals
+  let totalOnHand = 0, totalMinQty = 0, totalMaxQty = 0, totalLast30d = 0, totalAvg30d = 0
+  for (const s of specs) {
+    totalOnHand += s.onHand
+    totalMinQty += s.minQty
+    totalMaxQty += s.maxQty
+    totalLast30d += s.last30DayUsage
+    totalAvg30d += s.avg30DayUsage90
+  }
+
   return {
     bucketLabels: buckets.map(b => b.label),
     bucketDates: buckets.map(b => toISODate(b.startDate)),
     specs,
+    totals: {
+      totalOnHand: Math.round(totalOnHand),
+      totalMinQty: Math.round(totalMinQty),
+      totalMaxQty: Math.round(totalMaxQty),
+      totalLast30d: Math.round(totalLast30d),
+      totalAvg30d: Math.round(totalAvg30d * 10) / 10,
+    },
     kpis: {
       totalSKUs: specs.length,
       inShortage,
@@ -444,19 +494,28 @@ mrpDashboardRoutes.get('/projection', async (c) => {
   const spec = c.req.query('spec') || undefined
   const filterParam = c.req.query('filter') || ''
   const activeFilters = filterParam ? filterParam.split(',') : []
+  const hasOrders = c.req.query('hasOrders') || undefined
+  const hasMinOrMax = c.req.query('hasMinOrMax') || undefined
 
   if (!['day', 'week', '2week', 'month'].includes(granularity)) {
     return c.json({ error: 'granularity must be day, week, 2week, or month' }, 400)
   }
 
   try {
-    // Parallel fetch all data
-    const [inventoryResult, ordersResult, pricesResult, usageResult] = await Promise.all([
-      client.rawQuery(MRP_SQL.inventory, {}, 'esp'),
-      client.rawQuery(MRP_SQL.orders, {}, 'esp'),
-      client.rawQuery(MRP_SQL.prices, {}, 'esp'),
-      client.rawQuery(MRP_SQL.usage, {}, 'esp'),
-    ])
+    // Sequential fetch to isolate failures
+    const queries = ['inventory', 'orders', 'prices', 'usage'] as const
+    const results: Record<string, { data: Array<Record<string, unknown>> }> = {}
+    for (const q of queries) {
+      try {
+        results[q] = await client.rawQuery(MRP_SQL[q], {}, 'esp')
+      } catch (qErr) {
+        return c.json({ error: `Query '${q}' failed: ${qErr instanceof Error ? qErr.message : String(qErr)}` }, 400)
+      }
+    }
+    const inventoryResult = results.inventory
+    const ordersResult = results.orders
+    const pricesResult = results.prices
+    const usageResult = results.usage
 
     // Build price and usage maps
     const priceMap = new Map<string, { unitCost: number; unitPrice: number }>()
@@ -484,7 +543,9 @@ mrpDashboardRoutes.get('/projection', async (c) => {
       buckets,
       company,
       spec,
-      activeFilters
+      activeFilters,
+      hasOrders,
+      hasMinOrMax
     )
 
     await logAudit(c, {
@@ -495,10 +556,11 @@ mrpDashboardRoutes.get('/projection', async (c) => {
 
     return c.json(result)
   } catch (err) {
+    console.error('MRP projection error:', err)
     if (err instanceof KiwiplanError) {
       return c.json({ error: err.message }, err.statusCode as 400)
     }
-    throw err
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500)
   }
 })
 
@@ -516,10 +578,18 @@ mrpDashboardRoutes.get('/health-summary', async (c) => {
   const spec = c.req.query('spec') || undefined
 
   try {
-    const [inventoryResult, ordersResult] = await Promise.all([
-      client.rawQuery(MRP_SQL.inventory, {}, 'esp'),
-      client.rawQuery(MRP_SQL.orders, {}, 'esp'),
-    ])
+    let inventoryResult: { data: Array<Record<string, unknown>> }
+    let ordersResult: { data: Array<Record<string, unknown>> }
+    try {
+      inventoryResult = await client.rawQuery(MRP_SQL.inventory, {}, 'esp')
+    } catch (qErr) {
+      return c.json({ error: `Query 'inventory' failed: ${qErr instanceof Error ? qErr.message : String(qErr)}` }, 400)
+    }
+    try {
+      ordersResult = await client.rawQuery(MRP_SQL.orders, {}, 'esp')
+    } catch (qErr) {
+      return c.json({ error: `Query 'orders' failed: ${qErr instanceof Error ? qErr.message : String(qErr)}` }, 400)
+    }
 
     const buckets = buildBuckets(granularity, horizon)
     const result = computeProjection(
@@ -530,7 +600,9 @@ mrpDashboardRoutes.get('/health-summary', async (c) => {
       buckets,
       company,
       spec,
-      []
+      [],
+      undefined,
+      undefined
     )
 
     // Aggregate health counts per bucket
@@ -549,10 +621,11 @@ mrpDashboardRoutes.get('/health-summary', async (c) => {
 
     return c.json({ data: healthSummary })
   } catch (err) {
+    console.error('MRP health-summary error:', err)
     if (err instanceof KiwiplanError) {
       return c.json({ error: err.message }, err.statusCode as 400)
     }
-    throw err
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500)
   }
 })
 
@@ -608,9 +681,13 @@ mrpDashboardRoutes.get('/filter-options', async (c) => {
   }
 
   try {
-    const result = await client.rawQuery(MRP_SQL.companies, {}, 'esp')
-    const companies = (result.data as Array<Record<string, unknown>>).map(r => String(r.companyName))
-    return c.json({ companies })
+    const [companiesResult, specsResult] = await Promise.all([
+      client.rawQuery(MRP_SQL.companies, {}, 'esp'),
+      client.rawQuery(MRP_SQL.specs, {}, 'esp'),
+    ])
+    const companies = (companiesResult.data as Array<Record<string, unknown>>).map(r => String(r.companyName))
+    const specs = (specsResult.data as Array<Record<string, unknown>>).map(r => String(r.specNumber))
+    return c.json({ companies, specs })
   } catch (err) {
     if (err instanceof KiwiplanError) {
       return c.json({ error: err.message }, err.statusCode as 400)

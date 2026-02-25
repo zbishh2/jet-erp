@@ -1,23 +1,14 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
-import {
-  BarChart,
-  Bar,
-  AreaChart,
-  Area,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Legend,
-  ResponsiveContainer,
-  ReferenceArea,
-  ReferenceLine,
-} from "recharts"
 import { Card, CardContent } from "@/components/ui/card"
 import { SearchableSelect } from "@/components/ui/searchable-select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -27,30 +18,19 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import {
   ArrowLeft,
-  Info,
   ChevronUp,
-  Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react"
 import {
   useMrpProjection,
-  useMrpHealthSummary,
   useMrpSpecDetail,
   useMrpFilterOptions,
 } from "@/api/hooks/useMrpDashboard"
-import type {
-  MrpGranularity,
-  ValueMode,
-  MrpSpec,
-} from "@/api/hooks/useMrpDashboard"
+import type { MrpGranularity, MrpSpec } from "@/api/hooks/useMrpDashboard"
 
 // ── Persisted state ────────────────────────────────────────────
 
@@ -83,10 +63,72 @@ function formatNumber(value: number, decimals = 0): string {
   }).format(value)
 }
 
+function formatMoS(value: number | null): string {
+  if (value === null || value === undefined) return "—"
+  return formatNumber(value, 1)
+}
+
+function formatShortDate(iso: string): string {
+  const [y, m, d] = iso.split("-")
+  return `${+m}/${+d}/${y.slice(2)}`
+}
+
 function formatCurrency(value: number): string {
-  if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`
-  if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(1)}K`
-  return `$${formatNumber(value)}`
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+// ── Sort types ─────────────────────────────────────────────────
+
+type SortKey =
+  | "specNumber"
+  | "companyName"
+  | "customerSpec"
+  | "minQty"
+  | "minMonthsOfSupply"
+  | "maxQty"
+  | "maxMonthsOfSupply"
+  | "onHand"
+  | "onHandMonthsOfSupply"
+  | "last30DayUsage"
+  | "avg30DayUsage90"
+  | "belowMinDate"
+
+type SortDir = "asc" | "desc"
+
+function getSortValue(spec: MrpSpec, key: SortKey): number | string {
+  const v = spec[key]
+  if (v === null || v === undefined) {
+    if (key.includes("Months")) return Infinity
+    if (key.includes("Date")) return "\uffff" // sort nulls last
+    return ""
+  }
+  return v
+}
+
+// ── Constants ──────────────────────────────────────────────────
+
+const WEEKLY_OFFSETS = [0, 1, 2, 3, 4, 6, 8, 10]
+
+// ── Conditional formatting ─────────────────────────────────────
+
+function onHandCellClass(spec: MrpSpec): string {
+  if (spec.onHand <= 0) return "bg-red-500/15 text-red-700 dark:text-red-400"
+  if (spec.onHand < spec.minQty) return "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
+  return ""
+}
+
+function ohMosCellClass(spec: MrpSpec): string {
+  if (spec.onHandMonthsOfSupply === null) return ""
+  if (spec.onHandMonthsOfSupply < 1) return "bg-red-500/15 text-red-700 dark:text-red-400"
+  if (spec.minMonthsOfSupply !== null && spec.onHandMonthsOfSupply < spec.minMonthsOfSupply) {
+    return "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
+  }
+  return ""
 }
 
 function healthCellClass(health: string): string {
@@ -98,165 +140,159 @@ function healthCellClass(health: string): string {
   }
 }
 
-// ── KPI Card ───────────────────────────────────────────────────
-
-interface KpiCardProps {
-  title: string
-  value: string
-  tooltip?: string
-  alert?: boolean
-}
-
-function KpiCard({ title, value, tooltip, alert }: KpiCardProps) {
-  return (
-    <Card className="bg-background-secondary">
-      <CardContent className="p-4 h-full flex flex-col items-center justify-center text-center">
-        <p className="text-sm font-medium text-muted-foreground inline-flex items-center gap-1">
-          {title}
-          {tooltip && (
-            <TooltipProvider delayDuration={0}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-[250px] text-xs bg-background-secondary text-foreground border border-border">
-                  <p>{tooltip}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-        </p>
-        <p className={`text-2xl font-bold mt-1 ${alert ? "text-red-500" : "text-foreground"}`}>
-          {value}
-        </p>
-      </CardContent>
-    </Card>
-  )
-}
-
-// ── Granularity selector ───────────────────────────────────────
-
-const GRANULARITY_OPTIONS: { value: MrpGranularity; label: string }[] = [
-  { value: "day", label: "D" },
-  { value: "week", label: "W" },
-  { value: "2week", label: "2W" },
-  { value: "month", label: "M" },
-]
-
-// ── Filter pills ───────────────────────────────────────────────
-
-const FILTER_OPTIONS = [
-  { value: "shortage", label: "Shortage" },
-  { value: "belowMin", label: "Below Min" },
-  { value: "hasOrders", label: "Has Orders" },
-  { value: "pastDue", label: "Past Dues" },
-]
-
-// ── Chart tooltip ──────────────────────────────────────────────
-
-function ChartTooltipContent({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="rounded-md border px-3 py-2 text-xs shadow-md" style={{ backgroundColor: "var(--color-bg-secondary)", color: "var(--color-text)" }}>
-      <p className="font-medium mb-1">{label}</p>
-      {payload.map((entry) => (
-        <div key={entry.name} className="flex items-center gap-2">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
-          <span>{entry.name}: {formatNumber(entry.value)}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 // ── Main Component ─────────────────────────────────────────────
+
+type ActiveTab = "usage" | "mrp" | "value"
+type ValueBasis = "cost" | "price"
 
 export default function MrpDashboard() {
   const navigate = useNavigate()
 
   // Persisted state
-  const [granularity, setGranularity] = usePersistedState<MrpGranularity>("granularity", "week")
-  const [horizon] = usePersistedState<number>("horizon", 12)
-  const [valueMode, setValueMode] = usePersistedState<ValueMode>("valueMode", "qty")
+  const [activeTab, setActiveTab] = usePersistedState<ActiveTab>("tab", "usage")
+  const [mrpGranularity, setMrpGranularity] = usePersistedState<"week" | "day">("mrpGran", "week")
+  const [valueBasis, setValueBasis] = usePersistedState<ValueBasis>("valueBasis", "cost")
   const [companyFilter, setCompanyFilter] = usePersistedState<string>("company", "all")
-  const [specSearch, setSpecSearch] = usePersistedState<string>("specSearch", "")
+  const [specFilter, setSpecFilter] = usePersistedState<string>("specFilter", "all")
   const [activeFilters, setActiveFilters] = usePersistedState<string[]>("filters", [])
+  const [hasOrdersFilter, setHasOrdersFilter] = usePersistedState<string>("hasOrders", "all")
+  const [hasMinOrMaxFilter, setHasMinOrMaxFilter] = usePersistedState<string>("hasMinOrMax", "all")
+  const [sortKey, setSortKey] = usePersistedState<SortKey>("sortKey", "maxMonthsOfSupply")
+  const [sortDir, setSortDir] = usePersistedState<SortDir>("sortDir", "asc")
 
   // Non-persisted
   const [selectedSpec, setSelectedSpec] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
 
-  // Debounced spec search
-  const [debouncedSpec, setDebouncedSpec] = useState(specSearch)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
-  useEffect(() => {
-    debounceRef.current = setTimeout(() => setDebouncedSpec(specSearch), 300)
-    return () => clearTimeout(debounceRef.current)
-  }, [specSearch])
+  // API params differ by tab
+  const needsBuckets = activeTab === "mrp" || activeTab === "value"
+  const apiGranularity: MrpGranularity = needsBuckets ? mrpGranularity : "week"
+  const apiHorizon = needsBuckets && mrpGranularity === "day" ? 14 : 12
 
   // Data hooks
   const { data: filterOptions } = useMrpFilterOptions()
-  const { data: projection, isLoading, isError } = useMrpProjection(granularity, horizon, companyFilter, debouncedSpec, activeFilters)
-  const { data: healthData } = useMrpHealthSummary(granularity, horizon, companyFilter, debouncedSpec)
+  const { data: projection, isLoading, isError, error: projectionError } = useMrpProjection(
+    apiGranularity, apiHorizon, companyFilter, specFilter === "all" ? "" : specFilter, activeFilters, hasOrdersFilter, hasMinOrMaxFilter
+  )
   const { data: specDetail, isLoading: detailLoading } = useMrpSpecDetail(selectedSpec)
 
   const companies = filterOptions?.companies ?? []
+  const specOptions = filterOptions?.specs ?? []
 
-  // Toggle filter
+  // Toggle filter pill
   const toggleFilter = useCallback((f: string) => {
     setActiveFilters((prev) => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f])
   }, [setActiveFilters])
 
-  // Top shortages for bar chart
-  const topShortages = useMemo(() => {
+  // Sort handler
+  const handleSort = useCallback((key: SortKey) => {
+    setSortKey((prev) => {
+      if (prev === key) {
+        setSortDir((d) => d === "asc" ? "desc" : "asc")
+        return prev
+      }
+      setSortDir("asc")
+      return key
+    })
+  }, [setSortKey, setSortDir])
+
+  // Sorted specs
+  const sortedSpecs = useMemo(() => {
     if (!projection?.specs) return []
-    return projection.specs
-      .filter(s => s.shortageDate !== null)
-      .map(s => ({
-        specNumber: s.specNumber,
-        worstProjected: Math.min(...s.buckets.map(b => b.projected)),
-      }))
-      .sort((a, b) => a.worstProjected - b.worstProjected)
-      .slice(0, 10)
-  }, [projection])
+    return [...projection.specs].sort((a, b) => {
+      const va = getSortValue(a, sortKey)
+      const vb = getSortValue(b, sortKey)
+      let cmp = 0
+      if (typeof va === "string" && typeof vb === "string") {
+        cmp = va.localeCompare(vb)
+      } else {
+        cmp = (va as number) - (vb as number)
+      }
+      return sortDir === "asc" ? cmp : -cmp
+    })
+  }, [projection?.specs, sortKey, sortDir])
 
-  // Value display helper
-  const displayValue = useCallback((qty: number, spec: MrpSpec): string => {
-    switch (valueMode) {
-      case "cost": return formatCurrency(qty * spec.unitCost)
-      case "price": return formatCurrency(qty * spec.unitPrice)
-      default: return formatNumber(qty)
+  // MRP/Value tab: which bucket indices to display
+  const mrpBucketIndices = useMemo(() => {
+    if (!projection || !needsBuckets) return []
+    const h = apiHorizon
+    if (mrpGranularity === "week") {
+      return WEEKLY_OFFSETS.map(o => h + o).filter(i => i < projection.bucketLabels.length)
     }
-  }, [valueMode])
+    // Daily: show 0 through +horizon
+    return Array.from({ length: h + 1 }, (_, i) => h + i).filter(i => i < projection.bucketLabels.length)
+  }, [projection, needsBuckets, mrpGranularity, apiHorizon])
 
-  // Detail panel mini chart data
-  const miniChartData = useMemo(() => {
-    if (!selectedSpec || !projection) return []
-    const spec = projection.specs.find(s => s.specNumber === selectedSpec)
-    if (!spec) return []
-    return projection.bucketLabels.map((label, i) => ({
-      label,
-      projected: spec.buckets[i].projected,
-      minQty: spec.minQty,
-      maxQty: spec.maxQty,
-    }))
-  }, [selectedSpec, projection])
+  // MRP tab: bucket column totals
+  const mrpBucketTotals = useMemo(() => {
+    if (mrpBucketIndices.length === 0) return []
+    return mrpBucketIndices.map(idx =>
+      sortedSpecs.reduce((sum, spec) => sum + (spec.buckets[idx]?.projected ?? 0), 0)
+    )
+  }, [sortedSpecs, mrpBucketIndices])
+
+  // Value tab: bucket column totals (projected * unit rate)
+  const valueBucketTotals = useMemo(() => {
+    if (mrpBucketIndices.length === 0) return []
+    return mrpBucketIndices.map(idx =>
+      sortedSpecs.reduce((sum, spec) => {
+        const rate = valueBasis === "cost" ? spec.unitCost : spec.unitPrice
+        return sum + (spec.buckets[idx]?.projected ?? 0) * rate
+      }, 0)
+    )
+  }, [sortedSpecs, mrpBucketIndices, valueBasis])
 
   const selectedSpecData = projection?.specs.find(s => s.specNumber === selectedSpec)
 
+  // Sort icon helper
+  function SortIcon({ column }: { column: SortKey }) {
+    if (sortKey !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-30" />
+    return sortDir === "asc"
+      ? <ArrowUp className="h-3 w-3 ml-1" />
+      : <ArrowDown className="h-3 w-3 ml-1" />
+  }
+
+  // Row click handler
+  const handleRowClick = useCallback((specNumber: string) => {
+    setSelectedSpec(prev => prev === specNumber ? null : specNumber)
+    setDetailOpen(true)
+  }, [])
+
+  // (removed custom tabBtnClass — using shadcn Button variant instead)
+
   return (
-    <div className="flex flex-col gap-4 p-4 max-w-[1600px] mx-auto">
-      {/* ── Header ─────────────────────────────────────── */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="h-8 w-8 p-0">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <h1 className="text-xl font-bold text-foreground">MRP & Inventory</h1>
+    <div className="flex-1 overflow-y-auto px-6 pb-6 -mx-6 -mt-6 pt-3 space-y-4">
+      {/* ── Header ───────────────────────────────────── */}
+      <div className="flex items-center gap-3 pb-2 border-b border-border">
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <span className="text-sm font-medium">MRP & Inventory</span>
+
+        {/* Tab toggle */}
+        <div className="flex items-center gap-1 ml-2">
+          <Button variant={activeTab === "usage" ? "default" : "outline"} size="sm" className="h-7 px-2.5 text-xs" onClick={() => setActiveTab("usage")}>Usage</Button>
+          <Button variant={activeTab === "mrp" ? "default" : "outline"} size="sm" className="h-7 px-2.5 text-xs" onClick={() => setActiveTab("mrp")}>MRP</Button>
+          <Button variant={activeTab === "value" ? "default" : "outline"} size="sm" className="h-7 px-2.5 text-xs" onClick={() => setActiveTab("value")}>Inv Value</Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Company filter */}
+        {/* Granularity toggle (MRP/Value tabs) */}
+        {needsBuckets && (
+          <div className="flex items-center gap-1">
+            <Button variant={mrpGranularity === "week" ? "default" : "outline"} size="sm" className="h-7 w-7 px-0 text-xs" onClick={() => setMrpGranularity("week")}>W</Button>
+            <Button variant={mrpGranularity === "day" ? "default" : "outline"} size="sm" className="h-7 w-7 px-0 text-xs" onClick={() => setMrpGranularity("day")}>D</Button>
+          </div>
+        )}
+
+        {/* Cost/Price toggle (Value tab only) */}
+        {activeTab === "value" && (
+          <div className="flex items-center gap-1">
+            <Button variant={valueBasis === "cost" ? "default" : "outline"} size="sm" className="h-7 px-2.5 text-xs" onClick={() => setValueBasis("cost")}>Cost</Button>
+            <Button variant={valueBasis === "price" ? "default" : "outline"} size="sm" className="h-7 px-2.5 text-xs" onClick={() => setValueBasis("price")}>Price</Button>
+          </div>
+        )}
+
+        <div className="ml-auto flex items-center gap-2">
           <SearchableSelect
             value={companyFilter}
             onValueChange={setCompanyFilter}
@@ -265,51 +301,55 @@ export default function MrpDashboard() {
             searchPlaceholder="Search company..."
             width="w-[180px]"
           />
-
-          {/* Spec search */}
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search spec..."
-              value={specSearch}
-              onChange={(e) => setSpecSearch(e.target.value)}
-              className="h-8 w-[180px] pl-7 text-xs"
-            />
-          </div>
-
-          {/* Granularity toggle */}
-          <div className="flex rounded-md border border-border overflow-hidden">
-            {GRANULARITY_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setGranularity(opt.value)}
-                className={`px-3 py-1 text-xs font-medium transition-colors ${
-                  granularity === opt.value
-                    ? "bg-foreground text-background"
-                    : "bg-background text-foreground hover:bg-background-hover"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Filter pills */}
-          <div className="flex gap-1.5 ml-2">
-            {FILTER_OPTIONS.map((f) => (
-              <button
+          <SearchableSelect
+            value={specFilter}
+            onValueChange={setSpecFilter}
+            options={specOptions}
+            placeholder="All Specs"
+            searchPlaceholder="Search spec..."
+            width="w-[180px]"
+          />
+          <Select value={hasOrdersFilter} onValueChange={setHasOrdersFilter}>
+            <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectValue placeholder="Has Demand/MOs" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Demand/MOs: All</SelectItem>
+              <SelectItem value="true">Has Demand/MOs</SelectItem>
+              <SelectItem value="false">No Demand/MOs</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={hasMinOrMaxFilter} onValueChange={setHasMinOrMaxFilter}>
+            <SelectTrigger className="h-8 w-[130px] text-xs">
+              <SelectValue placeholder="Has Min/Max" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Min/Max: All</SelectItem>
+              <SelectItem value="true">Has Min/Max</SelectItem>
+              <SelectItem value="false">No Min/Max</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-1">
+            {[
+              { value: "shortage", label: "Shortage" },
+              { value: "belowMin", label: "Below Min" },
+            ].map((f) => (
+              <Button
                 key={f.value}
+                variant={activeFilters.includes(f.value) ? "default" : "outline"}
+                size="sm"
+                className="h-7 px-2.5 text-xs"
                 onClick={() => toggleFilter(f.value)}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
-                  activeFilters.includes(f.value)
-                    ? "bg-foreground text-background border-foreground"
-                    : "bg-background text-foreground-secondary border-border hover:bg-background-hover"
-                }`}
               >
                 {f.label}
-              </button>
+              </Button>
             ))}
           </div>
+          {projection && (
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {projection.specs.length} spec{projection.specs.length !== 1 ? "s" : ""}
+            </span>
+          )}
         </div>
       </div>
 
@@ -322,339 +362,407 @@ export default function MrpDashboard() {
 
       {isError && (
         <div className="text-center py-20 text-red-500">
-          Failed to load MRP data. Check that the Kiwiplan gateway is configured.
+          <p>Failed to load MRP data.</p>
+          {projectionError && <p className="text-xs mt-2 text-muted-foreground">{String(projectionError)}</p>}
         </div>
       )}
 
       {projection && (
         <>
-          {/* ── KPI Cards ──────────────────────────────── */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <KpiCard title="Total SKUs" value={formatNumber(projection.kpis.totalSKUs)} />
-            <KpiCard title="In Shortage" value={formatNumber(projection.kpis.inShortage)} alert={projection.kpis.inShortage > 0} />
-            <KpiCard title="Below Min" value={formatNumber(projection.kpis.belowMin)} alert={projection.kpis.belowMin > 0} />
-            <KpiCard title="On Hand $" value={formatCurrency(projection.kpis.onHandCost)} tooltip="Total on-hand inventory at cost" />
-            <KpiCard title="+4W $" value={formatCurrency(projection.kpis.projected4wCost)} tooltip="Projected inventory value at cost in 4 weeks" />
-            <KpiCard title="Past Dues" value={formatNumber(projection.kpis.pastDueCount)} alert={projection.kpis.pastDueCount > 0} />
-          </div>
-
-          {/* ── Charts Row ─────────────────────────────── */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Health Over Time (stacked area) */}
-            <Card className="lg:col-span-2 bg-background-secondary">
-              <CardContent className="p-4">
-                <p className="text-sm font-medium text-muted-foreground mb-3">Inventory Health Over Time</p>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={healthData?.data ?? []}>
-                    <defs>
-                      <linearGradient id="fillGood" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#22c55e" stopOpacity={0.4} />
-                        <stop offset="100%" stopColor="#22c55e" stopOpacity={0.05} />
-                      </linearGradient>
-                      <linearGradient id="fillAdequate" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.4} />
-                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0.05} />
-                      </linearGradient>
-                      <linearGradient id="fillBelowMin" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.4} />
-                        <stop offset="100%" stopColor="#f59e0b" stopOpacity={0.05} />
-                      </linearGradient>
-                      <linearGradient id="fillShortage" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#ef4444" stopOpacity={0.4} />
-                        <stop offset="100%" stopColor="#ef4444" stopOpacity={0.05} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }} />
-                    <YAxis tick={{ fontSize: 11, fill: "var(--color-text-secondary)" }} />
-                    <RechartsTooltip content={<ChartTooltipContent />} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Area type="monotone" dataKey="good" stackId="health" stroke="#22c55e" fill="url(#fillGood)" name="Good" isAnimationActive={false} />
-                    <Area type="monotone" dataKey="adequate" stackId="health" stroke="#6366f1" fill="url(#fillAdequate)" name="Adequate" isAnimationActive={false} />
-                    <Area type="monotone" dataKey="belowMin" stackId="health" stroke="#f59e0b" fill="url(#fillBelowMin)" name="Below Min" isAnimationActive={false} />
-                    <Area type="monotone" dataKey="shortage" stackId="health" stroke="#ef4444" fill="url(#fillShortage)" name="Shortage" isAnimationActive={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            {/* Top Shortages (horizontal bar) */}
-            <Card className="bg-background-secondary">
-              <CardContent className="p-4">
-                <p className="text-sm font-medium text-muted-foreground mb-3">Top Shortages</p>
-                <div className="max-h-[300px] overflow-y-auto">
-                  {topShortages.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-8">No shortages projected</p>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={Math.max(200, topShortages.length * 28)}>
-                      <BarChart data={topShortages} layout="vertical" margin={{ left: 0, right: 10, top: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                        <XAxis type="number" tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} />
-                        <YAxis
-                          type="category"
-                          dataKey="specNumber"
-                          width={80}
-                          tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }}
-                        />
-                        <RechartsTooltip content={<ChartTooltipContent />} />
-                        <Bar
-                          dataKey="worstProjected"
-                          fill="#ef4444"
-                          name="Worst Projected"
-                          isAnimationActive={false}
-                          cursor="pointer"
-                          onClick={(_data, _index, e) => {
-                            const payload = (e as unknown as { specNumber?: string })
-                            if (payload.specNumber) {
-                              setSelectedSpec(payload.specNumber)
-                              setDetailOpen(true)
-                            }
-                          }}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* ── Value Mode Toggle ──────────────────────── */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground font-medium">Display:</span>
-            <div className="flex rounded-md border border-border overflow-hidden">
-              {(["qty", "cost", "price"] as ValueMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setValueMode(mode)}
-                  className={`px-3 py-1 text-xs font-medium transition-colors ${
-                    valueMode === mode
-                      ? "bg-foreground text-background"
-                      : "bg-background text-foreground hover:bg-background-hover"
-                  }`}
-                >
-                  {mode === "qty" ? "Qty" : mode === "cost" ? "$ Cost" : "$ Price"}
-                </button>
-              ))}
-            </div>
-            <span className="text-xs text-muted-foreground ml-4">
-              {projection.specs.length} spec{projection.specs.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-
-          {/* ── Main MRP Table ─────────────────────────── */}
-          <Card className="bg-background-secondary overflow-hidden">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="sticky left-0 z-10 bg-background-secondary min-w-[100px]">Spec</TableHead>
-                    <TableHead className="sticky left-[100px] z-10 bg-background-secondary min-w-[120px]">Company</TableHead>
-                    <TableHead className="sticky left-[220px] z-10 bg-background-secondary min-w-[100px]">Cust Spec</TableHead>
-                    <TableHead className="text-right min-w-[70px]">On Hand</TableHead>
-                    {projection.bucketLabels.map((label) => (
-                      <TableHead key={label} className="text-right min-w-[70px] text-xs">
-                        {label}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {projection.specs.length === 0 ? (
+          {/* ════════════════ USAGE TAB ════════════════ */}
+          {activeTab === "usage" && (
+            <Card className="bg-background-secondary overflow-hidden">
+              <div className="overflow-auto max-h-[416px]">
+                <Table className="[&_td]:py-1 [&_td]:px-2 [&_th]:py-1.5 [&_th]:px-2">
+                  <TableHeader className="sticky top-0 z-20 bg-background-secondary">
                     <TableRow>
-                      <TableCell colSpan={4 + projection.bucketLabels.length} className="text-center py-8 text-muted-foreground">
-                        No specs match the current filters
-                      </TableCell>
+                      <TableHead className="sticky left-0 z-10 bg-background-secondary min-w-[100px] cursor-pointer select-none" onClick={() => handleSort("specNumber")}>
+                        <span className="inline-flex items-center text-xs">Spec<SortIcon column="specNumber" /></span>
+                      </TableHead>
+                      <TableHead className="sticky left-[100px] z-10 bg-background-secondary min-w-[120px] cursor-pointer select-none" onClick={() => handleSort("companyName")}>
+                        <span className="inline-flex items-center text-xs">Company<SortIcon column="companyName" /></span>
+                      </TableHead>
+                      <TableHead className="min-w-[100px] cursor-pointer select-none" onClick={() => handleSort("customerSpec")}>
+                        <span className="inline-flex items-center text-xs">Cust Spec<SortIcon column="customerSpec" /></span>
+                      </TableHead>
+                      <TableHead className="text-right min-w-[70px] cursor-pointer select-none" onClick={() => handleSort("minQty")}>
+                        <span className="inline-flex items-center justify-end text-xs">Min Qty<SortIcon column="minQty" /></span>
+                      </TableHead>
+                      <TableHead className="text-right min-w-[65px] cursor-pointer select-none" onClick={() => handleSort("minMonthsOfSupply")}>
+                        <span className="inline-flex items-center justify-end text-xs">Min MoS<SortIcon column="minMonthsOfSupply" /></span>
+                      </TableHead>
+                      <TableHead className="text-right min-w-[70px] cursor-pointer select-none" onClick={() => handleSort("maxQty")}>
+                        <span className="inline-flex items-center justify-end text-xs">Max Qty<SortIcon column="maxQty" /></span>
+                      </TableHead>
+                      <TableHead className="text-right min-w-[65px] cursor-pointer select-none" onClick={() => handleSort("maxMonthsOfSupply")}>
+                        <span className="inline-flex items-center justify-end text-xs">Max MoS<SortIcon column="maxMonthsOfSupply" /></span>
+                      </TableHead>
+                      <TableHead className="text-right min-w-[75px] cursor-pointer select-none" onClick={() => handleSort("onHand")}>
+                        <span className="inline-flex items-center justify-end text-xs">On Hand<SortIcon column="onHand" /></span>
+                      </TableHead>
+                      <TableHead className="text-right min-w-[65px] cursor-pointer select-none" onClick={() => handleSort("onHandMonthsOfSupply")}>
+                        <span className="inline-flex items-center justify-end text-xs">OH MoS<SortIcon column="onHandMonthsOfSupply" /></span>
+                      </TableHead>
+                      <TableHead className="text-right min-w-[70px] cursor-pointer select-none" onClick={() => handleSort("last30DayUsage")}>
+                        <span className="inline-flex items-center justify-end text-xs">Last 30d<SortIcon column="last30DayUsage" /></span>
+                      </TableHead>
+                      <TableHead className="text-right min-w-[70px] cursor-pointer select-none" onClick={() => handleSort("avg30DayUsage90")}>
+                        <span className="inline-flex items-center justify-end text-xs">Avg 30d<SortIcon column="avg30DayUsage90" /></span>
+                      </TableHead>
                     </TableRow>
-                  ) : (
-                    projection.specs.map((spec) => (
-                      <TableRow
-                        key={spec.specNumber}
-                        className={`cursor-pointer hover:bg-background-hover transition-colors ${selectedSpec === spec.specNumber ? "bg-background-selected" : ""}`}
-                        onClick={() => {
-                          setSelectedSpec(selectedSpec === spec.specNumber ? null : spec.specNumber)
-                          setDetailOpen(true)
-                        }}
-                      >
-                        <TableCell className="sticky left-0 z-10 bg-background-secondary font-mono text-xs font-medium">
-                          {spec.specNumber}
-                        </TableCell>
-                        <TableCell className="sticky left-[100px] z-10 bg-background-secondary text-xs truncate max-w-[120px]">
-                          {spec.companyName}
-                        </TableCell>
-                        <TableCell className="sticky left-[220px] z-10 bg-background-secondary text-xs truncate max-w-[100px]">
-                          {spec.customerSpec}
-                        </TableCell>
-                        <TableCell className="text-right text-xs font-mono">
-                          {displayValue(spec.onHand, spec)}
-                        </TableCell>
-                        {spec.buckets.map((bucket, idx) => (
-                          <TableCell
-                            key={idx}
-                            className={`text-right text-xs font-mono ${healthCellClass(bucket.health)}`}
-                          >
-                            {displayValue(bucket.projected, spec)}
-                          </TableCell>
-                        ))}
+                  </TableHeader>
+                  <TableBody>
+                    {sortedSpecs.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">No specs match the current filters</TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </Card>
+                    ) : (
+                      sortedSpecs.map((spec) => (
+                        <TableRow key={spec.specNumber} className={`cursor-pointer hover:bg-background-hover transition-colors ${selectedSpec === spec.specNumber ? "bg-background-selected" : ""}`} onClick={() => handleRowClick(spec.specNumber)}>
+                          <TableCell className="sticky left-0 z-10 bg-background-secondary font-mono text-xs font-medium">{spec.specNumber}</TableCell>
+                          <TableCell className="sticky left-[100px] z-10 bg-background-secondary text-xs truncate max-w-[120px]">{spec.companyName}</TableCell>
+                          <TableCell className="text-xs truncate max-w-[100px]">{spec.customerSpec}</TableCell>
+                          <TableCell className="text-right text-xs font-mono">{formatNumber(spec.minQty)}</TableCell>
+                          <TableCell className="text-right text-xs font-mono">{formatMoS(spec.minMonthsOfSupply)}</TableCell>
+                          <TableCell className="text-right text-xs font-mono">{formatNumber(spec.maxQty)}</TableCell>
+                          <TableCell className="text-right text-xs font-mono">{formatMoS(spec.maxMonthsOfSupply)}</TableCell>
+                          <TableCell className={`text-right text-xs font-mono ${onHandCellClass(spec)}`}>{formatNumber(spec.onHand)}</TableCell>
+                          <TableCell className={`text-right text-xs font-mono ${ohMosCellClass(spec)}`}>{formatMoS(spec.onHandMonthsOfSupply)}</TableCell>
+                          <TableCell className="text-right text-xs font-mono">{formatNumber(spec.last30DayUsage)}</TableCell>
+                          <TableCell className="text-right text-xs font-mono">{formatMoS(spec.avg30DayUsage90)}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                  <tfoot className="sticky bottom-0 z-20 bg-black text-white">
+                    <TableRow className="font-semibold hover:bg-black">
+                      <TableCell className="sticky left-0 z-10 bg-black text-xs">Totals</TableCell>
+                      <TableCell className="sticky left-[100px] z-10 bg-black text-xs" />
+                      <TableCell className="text-xs" />
+                      <TableCell className="text-right text-xs font-mono">{formatNumber(projection.totals.totalMinQty)}</TableCell>
+                      <TableCell className="text-right text-xs" />
+                      <TableCell className="text-right text-xs font-mono">{formatNumber(projection.totals.totalMaxQty)}</TableCell>
+                      <TableCell className="text-right text-xs" />
+                      <TableCell className="text-right text-xs font-mono">{formatNumber(projection.totals.totalOnHand)}</TableCell>
+                      <TableCell className="text-right text-xs" />
+                      <TableCell className="text-right text-xs font-mono">{formatNumber(projection.totals.totalLast30d)}</TableCell>
+                      <TableCell className="text-right text-xs font-mono">{formatNumber(projection.totals.totalAvg30d, 1)}</TableCell>
+                    </TableRow>
+                  </tfoot>
+                </Table>
+              </div>
+            </Card>
+          )}
+
+          {/* ════════════════ MRP TAB ════════════════ */}
+          {activeTab === "mrp" && (
+            <Card className="bg-background-secondary overflow-hidden">
+              <div className="overflow-auto max-h-[416px]">
+                <Table className="w-max min-w-full [&_td]:py-1 [&_td]:px-2 [&_th]:py-1.5 [&_th]:px-2">
+                  <TableHeader className="sticky top-0 z-20 bg-background-secondary">
+                    <TableRow>
+                      <TableHead className="sticky left-0 z-10 bg-background-secondary min-w-[100px] cursor-pointer select-none" onClick={() => handleSort("specNumber")}>
+                        <span className="inline-flex items-center text-xs">Spec<SortIcon column="specNumber" /></span>
+                      </TableHead>
+                      <TableHead className="sticky left-[100px] z-10 bg-background-secondary min-w-[120px] cursor-pointer select-none" onClick={() => handleSort("companyName")}>
+                        <span className="inline-flex items-center text-xs">Company<SortIcon column="companyName" /></span>
+                      </TableHead>
+                      <TableHead className="min-w-[100px] cursor-pointer select-none" onClick={() => handleSort("customerSpec")}>
+                        <span className="inline-flex items-center text-xs">Cust Spec<SortIcon column="customerSpec" /></span>
+                      </TableHead>
+                      <TableHead className="text-right min-w-[85px] cursor-pointer select-none" onClick={() => handleSort("belowMinDate")}>
+                        <span className="inline-flex items-center justify-end text-xs">Below Min<SortIcon column="belowMinDate" /></span>
+                      </TableHead>
+                      <TableHead className="text-right min-w-[70px] cursor-pointer select-none" onClick={() => handleSort("minQty")}>
+                        <span className="inline-flex items-center justify-end text-xs">Min Qty<SortIcon column="minQty" /></span>
+                      </TableHead>
+                      <TableHead className="text-right min-w-[70px] cursor-pointer select-none" onClick={() => handleSort("maxQty")}>
+                        <span className="inline-flex items-center justify-end text-xs">Max Qty<SortIcon column="maxQty" /></span>
+                      </TableHead>
+                      <TableHead className="text-right min-w-[75px] cursor-pointer select-none" onClick={() => handleSort("onHand")}>
+                        <span className="inline-flex items-center justify-end text-xs">OnHand<SortIcon column="onHand" /></span>
+                      </TableHead>
+                      {mrpBucketIndices.map((idx) => (
+                        <TableHead key={idx} className="text-right min-w-[80px]">
+                          <span className="text-xs">{projection.bucketDates[idx] ? formatShortDate(projection.bucketDates[idx]) : ""}</span>
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedSpecs.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7 + mrpBucketIndices.length} className="text-center py-8 text-muted-foreground">No specs match the current filters</TableCell>
+                      </TableRow>
+                    ) : (
+                      sortedSpecs.map((spec) => (
+                        <TableRow key={spec.specNumber} className={`cursor-pointer hover:bg-background-hover transition-colors ${selectedSpec === spec.specNumber ? "bg-background-selected" : ""}`} onClick={() => handleRowClick(spec.specNumber)}>
+                          <TableCell className="sticky left-0 z-10 bg-background-secondary font-mono text-xs font-medium">{spec.specNumber}</TableCell>
+                          <TableCell className="sticky left-[100px] z-10 bg-background-secondary text-xs truncate max-w-[120px]">{spec.companyName}</TableCell>
+                          <TableCell className="text-xs truncate max-w-[100px]">{spec.customerSpec}</TableCell>
+                          <TableCell className="text-right text-xs">{spec.belowMinDate ? formatShortDate(spec.belowMinDate) : ""}</TableCell>
+                          <TableCell className="text-right text-xs font-mono">{formatNumber(spec.minQty)}</TableCell>
+                          <TableCell className="text-right text-xs font-mono">{formatNumber(spec.maxQty)}</TableCell>
+                          <TableCell className={`text-right text-xs font-mono ${onHandCellClass(spec)}`}>{formatNumber(spec.onHand)}</TableCell>
+                          {mrpBucketIndices.map((idx) => {
+                            const bucket = spec.buckets[idx]
+                            if (!bucket) return <TableCell key={idx} />
+                            return (
+                              <TableCell key={idx} className={`text-right text-xs font-mono ${healthCellClass(bucket.health)}`}>
+                                {formatNumber(bucket.projected)}
+                              </TableCell>
+                            )
+                          })}
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                  <tfoot className="sticky bottom-0 z-20 bg-black text-white">
+                    <TableRow className="font-semibold hover:bg-black">
+                      <TableCell className="sticky left-0 z-10 bg-black text-xs">Total</TableCell>
+                      <TableCell className="sticky left-[100px] z-10 bg-black text-xs" />
+                      <TableCell className="text-xs" />
+                      <TableCell className="text-xs" />
+                      <TableCell className="text-right text-xs font-mono">{formatNumber(projection.totals.totalMinQty)}</TableCell>
+                      <TableCell className="text-right text-xs font-mono">{formatNumber(projection.totals.totalMaxQty)}</TableCell>
+                      <TableCell className="text-right text-xs font-mono">{formatNumber(projection.totals.totalOnHand)}</TableCell>
+                      {mrpBucketTotals.map((total, i) => (
+                        <TableCell key={i} className="text-right text-xs font-mono">{formatNumber(total)}</TableCell>
+                      ))}
+                    </TableRow>
+                  </tfoot>
+                </Table>
+              </div>
+            </Card>
+          )}
+
+          {/* ════════════════ INV VALUE TAB ════════════════ */}
+          {activeTab === "value" && (
+            <Card className="bg-background-secondary overflow-hidden">
+              <div className="overflow-auto max-h-[416px]">
+                <Table className="w-max min-w-full [&_td]:py-1 [&_td]:px-2 [&_th]:py-1.5 [&_th]:px-2">
+                  <TableHeader className="sticky top-0 z-20 bg-background-secondary">
+                    <TableRow>
+                      <TableHead className="sticky left-0 z-10 bg-background-secondary min-w-[100px] cursor-pointer select-none" onClick={() => handleSort("specNumber")}>
+                        <span className="inline-flex items-center text-xs">Spec<SortIcon column="specNumber" /></span>
+                      </TableHead>
+                      <TableHead className="sticky left-[100px] z-10 bg-background-secondary min-w-[120px] cursor-pointer select-none" onClick={() => handleSort("companyName")}>
+                        <span className="inline-flex items-center text-xs">Company<SortIcon column="companyName" /></span>
+                      </TableHead>
+                      <TableHead className="min-w-[100px] cursor-pointer select-none" onClick={() => handleSort("customerSpec")}>
+                        <span className="inline-flex items-center text-xs">Cust Spec<SortIcon column="customerSpec" /></span>
+                      </TableHead>
+                      <TableHead className="text-right min-w-[75px] cursor-pointer select-none" onClick={() => handleSort("onHand")}>
+                        <span className="inline-flex items-center justify-end text-xs">OnHand<SortIcon column="onHand" /></span>
+                      </TableHead>
+                      <TableHead className="text-right min-w-[80px]">
+                        <span className="text-xs">{valueBasis === "cost" ? "Unit Cost" : "Unit Price"}</span>
+                      </TableHead>
+                      <TableHead className="text-right min-w-[100px]">
+                        <span className="text-xs">OnHand $</span>
+                      </TableHead>
+                      {mrpBucketIndices.map((idx) => (
+                        <TableHead key={idx} className="text-right min-w-[100px]">
+                          <span className="text-xs">{projection.bucketDates[idx] ? formatShortDate(projection.bucketDates[idx]) : ""}</span>
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedSpecs.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6 + mrpBucketIndices.length} className="text-center py-8 text-muted-foreground">No specs match the current filters</TableCell>
+                      </TableRow>
+                    ) : (
+                      sortedSpecs.map((spec) => {
+                        const rate = valueBasis === "cost" ? spec.unitCost : spec.unitPrice
+                        return (
+                          <TableRow key={spec.specNumber} className={`cursor-pointer hover:bg-background-hover transition-colors ${selectedSpec === spec.specNumber ? "bg-background-selected" : ""}`} onClick={() => handleRowClick(spec.specNumber)}>
+                            <TableCell className="sticky left-0 z-10 bg-background-secondary font-mono text-xs font-medium">{spec.specNumber}</TableCell>
+                            <TableCell className="sticky left-[100px] z-10 bg-background-secondary text-xs truncate max-w-[120px]">{spec.companyName}</TableCell>
+                            <TableCell className="text-xs truncate max-w-[100px]">{spec.customerSpec}</TableCell>
+                            <TableCell className={`text-right text-xs font-mono ${onHandCellClass(spec)}`}>{formatNumber(spec.onHand)}</TableCell>
+                            <TableCell className="text-right text-xs font-mono">{formatCurrency(rate)}</TableCell>
+                            <TableCell className={`text-right text-xs font-mono ${onHandCellClass(spec)}`}>{formatCurrency(spec.onHand * rate)}</TableCell>
+                            {mrpBucketIndices.map((idx) => {
+                              const bucket = spec.buckets[idx]
+                              if (!bucket) return <TableCell key={idx} />
+                              return (
+                                <TableCell key={idx} className={`text-right text-xs font-mono ${healthCellClass(bucket.health)}`}>
+                                  {formatCurrency(bucket.projected * rate)}
+                                </TableCell>
+                              )
+                            })}
+                          </TableRow>
+                        )
+                      })
+                    )}
+                  </TableBody>
+                  <tfoot className="sticky bottom-0 z-20 bg-black text-white">
+                    <TableRow className="font-semibold hover:bg-black">
+                      <TableCell className="sticky left-0 z-10 bg-black text-xs">Total</TableCell>
+                      <TableCell className="sticky left-[100px] z-10 bg-black text-xs" />
+                      <TableCell className="text-xs" />
+                      <TableCell className="text-right text-xs font-mono">{formatNumber(projection.totals.totalOnHand)}</TableCell>
+                      <TableCell className="text-xs" />
+                      <TableCell className="text-right text-xs font-mono">{formatCurrency(sortedSpecs.reduce((s, spec) => s + spec.onHand * (valueBasis === "cost" ? spec.unitCost : spec.unitPrice), 0))}</TableCell>
+                      {valueBucketTotals.map((total, i) => (
+                        <TableCell key={i} className="text-right text-xs font-mono">{formatCurrency(total)}</TableCell>
+                      ))}
+                    </TableRow>
+                  </tfoot>
+                </Table>
+              </div>
+            </Card>
+          )}
 
           {/* ── Detail Panel ───────────────────────────── */}
           {selectedSpec && detailOpen && (
             <Card className="bg-background-secondary">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Detail: {selectedSpec}
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Detail: {selectedSpec}
+                      {selectedSpecData && (
+                        <span className="ml-2 font-normal text-muted-foreground">— {selectedSpecData.companyName}</span>
+                      )}
+                    </h3>
                     {selectedSpecData && (
-                      <span className="ml-2 font-normal text-muted-foreground">
-                        — {selectedSpecData.companyName}
-                      </span>
+                      <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                        <span>On Hand: <strong className="text-foreground">{formatNumber(selectedSpecData.onHand)}</strong></span>
+                        <span>Min: <strong className="text-foreground">{formatNumber(selectedSpecData.minQty)}</strong></span>
+                        <span>Max: <strong className="text-foreground">{formatNumber(selectedSpecData.maxQty)}</strong></span>
+                        {selectedSpecData.shortageDate && <span>Shortage: <strong className="text-red-500">{formatShortDate(selectedSpecData.shortageDate)}</strong></span>}
+                        {selectedSpecData.belowMinDate && <span>Below Min: <strong className="text-yellow-500">{formatShortDate(selectedSpecData.belowMinDate)}</strong></span>}
+                      </div>
                     )}
-                  </h3>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => { setDetailOpen(false); setSelectedSpec(null) }}
-                    className="h-7 w-7 p-0"
-                  >
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => { setDetailOpen(false); setSelectedSpec(null) }} className="h-7 w-7 p-0">
                     <ChevronUp className="h-4 w-4" />
                   </Button>
                 </div>
 
-                {/* Mini projection chart */}
-                {miniChartData.length > 0 && selectedSpecData && (
-                  <div className="mb-4">
-                    <ResponsiveContainer width="100%" height={200}>
-                      <LineChart data={miniChartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} />
-                        <YAxis tick={{ fontSize: 10, fill: "var(--color-text-secondary)" }} />
-                        <RechartsTooltip content={<ChartTooltipContent />} />
-                        {selectedSpecData.maxQty > 0 && (
-                          <ReferenceArea
-                            y1={selectedSpecData.minQty}
-                            y2={selectedSpecData.maxQty}
-                            fill="#6366f1"
-                            fillOpacity={0.08}
-                          />
-                        )}
-                        <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="3 3" />
-                        <Line
-                          type="monotone"
-                          dataKey="projected"
-                          stroke="#6366f1"
-                          strokeWidth={2}
-                          dot={false}
-                          name="Projected Qty"
-                          isAnimationActive={false}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-
-                {/* Detail tables */}
                 {detailLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-foreground" />
                   </div>
                 ) : specDetail ? (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                     {/* Open MOs */}
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-2">
-                        Open MOs ({specDetail.openMOs.length})
-                      </p>
-                      <div className="max-h-[250px] overflow-y-auto border border-border rounded">
-                        <Table>
-                          <TableHeader>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">Open MOs ({specDetail.openMOs.length})</p>
+                      <div className="overflow-auto max-h-[180px] border border-border rounded">
+                        <Table className="[&_td]:py-1 [&_td]:px-2 [&_th]:py-1.5 [&_th]:px-2">
+                          <TableHeader className="sticky top-0 z-10 bg-background-secondary">
                             <TableRow>
                               <TableHead className="text-xs">Job #</TableHead>
                               <TableHead className="text-xs text-right">Qty</TableHead>
                               <TableHead className="text-xs">Due</TableHead>
+                              <TableHead className="text-xs">Status</TableHead>
+                              <TableHead className="text-xs">Company</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {specDetail.openMOs.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={3} className="text-xs text-center text-muted-foreground py-4">None</TableCell>
-                              </TableRow>
+                              <TableRow><TableCell colSpan={5} className="text-xs text-center text-muted-foreground py-3">None</TableCell></TableRow>
                             ) : specDetail.openMOs.map((mo, i) => (
                               <TableRow key={i}>
                                 <TableCell className="text-xs font-mono">{mo.jobNum}</TableCell>
                                 <TableCell className="text-xs text-right font-mono">{formatNumber(mo.remainingQty)}</TableCell>
-                                <TableCell className="text-xs">{mo.dueDate}</TableCell>
+                                <TableCell className="text-xs">{formatShortDate(mo.dueDate)}</TableCell>
+                                <TableCell className="text-xs">{mo.orderStatus}</TableCell>
+                                <TableCell className="text-xs truncate max-w-[100px]">{mo.companyName}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
+                          {specDetail.openMOs.length > 0 && (
+                            <tfoot className="sticky bottom-0 z-10 bg-black text-white">
+                              <TableRow className="font-semibold">
+                                <TableCell className="text-xs">Total</TableCell>
+                                <TableCell className="text-xs text-right font-mono">{formatNumber(specDetail.openMOs.reduce((s, m) => s + m.remainingQty, 0))}</TableCell>
+                                <TableCell colSpan={3} />
+                              </TableRow>
+                            </tfoot>
+                          )}
                         </Table>
                       </div>
                     </div>
 
                     {/* Call Offs */}
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-2">
-                        Open Call Offs ({specDetail.callOffs.length})
-                      </p>
-                      <div className="max-h-[250px] overflow-y-auto border border-border rounded">
-                        <Table>
-                          <TableHeader>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">Open Call Offs ({specDetail.callOffs.length})</p>
+                      <div className="overflow-auto max-h-[180px] border border-border rounded">
+                        <Table className="[&_td]:py-1 [&_td]:px-2 [&_th]:py-1.5 [&_th]:px-2">
+                          <TableHeader className="sticky top-0 z-10 bg-background-secondary">
                             <TableRow>
                               <TableHead className="text-xs">Job #</TableHead>
                               <TableHead className="text-xs text-right">Qty</TableHead>
                               <TableHead className="text-xs">Due</TableHead>
+                              <TableHead className="text-xs">Status</TableHead>
+                              <TableHead className="text-xs">Company</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {specDetail.callOffs.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={3} className="text-xs text-center text-muted-foreground py-4">None</TableCell>
-                              </TableRow>
+                              <TableRow><TableCell colSpan={5} className="text-xs text-center text-muted-foreground py-3">None</TableCell></TableRow>
                             ) : specDetail.callOffs.map((co, i) => (
                               <TableRow key={i}>
                                 <TableCell className="text-xs font-mono">{co.jobNum}</TableCell>
                                 <TableCell className="text-xs text-right font-mono">{formatNumber(co.remainingQty)}</TableCell>
-                                <TableCell className="text-xs">{co.dueDate}</TableCell>
+                                <TableCell className="text-xs">{formatShortDate(co.dueDate)}</TableCell>
+                                <TableCell className="text-xs">{co.orderStatus}</TableCell>
+                                <TableCell className="text-xs truncate max-w-[100px]">{co.companyName}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
+                          {specDetail.callOffs.length > 0 && (
+                            <tfoot className="sticky bottom-0 z-10 bg-black text-white">
+                              <TableRow className="font-semibold">
+                                <TableCell className="text-xs">Total</TableCell>
+                                <TableCell className="text-xs text-right font-mono">{formatNumber(specDetail.callOffs.reduce((s, c) => s + c.remainingQty, 0))}</TableCell>
+                                <TableCell colSpan={3} />
+                              </TableRow>
+                            </tfoot>
+                          )}
                         </Table>
                       </div>
                     </div>
 
                     {/* Ship Log */}
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-2">
-                        Ship Log ({specDetail.shipLog.length})
-                      </p>
-                      <div className="max-h-[250px] overflow-y-auto border border-border rounded">
-                        <Table>
-                          <TableHeader>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">Ship Log ({specDetail.shipLog.length})</p>
+                      <div className="overflow-auto max-h-[180px] border border-border rounded">
+                        <Table className="[&_td]:py-1 [&_td]:px-2 [&_th]:py-1.5 [&_th]:px-2">
+                          <TableHeader className="sticky top-0 z-10 bg-background-secondary">
                             <TableRow>
                               <TableHead className="text-xs">Date</TableHead>
                               <TableHead className="text-xs text-right">Qty</TableHead>
+                              <TableHead className="text-xs">Docket #</TableHead>
                               <TableHead className="text-xs">Company</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {specDetail.shipLog.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={3} className="text-xs text-center text-muted-foreground py-4">None</TableCell>
-                              </TableRow>
+                              <TableRow><TableCell colSpan={4} className="text-xs text-center text-muted-foreground py-3">None</TableCell></TableRow>
                             ) : specDetail.shipLog.map((entry, i) => (
                               <TableRow key={i}>
-                                <TableCell className="text-xs">{entry.shipDate}</TableCell>
+                                <TableCell className="text-xs">{formatShortDate(entry.shipDate)}</TableCell>
                                 <TableCell className="text-xs text-right font-mono">{formatNumber(entry.qty)}</TableCell>
-                                <TableCell className="text-xs truncate max-w-[120px]">{entry.companyName}</TableCell>
+                                <TableCell className="text-xs font-mono">{entry.docketNumber}</TableCell>
+                                <TableCell className="text-xs truncate max-w-[100px]">{entry.companyName}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
+                          {specDetail.shipLog.length > 0 && (
+                            <tfoot className="sticky bottom-0 z-10 bg-black text-white">
+                              <TableRow className="font-semibold">
+                                <TableCell className="text-xs">Total</TableCell>
+                                <TableCell className="text-xs text-right font-mono">{formatNumber(specDetail.shipLog.reduce((s, e) => s + e.qty, 0))}</TableCell>
+                                <TableCell colSpan={2} />
+                              </TableRow>
+                            </tfoot>
+                          )}
                         </Table>
                       </div>
                     </div>

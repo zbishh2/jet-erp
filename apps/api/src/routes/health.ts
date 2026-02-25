@@ -6,6 +6,6 @@ healthRoutes.get('/', (c) => {
   return c.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    service: 'qms-api',
+    service: 'jet-erp-api',
   })
 })
