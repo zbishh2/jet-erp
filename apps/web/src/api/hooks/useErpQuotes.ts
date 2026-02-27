@@ -31,6 +31,7 @@ export interface ErpQuoteLineItem {
   isGlued: number
   costSnapshot: string | null
   pricePerM: number | null
+  qtyPerHour: number | null
   createdAt: string
   updatedAt: string
 }

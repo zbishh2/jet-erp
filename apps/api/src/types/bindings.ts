@@ -24,6 +24,9 @@ export interface Env {
   // Kiwiplan Gateway
   KIWIPLAN_GATEWAY_URL?: string
   KIWIPLAN_SERVICE_TOKEN?: string
+
+  // AI Chat
+  ANTHROPIC_API_KEY?: string
 }
 
 // Extended context variables available in Hono

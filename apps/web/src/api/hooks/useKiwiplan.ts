@@ -338,6 +338,14 @@ export function useRouting(productDesignId: number | undefined) {
   })
 }
 
+export function useRoutingStyleIds() {
+  return useQuery({
+    queryKey: ["kiwiplan", "routingStyleIds"],
+    queryFn: () => apiFetch<{ data: number[] }>("/erp/routing/style-ids"),
+    staleTime: 1000 * 60 * 10,
+  })
+}
+
 export function useRoutingByStyle(styleId: number | undefined) {
   return useQuery({
     queryKey: ["kiwiplan", "routingByStyle", styleId],

@@ -6,6 +6,8 @@ import {
   KiwiplanError,
 } from '../services/kiwiplan-client'
 
+import { kvCache, CacheTTL } from '../services/kv-cache'
+
 export const productionDashboardRoutes = new Hono<{ Bindings: Env }>()
 
 // Helper to get configured client
@@ -953,17 +955,20 @@ productionDashboardRoutes.get('/date-limits', async (c) => {
   }
 
   try {
-    const sql = `
-      SELECT
-        CONVERT(VARCHAR(10), MIN(CAST(pf.feedback_report_date AS DATE)), 23) as minDate,
-        CONVERT(VARCHAR(10), MAX(CAST(pf.feedback_report_date AS DATE)), 23) as maxDate
-      FROM dwproductionfeedback pf
-      INNER JOIN dwcostcenters cc
-        ON pf.feedback_costcenter_id = cc.costcenter_id
-      WHERE pf.actual_run_duration_minutes != 0
-        AND cc.costcenter_number IN (130, 131, 132, 133, 142, 144, 146, 154)
-    `
-    const result = await client.rawQuery(sql, {}, 'kdw')
+    const kv = c.env.AUTH_CACHE
+    const result = await kvCache(kv, 'production:date-limits', CacheTTL.DATE_LIMITS, async () => {
+      const sql = `
+        SELECT
+          CONVERT(VARCHAR(10), MIN(CAST(pf.feedback_report_date AS DATE)), 23) as minDate,
+          CONVERT(VARCHAR(10), MAX(CAST(pf.feedback_report_date AS DATE)), 23) as maxDate
+        FROM dwproductionfeedback pf
+        INNER JOIN dwcostcenters cc
+          ON pf.feedback_costcenter_id = cc.costcenter_id
+        WHERE pf.actual_run_duration_minutes != 0
+          AND cc.costcenter_number IN (130, 131, 132, 133, 142, 144, 146, 154)
+      `
+      return client.rawQuery(sql, {}, 'kdw')
+    })
     return c.json(result)
   } catch (err) {
     if (err instanceof KiwiplanError) {
@@ -1581,7 +1586,10 @@ productionDashboardRoutes.get('/machines', async (c) => {
   }
 
   try {
-    const result = await client.rawQuery(PRODUCTION_SQL.machines, {}, 'kdw')
+    const kv = c.env.AUTH_CACHE
+    const result = await kvCache(kv, 'production:machines', CacheTTL.LOOKUP_DATA, () =>
+      client.rawQuery(PRODUCTION_SQL.machines, {}, 'kdw')
+    )
     return c.json(result)
   } catch (err) {
     if (err instanceof KiwiplanError) {
@@ -1599,7 +1607,10 @@ productionDashboardRoutes.get('/shifts', async (c) => {
   }
 
   try {
-    const result = await client.rawQuery(PRODUCTION_SQL.shifts, {}, 'kdw')
+    const kv = c.env.AUTH_CACHE
+    const result = await kvCache(kv, 'production:shifts', CacheTTL.LOOKUP_DATA, () =>
+      client.rawQuery(PRODUCTION_SQL.shifts, {}, 'kdw')
+    )
     return c.json(result)
   } catch (err) {
     if (err instanceof KiwiplanError) {

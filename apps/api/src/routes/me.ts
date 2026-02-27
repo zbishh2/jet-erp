@@ -128,54 +128,74 @@ meRoutes.get('/organizations', async (c) => {
     }))
   }
 
-  // For each org, get the modules and user's role in each module
-  const orgsWithModules = await Promise.all(
-    baseOrgs.map(async (org) => {
-      // Get modules enabled for this org
-      const orgModules = await db
+  // Single joined query: org modules + user roles for ALL orgs at once
+  const orgIds = baseOrgs.map(o => o.id)
+  const allModulesAndRoles = orgIds.length > 0
+    ? await db
         .select({
-          moduleId: module.id,
+          orgId: organizationModule.organizationId,
           moduleCode: module.code,
           moduleName: module.name,
           moduleIcon: module.icon,
+          moduleId: module.id,
+          userRole: userOrganizationModule.role,
         })
         .from(organizationModule)
-        .innerJoin(module, eq(organizationModule.moduleId, module.id))
-        .where(and(
-          eq(organizationModule.organizationId, org.id),
-          eq(organizationModule.isActive, true),
+        .innerJoin(module, and(
+          eq(organizationModule.moduleId, module.id),
           eq(module.isActive, true)
         ))
+        .leftJoin(userOrganizationModule, and(
+          eq(userOrganizationModule.moduleId, module.id),
+          eq(userOrganizationModule.organizationId, organizationModule.organizationId),
+          eq(userOrganizationModule.userId, auth.userId),
+          eq(userOrganizationModule.isActive, true)
+        ))
+        .where(and(
+          ...(orgIds.length === 1
+            ? [eq(organizationModule.organizationId, orgIds[0])]
+            : []),
+          eq(organizationModule.isActive, true)
+        ))
+    : []
 
-      // Get user's roles in each module
-      const modulesWithRoles = await Promise.all(
-        orgModules.map(async (m) => {
-          const userMod = await db
-            .select({ role: userOrganizationModule.role })
-            .from(userOrganizationModule)
-            .where(and(
-              eq(userOrganizationModule.userId, auth.userId),
-              eq(userOrganizationModule.organizationId, org.id),
-              eq(userOrganizationModule.moduleId, m.moduleId),
-              eq(userOrganizationModule.isActive, true)
-            ))
+  // Group results by org → module
+  const orgModuleMap = new Map<string, Map<string, { code: string; name: string; icon: string | null; roles: string[] }>>()
+  for (const row of allModulesAndRoles) {
+    const orgId = row.orgId
+    // Filter to only requested org IDs (needed when query doesn't filter by single orgId)
+    if (orgIds.length > 1 && !orgIds.includes(orgId)) continue
 
-          return {
-            code: m.moduleCode,
-            name: m.moduleName,
-            icon: m.moduleIcon,
-            role: userMod.length > 0 ? userMod[0].role : null,
-            roles: userMod.map(um => um.role),
-          }
-        })
-      )
+    if (!orgModuleMap.has(orgId)) orgModuleMap.set(orgId, new Map())
+    const moduleMap = orgModuleMap.get(orgId)!
 
-      return {
-        ...org,
-        modules: modulesWithRoles,
-      }
-    })
-  )
+    if (!moduleMap.has(row.moduleCode)) {
+      moduleMap.set(row.moduleCode, {
+        code: row.moduleCode,
+        name: row.moduleName,
+        icon: row.moduleIcon,
+        roles: [],
+      })
+    }
+
+    if (row.userRole) {
+      moduleMap.get(row.moduleCode)!.roles.push(row.userRole)
+    }
+  }
+
+  const orgsWithModules = baseOrgs.map(org => {
+    const moduleMap = orgModuleMap.get(org.id)
+    const modules = moduleMap
+      ? [...moduleMap.values()].map(m => ({
+          code: m.code,
+          name: m.name,
+          icon: m.icon,
+          role: m.roles.length > 0 ? m.roles[0] : null,
+          roles: m.roles,
+        }))
+      : []
+    return { ...org, modules }
+  })
 
   return c.json({ data: orgsWithModules })
 })
@@ -185,43 +205,59 @@ meRoutes.get('/modules', async (c) => {
   const auth = c.get('auth') as AuthContext
   const db = c.get('db')
 
-  // Get modules enabled for current org
-  const orgModules = await db
+  // Single joined query: modules + user roles
+  const orgModulesWithRoles = await db
     .select({
       id: module.id,
       code: module.code,
       name: module.name,
       description: module.description,
       icon: module.icon,
+      userRole: userOrganizationModule.role,
     })
     .from(organizationModule)
-    .innerJoin(module, eq(organizationModule.moduleId, module.id))
-    .where(and(
-      eq(organizationModule.organizationId, auth.organizationId),
-      eq(organizationModule.isActive, true),
+    .innerJoin(module, and(
+      eq(organizationModule.moduleId, module.id),
       eq(module.isActive, true)
     ))
+    .leftJoin(userOrganizationModule, and(
+      eq(userOrganizationModule.moduleId, module.id),
+      eq(userOrganizationModule.organizationId, auth.organizationId),
+      eq(userOrganizationModule.userId, auth.userId),
+      eq(userOrganizationModule.isActive, true)
+    ))
+    .where(and(
+      eq(organizationModule.organizationId, auth.organizationId),
+      eq(organizationModule.isActive, true)
+    ))
 
-  // Get user's role in each module
-  const modulesWithRoles = await Promise.all(
-    orgModules.map(async (m) => {
-      const userMod = await db
-        .select({ role: userOrganizationModule.role })
-        .from(userOrganizationModule)
-        .where(and(
-          eq(userOrganizationModule.userId, auth.userId),
-          eq(userOrganizationModule.organizationId, auth.organizationId),
-          eq(userOrganizationModule.moduleId, m.id),
-          eq(userOrganizationModule.isActive, true)
-        ))
+  // Group roles by module
+  const moduleRoleMap = new Map<string, { id: string; code: string; name: string; description: string | null; icon: string | null; roles: string[] }>()
+  for (const row of orgModulesWithRoles) {
+    if (!moduleRoleMap.has(row.code)) {
+      moduleRoleMap.set(row.code, {
+        id: row.id,
+        code: row.code,
+        name: row.name,
+        description: row.description,
+        icon: row.icon,
+        roles: [],
+      })
+    }
+    if (row.userRole) {
+      moduleRoleMap.get(row.code)!.roles.push(row.userRole)
+    }
+  }
 
-      return {
-        ...m,
-        role: userMod.length > 0 ? userMod[0].role : null,
-        roles: userMod.map(um => um.role),
-      }
-    })
-  )
+  const modulesWithRoles = [...moduleRoleMap.values()].map(m => ({
+    id: m.id,
+    code: m.code,
+    name: m.name,
+    description: m.description,
+    icon: m.icon,
+    role: m.roles.length > 0 ? m.roles[0] : null,
+    roles: m.roles,
+  }))
 
   return c.json({ data: modulesWithRoles })
 })

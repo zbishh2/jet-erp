@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { ArrowLeft, Calculator, Search, X, Truck, Package, MoreHorizontal, Trash2, Loader2 } from "lucide-react"
+import { ArrowLeft, Calculator, Search, X, Truck, Package, MoreHorizontal, Trash2, Loader2, Info } from "lucide-react"
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
 import { toast } from "sonner"
 import {
   useKiwiplanBoardGrades,
@@ -11,6 +12,7 @@ import {
   useFreightZone,
   useDespatchMode,
   useRoutingByStyle,
+  useRoutingStyleIds,
   type KiwiplanCustomer,
   type KiwiplanBoardGrade,
   type KiwiplanStyle,
@@ -210,6 +212,12 @@ export function getRatesForMachine(
     return name.includes("manufacturing") || name.includes("mfg overhead") || name.includes("direct mfg")
   })
 
+  // Only use fallback if this machine has *some* rates in cstPlantRate.
+  // Machines with no rates at all (e.g. Board Supply, Strapper) get 0.
+  if (machineRates.length === 0) {
+    return { labor: 0, mfg: 0 }
+  }
+
   return {
     labor: laborRate?.costRate ?? fallbackLabor,
     mfg: mfgRate?.costRate ?? fallbackMfg,
@@ -227,10 +235,16 @@ export function buildMachineSteps(
   fallbackMfg: number,
   qtyPerHourOverride?: number,
 ): MachineStep[] {
+  // Find the primary production step (first with a real rate, not 999999 passthrough)
+  const primaryIdx = routeSteps.findIndex(s => {
+    const rate = s.routingstdrunrate ?? s.costingstdrunrate ?? 0
+    return rate > 0 && rate < 999999
+  })
+
   return routeSteps.map((step, i) => {
     const rates = getRatesForMachine(step.machineno, plantRates, fallbackLabor, fallbackMfg)
     const baseRunRate = step.routingstdrunrate ?? step.costingstdrunrate ?? 0
-    const runRate = (i === 0 && qtyPerHourOverride && qtyPerHourOverride > 0)
+    const runRate = (i === primaryIdx && qtyPerHourOverride && qtyPerHourOverride > 0)
       ? qtyPerHourOverride
       : baseRunRate
 
@@ -296,10 +310,12 @@ export default function QuoteForm() {
   const freightZoneQuery = useFreightZone(selectedAddress?.deliveryRegionID)
   const despatchModeQuery = useDespatchMode(selectedAddress?.standardDespatchModeID)
   const routingQuery = useRoutingByStyle(selectedStyle?.styleId)
+  const routingStyleIdsQuery = useRoutingStyleIds()
 
   const customers = customersQuery.data?.data ?? []
   const boards = boardsQuery.data?.data ?? []
   const styles = stylesQuery.data?.data ?? []
+  const routingStyleIds = useMemo(() => new Set(routingStyleIdsQuery.data?.data ?? []), [routingStyleIdsQuery.data])
   const plantRates = plantRatesQuery.data?.data ?? []
   const addresses = addressesQuery.data?.data ?? []
   const freightZone = freightZoneQuery.data?.data ?? null
@@ -348,6 +364,10 @@ export default function QuoteForm() {
         setWhatIfField("pricePerM")
         setWhatIfValue(line.pricePerM)
       }
+      if (line.qtyPerHour) {
+        setQtyPerHour(line.qtyPerHour)
+        setQtyPerHourTouched(true)
+      }
     }
 
     setInitialized(true)
@@ -388,12 +408,16 @@ export default function QuoteForm() {
     }
   }, [despatchMode, isEditMode])
 
-  // Auto-default QTY/H from routing's primary machine speed (only if user hasn't manually set it)
+  // Auto-default QTY/H from routing's primary production machine speed
+  // Skip passthrough steps (rate 999999 = no bottleneck sentinel)
   useEffect(() => {
     if (routeSteps.length > 0 && !qtyPerHourTouched) {
-      const primaryRate = routeSteps[0].routingstdrunrate ?? routeSteps[0].costingstdrunrate ?? 0
-      if (primaryRate > 0) {
-        setQtyPerHour(primaryRate)
+      const prodStep = routeSteps.find(s => {
+        const rate = s.routingstdrunrate ?? s.costingstdrunrate ?? 0
+        return rate > 0 && rate < 999999
+      })
+      if (prodStep) {
+        setQtyPerHour(prodStep.routingstdrunrate ?? prodStep.costingstdrunrate ?? 0)
       }
     }
   }, [routeSteps, qtyPerHourTouched])
@@ -512,6 +536,12 @@ export default function QuoteForm() {
     [pricePerM, costs, quantity, plantTarget]
   )
 
+  // Default contribution (no what-if override) for reset buttons
+  const defaultContribution = useMemo<ContributionMetrics>(
+    () => calcContribution(costs.pricePerM, costs, quantity, plantTarget),
+    [costs, quantity, plantTarget]
+  )
+
   const isLoading = boardsQuery.isLoading || stylesQuery.isLoading
 
   // --- Save handler ---
@@ -531,7 +561,8 @@ export default function QuoteForm() {
       inkCoveragePercent: inkCoveragePct,
       isGlued,
       costSnapshot: JSON.stringify(costs),
-      pricePerM,
+      pricePerM: Math.round(pricePerM * 100) / 100,
+      qtyPerHour: qtyPerHour > 0 ? qtyPerHour : undefined,
     }
     try {
       if (isEditMode && existingQuote) {
@@ -560,7 +591,7 @@ export default function QuoteForm() {
     } finally {
       setIsSaving(false)
     }
-  }, [selectedCustomer, selectedAddress, shippingMethod, selectedStyle, length, width, depth, quantity, selectedBoard, inkCoveragePct, isGlued, costs, pricePerM, createQuote, updateQuote, isEditMode, existingQuote, navigate])
+  }, [selectedCustomer, selectedAddress, shippingMethod, selectedStyle, length, width, depth, quantity, selectedBoard, inkCoveragePct, isGlued, costs, pricePerM, qtyPerHour, createQuote, updateQuote, isEditMode, existingQuote, navigate])
 
   // --- Delete handler ---
   const handleDelete = async () => {
@@ -787,7 +818,11 @@ export default function QuoteForm() {
                       value={selectedStyle}
                       onChange={(s) => { setSelectedStyle(s); setQtyPerHourTouched(false) }}
                       getLabel={(s) => s.code}
-                      getSubLabel={(s) => s.description || ""}
+                      getSubLabel={(s) => {
+                        const desc = s.description || ""
+                        const hasRouting = routingStyleIds.has(s.styleId)
+                        return hasRouting ? `${desc} ✦ routing` : desc
+                      }}
                       getId={(s) => s.styleId}
                       placeholder="Search box styles..."
                     />
@@ -837,7 +872,7 @@ export default function QuoteForm() {
                     const isBottleneck = step.runRate > 0 && step.runRate === minRate && machineSteps.length > 1
                     return (
                       <div key={i} className={`flex items-center justify-between gap-2 ${isBottleneck ? "text-amber-600 font-semibold" : ""}`}>
-                        <span className="truncate">{step.machineName}</span>
+                        <span className="truncate"><span className="text-foreground-tertiary">{step.machineNumber}</span> {step.machineName}</span>
                         <div className="flex items-center gap-3 shrink-0">
                           <span>{step.runRate.toLocaleString()} pcs/hr</span>
                           {step.setupMins > 0 && (
@@ -873,45 +908,89 @@ export default function QuoteForm() {
                       <th className="text-right py-1 px-2 text-sm text-foreground-secondary">$/M (Auto)</th>
                     </tr>
                   </thead>
+                  <TooltipProvider delayDuration={200}>
                   <tbody className="text-sm">
                     {[
-                      { label: "Board", value: costs.board },
-                      { label: "Oth Mat", value: costs.othMat },
-                      { label: "Dir Lab", value: costs.dirLab },
-                      { label: "Dir Mfg", value: costs.dirMfg },
-                      { label: "Trucking", value: costs.trucking },
-                    ].map(({ label, value }) => (
+                      { label: "Board", value: costs.board, tip: `Board $/MSF × Blank Area\n$${fmt(costInputs.boardCostPerMSF)} × ${fmt(costs.blankAreaSqFt, 3)} sq ft = $${fmt(costs.board)}/M` },
+                      { label: "Oth Mat", value: costs.othMat, tip: `Ink + Glue per M pieces\nInk: $${fmt(costInputs.inkStdRate)}/MSF × ${fmt(costs.blankAreaSqFt, 3)} sq ft × ${costInputs.inkCoveragePercent}% coverage\nGlue: $${costInputs.glueCostPerPiece}/pc × 1000` },
+                      { label: "Dir Lab", value: costs.dirLab, tip: `Sum of (labor $/hr × hrs/M) per machine step\nhrs/M = 1000 ÷ run rate` },
+                      { label: "Dir Mfg", value: costs.dirMfg, tip: `Sum of (mfg overhead $/hr × hrs/M) per machine step\nhrs/M = 1000 ÷ run rate` },
+                      { label: "Trucking", value: costs.trucking, tip: shippingMethod === 'cpu' ? 'Customer pickup — no freight' : `Freight $/cwt × weight/M ÷ 100\n$${fmt(costInputs.freightPer)} × ${fmt(costs.weightPerM, 0)} lbs ÷ 100` },
+                    ].map(({ label, value, tip }) => (
                       <tr key={label}>
-                        <td className="py-0.5">{label}</td>
+                        <td className="py-0.5">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex items-center gap-1 cursor-help">{label}<Info className="h-3 w-3 text-foreground-tertiary" /></span>
+                            </TooltipTrigger>
+                            <TooltipContent side="left" className="max-w-xs whitespace-pre-line font-mono text-[11px] bg-background-secondary border border-border shadow-lg rounded-lg px-4 py-3 text-foreground">{tip}</TooltipContent>
+                          </Tooltip>
+                        </td>
                         <td className="text-right px-2">{fmt(value)}</td>
                       </tr>
                     ))}
                     <tr className="border-t border-border font-semibold">
-                      <td className="py-0.5">*DIRECT</td>
+                      <td className="py-0.5">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center gap-1 cursor-help">*DIRECT<Info className="h-3 w-3 text-foreground-tertiary" /></span>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="max-w-xs whitespace-pre-line font-mono text-[11px] bg-background-secondary border border-border shadow-lg rounded-lg px-4 py-3 text-foreground">Board + Oth Mat + Dir Lab + Dir Mfg + Trucking</TooltipContent>
+                        </Tooltip>
+                      </td>
                       <td className="text-right px-2">{fmt(costs.direct)}</td>
                     </tr>
                     {[
-                      { label: "Fix Mfg", value: costs.fixMfg },
-                      { label: "Whse", value: costs.whse },
-                    ].map(({ label, value }) => (
+                      { label: "Fix Mfg", value: costs.fixMfg, tip: `${costInputs.fixedMfgPercent}% of Dir Mfg\n$${fmt(costs.dirMfg)} × ${costInputs.fixedMfgPercent}% = $${fmt(costs.fixMfg)}` },
+                      { label: "Whse", value: costs.whse, tip: "Warehouse cost — currently $0 (placeholder)" },
+                    ].map(({ label, value, tip }) => (
                       <tr key={label}>
-                        <td className="py-0.5">{label}</td>
+                        <td className="py-0.5">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex items-center gap-1 cursor-help">{label}<Info className="h-3 w-3 text-foreground-tertiary" /></span>
+                            </TooltipTrigger>
+                            <TooltipContent side="left" className="max-w-xs whitespace-pre-line font-mono text-[11px] bg-background-secondary border border-border shadow-lg rounded-lg px-4 py-3 text-foreground">{tip}</TooltipContent>
+                          </Tooltip>
+                        </td>
                         <td className="text-right px-2">{fmt(value)}</td>
                       </tr>
                     ))}
                     <tr className="border-t border-border font-semibold">
-                      <td className="py-0.5">*PLANT</td>
+                      <td className="py-0.5">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center gap-1 cursor-help">*PLANT<Info className="h-3 w-3 text-foreground-tertiary" /></span>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="max-w-xs whitespace-pre-line font-mono text-[11px] bg-background-secondary border border-border shadow-lg rounded-lg px-4 py-3 text-foreground">*DIRECT + Fix Mfg + Whse</TooltipContent>
+                        </Tooltip>
+                      </td>
                       <td className="text-right px-2">{fmt(costs.plant)}</td>
                     </tr>
                     <tr>
-                      <td className="py-0.5">SG&A+</td>
+                      <td className="py-0.5">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center gap-1 cursor-help">SG&A+<Info className="h-3 w-3 text-foreground-tertiary" /></span>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="max-w-xs whitespace-pre-line font-mono text-[11px] bg-background-secondary border border-border shadow-lg rounded-lg px-4 py-3 text-foreground">{`${costInputs.sgaPercent}% of *PLANT\n$${fmt(costs.plant)} × ${costInputs.sgaPercent}% = $${fmt(costs.sgaPlus)}`}</TooltipContent>
+                        </Tooltip>
+                      </td>
                       <td className="text-right px-2">{fmt(costs.sgaPlus)}</td>
                     </tr>
                     <tr className="border-t border-border font-bold text-accent">
-                      <td className="py-0.5">*100DEX</td>
+                      <td className="py-0.5">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center gap-1 cursor-help">*100DEX<Info className="h-3 w-3 text-foreground-tertiary" /></span>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="max-w-xs whitespace-pre-line font-mono text-[11px] bg-background-secondary border border-border shadow-lg rounded-lg px-4 py-3 text-foreground">*PLANT + SG&A+ = total cost at 100% index</TooltipContent>
+                        </Tooltip>
+                      </td>
                       <td className="text-right px-2">{fmt(costs.total)}</td>
                     </tr>
                   </tbody>
+                  </TooltipProvider>
                 </table>
 
                 {/* Physical Summary */}
@@ -950,9 +1029,15 @@ export default function QuoteForm() {
                 <h4 className="text-base font-semibold text-foreground-secondary mb-2">What-If Pricing</h4>
                 <div className="bg-background border border-border rounded p-3 space-y-2">
                   {/* QTY/H — primary speed input (drives machine hours, labor, contribution) */}
+                  <TooltipProvider delayDuration={200}>
                   <div className="flex items-center gap-3 pb-2 border-b border-border">
-                    <span className="text-sm font-mono w-20 text-right font-semibold text-foreground-secondary">QTY/H</span>
-                    <div className="relative flex-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="text-sm font-mono w-20 text-right font-semibold text-foreground-secondary inline-flex items-center justify-end gap-1 cursor-help">QTY/H<Info className="h-3 w-3 text-foreground-tertiary" /></span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-xs whitespace-pre-line font-mono text-[11px] bg-background-secondary border border-border shadow-lg rounded-lg px-4 py-3 text-foreground">{`Machine speed (pcs/hr)\nDrives machine hours, labor, and mfg costs\nMach Hrs = setup + (1000 ÷ QTY/H) × qty/1000`}</TooltipContent>
+                    </Tooltip>
+                    <div className="relative flex-1 flex items-center gap-1">
                       <input
                         type="number"
                         step="100"
@@ -963,51 +1048,109 @@ export default function QuoteForm() {
                           qtyPerHour > 0 ? "border-accent bg-accent/10" : ""
                         }`}
                       />
+                      {qtyPerHourTouched && (() => {
+                        const prodStep = routeSteps.find(s => {
+                          const rate = s.routingstdrunrate ?? s.costingstdrunrate ?? 0
+                          return rate > 0 && rate < 999999
+                        })
+                        const stdRate = prodStep?.routingstdrunrate ?? prodStep?.costingstdrunrate ?? 0
+                        return stdRate > 0 && qtyPerHour !== stdRate ? (
+                          <button
+                            type="button"
+                            onClick={() => { setQtyPerHour(stdRate); setQtyPerHourTouched(false); setWhatIfField(null) }}
+                            className="text-[10px] text-accent hover:text-accent/80 whitespace-nowrap shrink-0"
+                            title={`Reset to standard: ${stdRate.toLocaleString()}`}
+                          >Std: {stdRate.toLocaleString()}</button>
+                        ) : null
+                      })()}
                     </div>
                     <span className="text-sm font-mono w-24 text-right text-foreground-tertiary">
                       {qtyPerHour > 0 ? `${fmt(costs.machineHours, 1)} hrs` : ""}
                     </span>
                   </div>
                   {[
-                    { field: "pricePerM" as const, label: "PRICE/M", prefix: "$" },
-                    { field: "contDollars" as const, label: "CONT $", prefix: "$" },
-                    { field: "contPercent" as const, label: "CONT %", suffix: "%" },
-                    { field: "contPerHour" as const, label: "CONT/HR", prefix: "$" },
-                    { field: "index" as const, label: "INDEX", suffix: "" },
-                  ].map(({ field, label, prefix, suffix }) => (
+                    { field: "pricePerM" as const, label: "PRICE/M", prefix: "$", tip: "Selling price per 1,000 pieces\nDefault = *100DEX (total cost at 100% index)" },
+                    { field: "contDollars" as const, label: "CONT $/M", prefix: "$", tip: "Contribution dollars per 1,000 pieces\nPrice/M − *DIRECT" },
+                    { field: "contPercent" as const, label: "CONT %", suffix: "%", tip: "Contribution as % of Price/M\n(CONT $/M ÷ Price/M) × 100" },
+                    { field: "contPerHour" as const, label: "CONT/HR", prefix: "$", tip: `Contribution per machine hour\n(CONT $/M × qty/1000) ÷ Mach Hrs\nPlant target: $${fmt(plantTarget, 0)}/hr` },
+                    { field: "index" as const, label: "INDEX", suffix: "", tip: `Performance index (CONT/HR ÷ plant target × 100)\n100 = breakeven, >100 = above target\nPlant target: $${fmt(plantTarget, 0)}/hr` },
+                  ].map(({ field, label, prefix, suffix, tip }) => {
+                    const needsQtyH = (field === "contPerHour" || field === "index") && costs.machineHours <= 0
+                    const defaultVal = field === "pricePerM" ? defaultContribution.pricePerM
+                      : field === "contDollars" ? defaultContribution.contDollars
+                      : field === "contPercent" ? defaultContribution.contPercent
+                      : field === "contPerHour" ? defaultContribution.contPerHour
+                      : defaultContribution.index
+                    const decimals = field === "contPercent" ? 1 : field === "index" ? 0 : 2
+                    const isOverridden = whatIfField && whatIfField !== field
+                    return (
                     <div key={field} className="flex items-center gap-3">
-                      <span className="text-sm font-mono w-20 text-right font-semibold text-foreground-secondary">{label}</span>
-                      <div className="relative flex-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-sm font-mono w-20 text-right font-semibold text-foreground-secondary inline-flex items-center justify-end gap-1 cursor-help">{label}<Info className="h-3 w-3 text-foreground-tertiary" /></span>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="max-w-xs whitespace-pre-line font-mono text-[11px] bg-background-secondary border border-border shadow-lg rounded-lg px-4 py-3 text-foreground">{tip}</TooltipContent>
+                      </Tooltip>
+                      <div className="relative flex-1 flex items-center gap-1">
+                        {needsQtyH ? (
+                          <span className="block w-full pl-2 py-1.5 text-sm font-mono text-foreground-tertiary italic">Needs QTY/H</span>
+                        ) : (
+                        <>
+                        <div className="relative flex-1">
                         {prefix && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm text-foreground-tertiary">{prefix}</span>}
                         <input
                           type="number"
-                          step="any"
+                          step={field === "pricePerM" ? "0.01" : "any"}
                           value={whatIfField === field ? (whatIfValue || "") : ""}
                           placeholder={whatIfDisplay(field)}
-                          onChange={(e) => handleWhatIfChange(field, e.target.value)}
+                          onChange={(e) => {
+                            let val = e.target.value
+                            if (field === "pricePerM" && val) {
+                              const parts = val.split(".")
+                              if (parts[1] && parts[1].length > 2) val = `${parts[0]}.${parts[1].slice(0, 2)}`
+                            }
+                            handleWhatIfChange(field, val)
+                          }}
                           className={`w-full ${prefix ? "pl-5" : "pl-2"} pr-6 py-1.5 text-sm font-mono border border-border rounded bg-background focus:outline-none focus:ring-1 focus:ring-accent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
                             whatIfField === field ? "border-accent bg-accent/10" : ""
                           }`}
                         />
                         {suffix && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-foreground-tertiary">{suffix}</span>}
+                        </div>
+                        {isOverridden && (
+                          <button
+                            type="button"
+                            onClick={() => { setWhatIfField(null); setWhatIfValue(0) }}
+                            className="text-[10px] text-accent hover:text-accent/80 whitespace-nowrap shrink-0"
+                            title={`Reset to auto: ${prefix ?? ""}${fmt(defaultVal, decimals)}${suffix ?? ""}`}
+                          >{prefix ?? ""}{fmt(defaultVal, decimals)}{suffix ?? ""}</button>
+                        )}
+                        </>
+                        )}
                       </div>
                       <span className="text-sm font-mono w-24 text-right text-foreground-tertiary">
                         {field === "pricePerM" && fmt(contribution.pricePerM)}
                         {field === "contDollars" && fmt(contribution.contDollars)}
                         {field === "contPercent" && `${fmt(contribution.contPercent, 1)}%`}
-                        {field === "contPerHour" && fmt(contribution.contPerHour)}
-                        {field === "index" && fmt(contribution.index, 0)}
+                        {field === "contPerHour" && (needsQtyH ? "-" : fmt(contribution.contPerHour))}
+                        {field === "index" && (needsQtyH ? "-" : fmt(contribution.index, 0))}
                       </span>
                     </div>
-                  ))}
+                  )})}
 
                   {/* Derived read-only metrics */}
                   <div className="pt-2 border-t border-border space-y-1">
                     <div className="flex items-center gap-3">
-                      <span className="text-sm font-mono w-20 text-right text-foreground-secondary">$/MSF</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-sm font-mono w-20 text-right text-foreground-secondary inline-flex items-center justify-end gap-1 cursor-help">$/MSF<Info className="h-3 w-3 text-foreground-tertiary" /></span>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="max-w-xs whitespace-pre-line font-mono text-[11px] bg-background-secondary border border-border shadow-lg rounded-lg px-4 py-3 text-foreground">{`Price per 1,000 sq ft\nPrice/M ÷ blank area\n$${fmt(contribution.pricePerM)} ÷ ${fmt(costs.blankAreaSqFt, 3)} sq ft`}</TooltipContent>
+                      </Tooltip>
                       <span className="text-sm font-mono">${fmt(contribution.dollarPerMSF)}</span>
                     </div>
                   </div>
+                  </TooltipProvider>
 
                   {whatIfField && (
                     <button

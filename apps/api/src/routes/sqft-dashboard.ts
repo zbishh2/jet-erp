@@ -5,6 +5,7 @@ import {
   isKiwiplanConfigured,
   KiwiplanError,
 } from '../services/kiwiplan-client'
+import { kvCache, cacheKey, CacheTTL } from '../services/kv-cache'
 
 export const sqFtDashboardRoutes = new Hono<{ Bindings: Env }>()
 
@@ -199,7 +200,10 @@ sqFtDashboardRoutes.get('/date-limits', async (c) => {
   }
 
   try {
-    const result = await client.rawQuery(getDateLimitsSQL(), {}, 'kdw')
+    const kv = c.env.AUTH_CACHE
+    const result = await kvCache(kv, 'sqft:date-limits', CacheTTL.DATE_LIMITS, () =>
+      client.rawQuery(getDateLimitsSQL(), {}, 'kdw')
+    )
     return c.json(result)
   } catch (err) {
     if (err instanceof KiwiplanError) {
@@ -320,44 +324,50 @@ sqFtDashboardRoutes.get('/filter-options', async (c) => {
   const { line, customer, spec, hasLine, hasCustomer, hasSpec } = parseDashboardFilters(c)
 
   try {
-    const lineSql = getLineOptionsSQL(hasCustomer, hasSpec)
-    const customerSql = getCustomerOptionsSQL(hasLine, hasSpec)
-    const specSql = getSpecOptionsSQL(hasLine, hasCustomer)
+    const kv = c.env.AUTH_CACHE
+    const key = cacheKey('sqft:filter-options', {
+      s: dates.startDate, e: dates.endDate,
+      l: line, c: customer, sp: spec,
+    })
+    const result = await kvCache(kv, key, CacheTTL.FILTER_OPTIONS, async () => {
+      const lineSql = getLineOptionsSQL(hasCustomer, hasSpec)
+      const customerSql = getCustomerOptionsSQL(hasLine, hasSpec)
+      const specSql = getSpecOptionsSQL(hasLine, hasCustomer)
 
-    const lineParams: Record<string, unknown> = {
-      startDate: dates.startDate,
-      endDate: dates.endDate,
-    }
-    if (hasCustomer) lineParams.customer = customer
-    if (hasSpec) lineParams.spec = spec
+      const lineParams: Record<string, unknown> = {
+        startDate: dates.startDate,
+        endDate: dates.endDate,
+      }
+      if (hasCustomer) lineParams.customer = customer
+      if (hasSpec) lineParams.spec = spec
 
-    const customerParams: Record<string, unknown> = {
-      startDate: dates.startDate,
-      endDate: dates.endDate,
-    }
-    if (hasLine) customerParams.line = parseInt(line, 10)
-    if (hasSpec) customerParams.spec = spec
+      const customerParams: Record<string, unknown> = {
+        startDate: dates.startDate,
+        endDate: dates.endDate,
+      }
+      if (hasLine) customerParams.line = parseInt(line, 10)
+      if (hasSpec) customerParams.spec = spec
 
-    const specParams: Record<string, unknown> = {
-      startDate: dates.startDate,
-      endDate: dates.endDate,
-    }
-    if (hasLine) specParams.line = parseInt(line, 10)
-    if (hasCustomer) specParams.customer = customer
+      const specParams: Record<string, unknown> = {
+        startDate: dates.startDate,
+        endDate: dates.endDate,
+      }
+      if (hasLine) specParams.line = parseInt(line, 10)
+      if (hasCustomer) specParams.customer = customer
 
-    const [linesRes, customersRes, specsRes] = await Promise.all([
-      client.rawQuery(lineSql, lineParams, 'kdw'),
-      client.rawQuery(customerSql, customerParams, 'kdw'),
-      client.rawQuery(specSql, specParams, 'kdw'),
-    ])
+      const [linesRes, customersRes, specsRes] = await Promise.all([
+        client.rawQuery(lineSql, lineParams, 'kdw'),
+        client.rawQuery(customerSql, customerParams, 'kdw'),
+        client.rawQuery(specSql, specParams, 'kdw'),
+      ])
 
-    return c.json({
-      data: {
+      return {
         lineNumbers: ((linesRes.data as Array<Record<string, unknown>>) ?? []).map((r) => String(r.lineNumber ?? '')),
         customers: ((customersRes.data as Array<Record<string, unknown>>) ?? []).map((r) => String(r.customerName ?? '')),
         specs: ((specsRes.data as Array<Record<string, unknown>>) ?? []).map((r) => String(r.specNumber ?? '')),
-      },
+      }
     })
+    return c.json({ data: result })
   } catch (err) {
     if (err instanceof KiwiplanError) {
       return c.json({ error: err.message }, err.statusCode as 400)

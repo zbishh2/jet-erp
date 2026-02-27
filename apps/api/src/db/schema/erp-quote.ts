@@ -46,6 +46,7 @@ export const erpQuoteLine = sqliteTable('erp_quote_line', {
   isGlued: integer('is_glued').notNull().default(1),
   costSnapshot: text('cost_snapshot'),  // JSON of full CostResult
   pricePerM: real('price_per_m'),
+  qtyPerHour: real('qty_per_hour'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 }, (table) => ({

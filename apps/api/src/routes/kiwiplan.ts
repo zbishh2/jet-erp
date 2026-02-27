@@ -256,6 +256,31 @@ kiwiplanRoutes.get('/addresses/despatch-mode/:id', async (c) => {
   }
 })
 
+// GET /api/erp/routing/style-ids - Get style IDs that have routing (product designs)
+kiwiplanRoutes.get('/routing/style-ids', async (c) => {
+  const client = getClient(c.env)
+  if (!client) {
+    return c.json({ error: 'Kiwiplan gateway not configured' }, 503)
+  }
+
+  try {
+    const result = await client.rawQuery<{ styleID: number }>(
+      `SELECT DISTINCT pd.styleID
+       FROM ebxProductDesign pd
+       INNER JOIN ebxRoute r ON r.productDesignID = pd.ID
+       INNER JOIN ebxMachineStep ms ON ms.routeID = r.ID
+       WHERE r.plantID = 1`,
+    )
+    const styleIds = result.data.map(r => r.styleID)
+    return c.json({ data: styleIds })
+  } catch (err) {
+    if (err instanceof KiwiplanError) {
+      return c.json({ error: err.message }, err.statusCode as 400)
+    }
+    throw err
+  }
+})
+
 // GET /api/erp/routing/by-style?styleId=123 - Get routing from most recent product design for a style
 kiwiplanRoutes.get('/routing/by-style', async (c) => {
   const client = getClient(c.env)
@@ -269,7 +294,42 @@ kiwiplanRoutes.get('/routing/by-style', async (c) => {
   }
 
   try {
-    const result = await client.getRoutingByStyle(styleId, { companyId: 1 })
+    // Use rawQuery with correct table names (ebx/esp schema)
+    // Find the most recent product design for this style, then get its route steps
+    const result = await client.rawQuery<{
+      machineno: number
+      machinename: string | null
+      machinegroup: string | null
+      sequencenumber: number
+      routingstdrunrate: number | null
+      costingstdrunrate: number | null
+      routingstdsetupmins: number | null
+      costingstdsetupmins: number | null
+      inkcount: number | null
+      routingstdruncrew: number | null
+      costingstdruncrew: number | null
+    }>(
+      `SELECT ms.machineno,
+              (SELECT TOP 1 mrs.machinename FROM espMachineRouteStep mrs WHERE mrs.machineno = ms.machineno) AS machinename,
+              (SELECT TOP 1 mrs.machinegroup FROM espMachineRouteStep mrs WHERE mrs.machineno = ms.machineno) AS machinegroup,
+              ms.sequencenumber,
+              ms.routingstdrunrate, ms.costingstdrunrate,
+              ms.routingstdsetupmins, ms.costingstdsetupmins,
+              ms.inkcount, ms.routingstdruncrew AS routingcrew, ms.costingstdruncrew AS costingcrew
+       FROM ebxProductDesign pd
+       INNER JOIN ebxRoute r ON r.productDesignID = pd.ID
+       INNER JOIN ebxMachineStep ms ON ms.routeID = r.ID
+       WHERE pd.styleID = @styleId
+         AND r.plantID = 1
+         AND pd.ID = (
+           SELECT TOP 1 pd2.ID FROM ebxProductDesign pd2
+           INNER JOIN ebxRoute r2 ON r2.productDesignID = pd2.ID
+           WHERE pd2.styleID = @styleId AND r2.plantID = 1
+           ORDER BY pd2.ID DESC
+         )
+       ORDER BY ms.sequencenumber`,
+      { styleId },
+    )
     return c.json(result)
   } catch (err) {
     if (err instanceof KiwiplanError) {

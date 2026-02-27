@@ -6,6 +6,7 @@ import {
   KiwiplanError,
 } from '../services/kiwiplan-client'
 import { logAudit } from '../services/audit'
+import { kvCache, CacheTTL } from '../services/kv-cache'
 
 export const mrpDashboardRoutes = new Hono<{ Bindings: Env }>()
 
@@ -502,20 +503,23 @@ mrpDashboardRoutes.get('/projection', async (c) => {
   }
 
   try {
-    // Sequential fetch to isolate failures
-    const queries = ['inventory', 'orders', 'prices', 'usage'] as const
-    const results: Record<string, { data: Array<Record<string, unknown>> }> = {}
-    for (const q of queries) {
-      try {
-        results[q] = await client.rawQuery(MRP_SQL[q], {}, 'esp')
-      } catch (qErr) {
-        return c.json({ error: `Query '${q}' failed: ${qErr instanceof Error ? qErr.message : String(qErr)}` }, 400)
-      }
-    }
-    const inventoryResult = results.inventory
-    const ordersResult = results.orders
-    const pricesResult = results.prices
-    const usageResult = results.usage
+    const kv = c.env.AUTH_CACHE
+
+    // Parallel fetch — no data dependency between queries
+    const [inventoryResult, ordersResult, pricesResult, usageResult] = await Promise.all([
+      kvCache(kv, 'mrp:inventory', CacheTTL.DASHBOARD_DATA, () =>
+        client.rawQuery(MRP_SQL.inventory, {}, 'esp')
+      ),
+      kvCache(kv, 'mrp:orders', CacheTTL.DASHBOARD_DATA, () =>
+        client.rawQuery(MRP_SQL.orders, {}, 'esp')
+      ),
+      kvCache(kv, 'mrp:prices', CacheTTL.LOOKUP_DATA, () =>
+        client.rawQuery(MRP_SQL.prices, {}, 'esp')
+      ),
+      kvCache(kv, 'mrp:usage', CacheTTL.DASHBOARD_DATA, () =>
+        client.rawQuery(MRP_SQL.usage, {}, 'esp')
+      ),
+    ])
 
     // Build price and usage maps
     const priceMap = new Map<string, { unitCost: number; unitPrice: number }>()
@@ -578,18 +582,17 @@ mrpDashboardRoutes.get('/health-summary', async (c) => {
   const spec = c.req.query('spec') || undefined
 
   try {
-    let inventoryResult: { data: Array<Record<string, unknown>> }
-    let ordersResult: { data: Array<Record<string, unknown>> }
-    try {
-      inventoryResult = await client.rawQuery(MRP_SQL.inventory, {}, 'esp')
-    } catch (qErr) {
-      return c.json({ error: `Query 'inventory' failed: ${qErr instanceof Error ? qErr.message : String(qErr)}` }, 400)
-    }
-    try {
-      ordersResult = await client.rawQuery(MRP_SQL.orders, {}, 'esp')
-    } catch (qErr) {
-      return c.json({ error: `Query 'orders' failed: ${qErr instanceof Error ? qErr.message : String(qErr)}` }, 400)
-    }
+    const kv = c.env.AUTH_CACHE
+
+    // Reuse same cached data as /projection — avoids duplicate fetches
+    const [inventoryResult, ordersResult] = await Promise.all([
+      kvCache(kv, 'mrp:inventory', CacheTTL.DASHBOARD_DATA, () =>
+        client.rawQuery(MRP_SQL.inventory, {}, 'esp')
+      ),
+      kvCache(kv, 'mrp:orders', CacheTTL.DASHBOARD_DATA, () =>
+        client.rawQuery(MRP_SQL.orders, {}, 'esp')
+      ),
+    ])
 
     const buckets = buildBuckets(granularity, horizon)
     const result = computeProjection(
@@ -681,13 +684,18 @@ mrpDashboardRoutes.get('/filter-options', async (c) => {
   }
 
   try {
-    const [companiesResult, specsResult] = await Promise.all([
-      client.rawQuery(MRP_SQL.companies, {}, 'esp'),
-      client.rawQuery(MRP_SQL.specs, {}, 'esp'),
-    ])
-    const companies = (companiesResult.data as Array<Record<string, unknown>>).map(r => String(r.companyName))
-    const specs = (specsResult.data as Array<Record<string, unknown>>).map(r => String(r.specNumber))
-    return c.json({ companies, specs })
+    const kv = c.env.AUTH_CACHE
+    const result = await kvCache(kv, 'mrp:filter-options', CacheTTL.FILTER_OPTIONS, async () => {
+      const [companiesResult, specsResult] = await Promise.all([
+        client.rawQuery(MRP_SQL.companies, {}, 'esp'),
+        client.rawQuery(MRP_SQL.specs, {}, 'esp'),
+      ])
+      return {
+        companies: (companiesResult.data as Array<Record<string, unknown>>).map(r => String(r.companyName)),
+        specs: (specsResult.data as Array<Record<string, unknown>>).map(r => String(r.specNumber)),
+      }
+    })
+    return c.json(result)
   } catch (err) {
     if (err instanceof KiwiplanError) {
       return c.json({ error: err.message }, err.statusCode as 400)

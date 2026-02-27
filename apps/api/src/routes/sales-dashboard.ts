@@ -9,6 +9,7 @@ import { salesBudget, holiday } from '../db/schema'
 import { and, gte, lt } from 'drizzle-orm'
 import { logAudit } from '../services/audit'
 import { requireModuleRole } from '../middleware/require-role'
+import { kvCache, CacheTTL } from '../services/kv-cache'
 
 export const salesDashboardRoutes = new Hono<{ Bindings: Env }>()
 
@@ -27,7 +28,7 @@ function getClient(env: Env) {
 }
 
 // SQL queries — live here so changes only need a Worker deploy
-function getSummarySQL(granularity: string, hasRep: boolean) {
+function getSummarySQL(granularity: string, hasRep: boolean, hasCustomer: boolean) {
   let periodExpr: string
   let groupBy: string
   let orderBy: string
@@ -55,12 +56,18 @@ function getSummarySQL(granularity: string, hasRep: boolean) {
       orderBy = periodExpr
   }
 
-  const repJoin = hasRep
-    ? `LEFT JOIN orgCompany cust ON inv.companyID = cust.ID
-       LEFT JOIN orgContact con ON cust.salesContactID = con.ID`
+  const needsCust = hasRep || hasCustomer
+  const custJoin = needsCust
+    ? `LEFT JOIN orgCompany cust ON inv.companyID = cust.ID`
+    : ''
+  const conJoin = hasRep
+    ? `LEFT JOIN orgContact con ON cust.salesContactID = con.ID`
     : ''
   const repWhere = hasRep
     ? `AND con.firstname + ' ' + con.lastname = @rep`
+    : ''
+  const custWhere = hasCustomer
+    ? `AND cust.name = @customer`
     : ''
 
   return `
@@ -72,13 +79,15 @@ function getSummarySQL(granularity: string, hasRep: boolean) {
       COUNT(DISTINCT inv.ID) as invoiceCount
     FROM espInvoiceLine il
     INNER JOIN espInvoice inv ON il.invoiceID = inv.ID
-    ${repJoin}
+    ${custJoin}
+    ${conJoin}
     LEFT JOIN espOrder o ON il.orderID = o.ID
     LEFT JOIN cstCostEstimate ce ON o.preCostEstimateID = ce.ID
     WHERE inv.transactiondate >= @startDate
       AND inv.transactiondate < @endDate
       AND inv.invoicestatus = 'Final'
       ${repWhere}
+      ${custWhere}
     GROUP BY ${groupBy}
     ORDER BY ${orderBy}
   `
@@ -105,8 +114,8 @@ const SALES_SQL = {
     ORDER BY totalSales DESC
   `,
 
-  byCustomer: `
-    SELECT
+  byCustomer: (limit: number) => `
+    SELECT TOP ${limit}
       cust.name as customerName,
       con.firstname + ' ' + con.lastname as repName,
       SUM(il.totalvalue) as totalSales,
@@ -157,6 +166,16 @@ const SALES_SQL = {
     WHERE cust.isCustomer <> 0
     ORDER BY repName
   `,
+
+  customers: `
+    SELECT DISTINCT
+      cust.name as customerName
+    FROM orgCompany cust
+    WHERE cust.isCustomer <> 0
+      AND cust.name IS NOT NULL
+      AND cust.name <> ''
+    ORDER BY customerName
+  `,
 }
 
 // GET /api/erp/sales/date-limits
@@ -167,14 +186,17 @@ salesDashboardRoutes.get('/date-limits', async (c) => {
   }
 
   try {
-    const sql = `
-      SELECT
-        CONVERT(VARCHAR(10), MIN(CAST(inv.transactiondate AS DATE)), 23) as minDate,
-        CONVERT(VARCHAR(10), MAX(CAST(inv.transactiondate AS DATE)), 23) as maxDate
-      FROM espInvoice inv
-      WHERE inv.invoicestatus = 'Final'
-    `
-    const result = await client.rawQuery(sql, {})
+    const kv = c.env.AUTH_CACHE
+    const result = await kvCache(kv, 'sales:date-limits', CacheTTL.DATE_LIMITS, async () => {
+      const sql = `
+        SELECT
+          CONVERT(VARCHAR(10), MIN(CAST(inv.transactiondate AS DATE)), 23) as minDate,
+          CONVERT(VARCHAR(10), MAX(CAST(inv.transactiondate AS DATE)), 23) as maxDate
+        FROM espInvoice inv
+        WHERE inv.invoicestatus = 'Final'
+      `
+      return client.rawQuery(sql, {})
+    })
     return c.json(result)
   } catch (err) {
     if (err instanceof KiwiplanError) {
@@ -195,6 +217,7 @@ salesDashboardRoutes.get('/summary', async (c) => {
   const endDate = c.req.query('endDate')
   const granularity = c.req.query('granularity') || 'monthly'
   const rep = c.req.query('rep') || ''
+  const customer = c.req.query('customer') || ''
   if (!startDate || !endDate) {
     return c.json({ error: 'startDate and endDate are required' }, 400)
   }
@@ -204,9 +227,11 @@ salesDashboardRoutes.get('/summary', async (c) => {
 
   try {
     const hasRep = rep.length > 0
-    const sql = getSummarySQL(granularity, hasRep)
+    const hasCustomer = customer.length > 0
+    const sql = getSummarySQL(granularity, hasRep, hasCustomer)
     const params: Record<string, unknown> = { startDate, endDate }
     if (hasRep) params.rep = rep
+    if (hasCustomer) params.customer = customer
     const result = await client.rawQuery(sql, params)
     return c.json(result)
   } catch (err) {
@@ -268,8 +293,8 @@ salesDashboardRoutes.get('/by-customer', async (c) => {
   }
 
   try {
-    const result = await client.rawQuery(SALES_SQL.byCustomer, { startDate, endDate })
-    return c.json({ data: (result.data as unknown[]).slice(0, limit) })
+    const result = await client.rawQuery(SALES_SQL.byCustomer(limit), { startDate, endDate })
+    return c.json({ data: result.data })
   } catch (err) {
     if (err instanceof KiwiplanError) {
       return c.json({ error: err.message }, err.statusCode as 400)
@@ -310,7 +335,31 @@ salesDashboardRoutes.get('/reps', async (c) => {
   }
 
   try {
-    const result = await client.rawQuery(SALES_SQL.reps)
+    const kv = c.env.AUTH_CACHE
+    const result = await kvCache(kv, 'sales:reps', CacheTTL.LOOKUP_DATA, () =>
+      client.rawQuery(SALES_SQL.reps)
+    )
+    return c.json(result)
+  } catch (err) {
+    if (err instanceof KiwiplanError) {
+      return c.json({ error: err.message }, err.statusCode as 400)
+    }
+    throw err
+  }
+})
+
+// GET /api/erp/sales/customers
+salesDashboardRoutes.get('/customers', async (c) => {
+  const client = getClient(c.env)
+  if (!client) {
+    return c.json({ error: 'Kiwiplan gateway not configured' }, 503)
+  }
+
+  try {
+    const kv = c.env.AUTH_CACHE
+    const result = await kvCache(kv, 'sales:customers', CacheTTL.LOOKUP_DATA, () =>
+      client.rawQuery(SALES_SQL.customers)
+    )
     return c.json(result)
   } catch (err) {
     if (err instanceof KiwiplanError) {

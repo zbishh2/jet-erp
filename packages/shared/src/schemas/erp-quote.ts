@@ -26,6 +26,7 @@ const quoteLineSchema = z.object({
   isGlued: z.boolean().default(true),
   costSnapshot: z.string().optional(), // JSON string
   pricePerM: z.number().optional(),
+  qtyPerHour: z.number().optional(),
 });
 
 // Full ERP Quote schema

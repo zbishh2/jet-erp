@@ -1,6 +1,7 @@
 import { Outlet } from "react-router-dom"
 import { Sidebar } from "./Sidebar"
 import { useAuth } from "@/contexts/AuthContext"
+import { ChatBubble } from "@/components/chat/ChatBubble"
 
 export function MainLayout() {
   const { isLoading } = useAuth()
@@ -26,6 +27,7 @@ export function MainLayout() {
           )}
         </div>
       </main>
+      <ChatBubble />
     </div>
   )
 }

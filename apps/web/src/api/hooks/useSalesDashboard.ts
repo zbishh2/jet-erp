@@ -32,6 +32,10 @@ export interface SalesRep {
   repName: string
 }
 
+export interface SalesCustomer {
+  customerName: string
+}
+
 export interface SalesBudget {
   id: string
   salesRep: string
@@ -54,12 +58,13 @@ export function useSalesDateLimits() {
   })
 }
 
-export function useSalesSummary(startDate: string, endDate: string, granularity: Granularity = "monthly", rep?: string) {
+export function useSalesSummary(startDate: string, endDate: string, granularity: Granularity = "monthly", rep?: string, customer?: string) {
   return useQuery({
-    queryKey: ["sales", "summary", startDate, endDate, granularity, rep ?? "all"],
+    queryKey: ["sales", "summary", startDate, endDate, granularity, rep ?? "all", customer ?? "all"],
     queryFn: () => {
       const params = new URLSearchParams({ startDate, endDate, granularity })
       if (rep) params.set("rep", rep)
+      if (customer) params.set("customer", customer)
       return apiFetch<{ data: SalesSummary[] }>(`/erp/sales/summary?${params}`)
     },
     enabled: !!startDate && !!endDate,
@@ -117,6 +122,14 @@ export function useSalesReps() {
   return useQuery({
     queryKey: ["sales", "reps"],
     queryFn: () => apiFetch<{ data: SalesRep[] }>("/erp/sales/reps"),
+    staleTime: 1000 * 60 * 10,
+  })
+}
+
+export function useSalesCustomers() {
+  return useQuery({
+    queryKey: ["sales", "customers"],
+    queryFn: () => apiFetch<{ data: SalesCustomer[] }>("/erp/sales/customers"),
     staleTime: 1000 * 60 * 10,
   })
 }

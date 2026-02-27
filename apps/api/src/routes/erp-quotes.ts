@@ -189,6 +189,7 @@ erpQuoteRoutes.post('/', erpWrite, async (c) => {
         isGlued: line.isGlued ? 1 : 0,
         costSnapshot: line.costSnapshot ?? null,
         pricePerM: line.pricePerM ?? null,
+        qtyPerHour: line.qtyPerHour ?? null,
         createdAt: now,
         updatedAt: now,
       }))
@@ -280,6 +281,7 @@ erpQuoteRoutes.patch('/:id', erpWrite, async (c) => {
           isGlued: line.isGlued ? 1 : 0,
           costSnapshot: line.costSnapshot ?? null,
           pricePerM: line.pricePerM ?? null,
+          qtyPerHour: line.qtyPerHour ?? null,
           createdAt: now,
           updatedAt: now,
         }))

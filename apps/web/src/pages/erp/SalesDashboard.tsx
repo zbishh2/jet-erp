@@ -46,8 +46,10 @@ import {
   useSalesDateLimits,
   useSalesSummary,
   useSalesByRep,
+  useSalesByCustomer,
   useSalesDetail,
   useSalesReps,
+  useSalesCustomers,
   useSalesBudgets,
   useHolidays,
 } from "@/api/hooks/useSalesDashboard"
@@ -183,11 +185,13 @@ export default function SalesDashboard() {
   const [timeWindow, setTimeWindow] = usePersistedState<TimeWindow>("timeWindow", "last-6m")
   const [quarter, setQuarter] = usePersistedState<Quarter>("quarter", "all")
   const [repFilter, setRepFilter] = usePersistedState<string>("repFilter", "all")
+  const [customerFilter, setCustomerFilter] = usePersistedState<string>("customerFilter", "all")
   const [chartMode, setChartMode] = usePersistedState<"budget" | "yoy">("chartMode", "budget")
   const [granularity, setGranularity] = usePersistedState<Granularity>("granularity", "monthly")
   const [customStart, setCustomStart] = usePersistedState<string>("customStart", "")
   const [customEnd, setCustomEnd] = usePersistedState<string>("customEnd", "")
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
+  const [selectedDetailKey, setSelectedDetailKey] = useState<string | null>(null)
   const [budgetMonth, setBudgetMonth] = useState<string>(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
@@ -247,6 +251,7 @@ export default function SalesDashboard() {
   const summaryEnd = endDate
 
   const activeRep = repFilter !== "all" ? repFilter : undefined
+  const activeCustomer = customerFilter !== "all" ? customerFilter : undefined
 
   // Narrow date range when a period is selected (for rep + customer queries)
   const [detailStart, detailEnd] = useMemo(() => {
@@ -275,11 +280,13 @@ export default function SalesDashboard() {
     return [`${y}-${String(m).padStart(2, "0")}-01`, `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`]
   }, [selectedMonth, startDate, endDate, granularity])
 
-  const summaryQuery = useSalesSummary(summaryStart, summaryEnd, granularity, activeRep)
-  const priorYearQuery = useSalesSummary(priorYearStart, priorYearEnd, granularity, activeRep)
+  const summaryQuery = useSalesSummary(summaryStart, summaryEnd, granularity, activeRep, activeCustomer)
+  const priorYearQuery = useSalesSummary(priorYearStart, priorYearEnd, granularity, activeRep, activeCustomer)
   const byRepQuery = useSalesByRep(detailStart, detailEnd)
+  const byCustomerQuery = useSalesByCustomer(detailStart, detailEnd)
   const salesDetailQuery = useSalesDetail(detailStart, detailEnd)
   const repsQuery = useSalesReps()
+  const customersQuery = useSalesCustomers()
   const budgetsQuery = useSalesBudgets(budgetYear)
   const holidaysQuery = useHolidays(startDate, endDate)
 
@@ -287,10 +294,10 @@ export default function SalesDashboard() {
   const viewingCurrentYear = timeWindow === "ytd" || timeWindow === `year-${currentYear}` ||
     (timeWindow === "custom" && startDate.startsWith(String(currentYear)))
   const seasonalityY1Query = useSalesSummary(
-    `${currentYear - 1}-01-01`, `${currentYear}-01-01`, "monthly", activeRep
+    `${currentYear - 1}-01-01`, `${currentYear}-01-01`, "monthly", activeRep, activeCustomer
   )
   const seasonalityY2Query = useSalesSummary(
-    `${currentYear - 2}-01-01`, `${currentYear - 1}-01-01`, "monthly", activeRep
+    `${currentYear - 2}-01-01`, `${currentYear - 1}-01-01`, "monthly", activeRep, activeCustomer
   )
 
   const holidayDates = useMemo(() => {
@@ -322,8 +329,10 @@ export default function SalesDashboard() {
     return map
   }, [priorYearData, granularity])
   const repData = byRepQuery.data?.data ?? []
+  const byCustomerData = byCustomerQuery.data?.data ?? []
   const salesDetailData = salesDetailQuery.data?.data ?? []
   const reps = repsQuery.data?.data ?? []
+  const customers = customersQuery.data?.data ?? []
   const budgets = budgetsQuery.data?.data ?? []
 
   // Reps sorted by sales (repData is already sorted by totalSales DESC)
@@ -334,6 +343,23 @@ export default function SalesDashboard() {
     const remaining = reps.filter((r) => !repSet.has(r.repName)).map((r) => r.repName)
     return [...repSalesOrder, ...remaining]
   }, [repData, reps])
+
+  // Customers sorted by sales (byCustomerData is sorted by totalSales DESC)
+  const sortedCustomers = useMemo(() => {
+    const custSalesOrder = byCustomerData.map((c) => c.customerName).filter(Boolean) as string[]
+    // Deduplicate (byCustomer has one row per customer+rep combo)
+    const seen = new Set<string>()
+    const deduped: string[] = []
+    for (const name of custSalesOrder) {
+      if (!seen.has(name)) {
+        seen.add(name)
+        deduped.push(name)
+      }
+    }
+    // Append any customers from the full list that had no sales in this period
+    const remaining = customers.filter((c) => !seen.has(c.customerName)).map((c) => c.customerName)
+    return [...deduped, ...remaining]
+  }, [byCustomerData, customers])
 
   // Build budget lookup keyed by period
   const budgetByPeriod = useMemo(() => {
@@ -818,6 +844,9 @@ export default function SalesDashboard() {
     if (repFilter !== "all") {
       data = data.filter((r) => r.repName === repFilter)
     }
+    if (customerFilter !== "all") {
+      data = data.filter((r) => r.customerName === customerFilter)
+    }
     return data.map((row) => {
       const contribution = row.totalSales - row.totalCost
       const salesPerMSF = row.totalMSF > 0 ? row.totalSales / row.totalMSF : 0
@@ -836,7 +865,7 @@ export default function SalesDashboard() {
         contPct,
       }
     })
-  }, [salesDetailData, repFilter])
+  }, [salesDetailData, repFilter, customerFilter])
 
   // Group detail rows by active dims
   const groupedDetailRows = useMemo(() => {
@@ -924,17 +953,55 @@ export default function SalesDashboard() {
     }))
   }
 
+  // Build a unique key for a detail row based on active group-by dims
+  const getDetailRowKey = useCallback((row: typeof sortedDetailRows[number]) => {
+    return groupByDims.map((d) => String((row as unknown as Record<string, unknown>)[d] ?? "")).join("|")
+  }, [groupByDims])
+
+  const handleDetailRowClick = useCallback((row: typeof sortedDetailRows[number]) => {
+    const key = getDetailRowKey(row)
+    const isDeselecting = selectedDetailKey === key
+
+    if (isDeselecting) {
+      // Toggle off — clear the filters we applied
+      setSelectedDetailKey(null)
+      setCustomerFilter("all")
+      setRepFilter("all")
+      return
+    }
+
+    // Select this row and apply its dims as dashboard filters
+    setSelectedDetailKey(key)
+    if (groupByDims.includes("customerName") && row.customerName) {
+      setCustomerFilter(row.customerName)
+    } else {
+      setCustomerFilter("all")
+    }
+    if (groupByDims.includes("repName") && row.repName && row.repName !== "Unassigned") {
+      setRepFilter(row.repName)
+    } else {
+      setRepFilter("all")
+    }
+  }, [groupByDims, selectedDetailKey, getDetailRowKey, setCustomerFilter, setRepFilter])
+
+  // Clear detail row selection when group-by dims change
+  useEffect(() => {
+    setSelectedDetailKey(null)
+  }, [groupByDims])
+
   const resetFilters = useCallback(() => {
     setTimeWindow(getDefaultPreset("monthly"))
     setQuarter("all")
     setRepFilter("all")
+    setCustomerFilter("all")
     setChartMode("budget")
     setGranularity("monthly")
     setSelectedMonth(null)
+    setSelectedDetailKey(null)
     setDetailSort({ key: "invoiceDate", dir: "desc" })
     setDetailTab("detail")
     setGroupByDims(["invoiceDate", "customerName", "repName", "invoiceNumber"])
-  }, [setTimeWindow, setQuarter, setRepFilter, setChartMode, setGranularity, setDetailSort, setDetailTab, setGroupByDims])
+  }, [setTimeWindow, setQuarter, setRepFilter, setCustomerFilter, setChartMode, setGranularity, setDetailSort, setDetailTab, setGroupByDims])
 
   // Rep bar chart data
   const repBarData = useMemo(() => repData.map((r) => ({
@@ -1028,6 +1095,14 @@ export default function SalesDashboard() {
             placeholder="All Reps"
             searchPlaceholder="Search reps..."
             width="w-[160px]"
+          />
+          <SearchableSelect
+            value={customerFilter}
+            onValueChange={setCustomerFilter}
+            options={sortedCustomers}
+            placeholder="All Customers"
+            searchPlaceholder="Search customers..."
+            width="w-[180px]"
           />
 
           <TimePresetBar
@@ -1582,7 +1657,7 @@ export default function SalesDashboard() {
                 </TableHeader>
                 <TableBody>
                   {sortedDetailRows.map((row, idx) => (
-                    <TableRow key={`${row.invoiceDate}-${row.customerName}-${row.invoiceNumber}-${idx}`}>
+                    <TableRow key={`${row.invoiceDate}-${row.customerName}-${row.invoiceNumber}-${idx}`} className={`cursor-pointer hover:bg-[var(--color-bg-secondary)] ${selectedDetailKey === getDetailRowKey(row) ? "bg-indigo-500/15 hover:bg-indigo-500/20" : ""}`} onClick={() => handleDetailRowClick(row)}>
                       {groupByDimOptions.map(([dim]) =>
                         groupByDims.includes(dim) ? (
                           <TableCell key={dim} className={dim === "invoiceDate" ? "font-medium" : dim === "customerName" ? "max-w-[200px] truncate" : dim === "repName" ? "text-muted-foreground max-w-[120px] truncate" : ""}>

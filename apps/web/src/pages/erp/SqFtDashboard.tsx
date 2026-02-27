@@ -264,7 +264,7 @@ function getHeatColor(value: number, max: number): { bg: string; textColor: stri
   const r = Math.round(224 + (99 - 224) * ratio)
   const g = Math.round(225 + (102 - 225) * ratio)
   const b = Math.round(252 + (241 - 252) * ratio)
-  const textColor = ratio > 0.5 ? "#ffffff" : "#1a1a1a"
+  const textColor = "#000000"
   return { bg: `rgb(${r},${g},${b})`, textColor }
 }
 
@@ -834,11 +834,11 @@ export default function SqFtDashboard() {
                                     style={{ backgroundColor: value > 0 ? bg : undefined }}
                                     onClick={() => setSelectedPeriod((prev) => prev === cell.key ? null : cell.key)}
                                   >
-                                    <span className="absolute top-0.5 right-1.5 text-[10px] leading-none" style={{ color: value > 0 ? textColor : "var(--color-text-muted)" }}>
+                                    <span className="absolute top-0.5 right-1.5 text-[10px] leading-none font-bold" style={{ color: value > 0 ? textColor : "var(--color-text-muted)" }}>
                                       {cell.date}
                                     </span>
                                     {value > 0 && (
-                                      <span className="text-xs font-semibold mt-1" style={{ color: textColor }}>
+                                      <span className="text-xs font-bold mt-1" style={{ color: textColor }}>
                                         {formatCompact(value)}
                                       </span>
                                     )}

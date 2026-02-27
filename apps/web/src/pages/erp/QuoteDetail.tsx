@@ -147,11 +147,23 @@ export default function QuoteDetail() {
                   <TableHead className="text-right">Dims (L x W x D)</TableHead>
                   <TableHead>Board</TableHead>
                   <TableHead className="text-right">Qty</TableHead>
+                  <TableHead className="text-right">QTY/H</TableHead>
                   <TableHead className="text-right">Price/M</TableHead>
+                  <TableHead className="text-right">CONT/HR</TableHead>
+                  <TableHead className="text-right">Total Price</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {quote.lines.map((line) => (
+                {quote.lines.map((line) => {
+                  let costData: { direct?: number; machineHours?: number } = {}
+                  try { if (line.costSnapshot) costData = JSON.parse(line.costSnapshot) } catch {}
+                  const direct = costData.direct ?? 0
+                  const machineHours = costData.machineHours ?? 0
+                  const contPerHour = machineHours > 0 && line.pricePerM != null
+                    ? (line.pricePerM - direct) * (line.quantity / 1000) / machineHours
+                    : null
+                  const totalPrice = line.pricePerM != null ? line.pricePerM * (line.quantity / 1000) : null
+                  return (
                   <TableRow key={line.id}>
                     <TableCell>{line.lineNumber}</TableCell>
                     <TableCell>{line.description || "-"}</TableCell>
@@ -163,9 +175,13 @@ export default function QuoteDetail() {
                     </TableCell>
                     <TableCell className="font-mono">{line.boardGradeCode || "-"}</TableCell>
                     <TableCell className="text-right">{line.quantity.toLocaleString()}</TableCell>
+                    <TableCell className="text-right font-mono">{fmt(line.qtyPerHour, 0)}</TableCell>
                     <TableCell className="text-right font-mono">${fmt(line.pricePerM)}</TableCell>
+                    <TableCell className="text-right font-mono">{contPerHour != null ? `$${fmt(contPerHour)}` : "-"}</TableCell>
+                    <TableCell className="text-right font-mono">{totalPrice != null ? `$${fmt(totalPrice)}` : "-"}</TableCell>
                   </TableRow>
-                ))}
+                  )
+                })}
               </TableBody>
             </Table>
           )}

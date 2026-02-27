@@ -27,6 +27,7 @@ bucket_name = "jet-erp-attachments"
 # Environment Variables (secrets set via: wrangler secret put SECRET_NAME)
 # RESEND_API_KEY - set via: wrangler secret put RESEND_API_KEY
 # KIWIPLAN_SERVICE_TOKEN - set via: wrangler secret put KIWIPLAN_SERVICE_TOKEN
+# ANTHROPIC_API_KEY - set via: wrangler secret put ANTHROPIC_API_KEY
 [vars]
 ENVIRONMENT = "production"
 ALLOW_DEV_AUTH = "false"

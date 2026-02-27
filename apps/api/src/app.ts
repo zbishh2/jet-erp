@@ -16,6 +16,7 @@ import { costVarianceDashboardRoutes } from './routes/cost-variance-dashboard'
 import { invoiceCostVarianceDashboardRoutes } from './routes/invoice-cost-variance-dashboard'
 import { mrpDashboardRoutes } from './routes/mrp-dashboard'
 import { adminRoutes } from './routes/admin'
+import { chatRoutes } from './routes/chat'
 import { authMiddleware } from './middleware/auth'
 import { tenantMiddleware } from './middleware/tenant'
 import { moduleContextMiddleware } from './middleware/module-context'
@@ -115,6 +116,7 @@ export function createApp() {
   erpApp.route('/invoice-cost-variance', invoiceCostVarianceDashboardRoutes)
   erpApp.route('/mrp', mrpDashboardRoutes)
   erpApp.route('/admin', adminRoutes)
+  erpApp.route('/chat', chatRoutes)
   erpApp.route('/', kiwiplanRoutes)
   app.route('/erp', erpApp)
 

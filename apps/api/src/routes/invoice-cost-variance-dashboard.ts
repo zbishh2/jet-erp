@@ -6,6 +6,7 @@ import {
   KiwiplanError,
 } from '../services/kiwiplan-client'
 import { requireModuleRole } from '../middleware/require-role'
+import { kvCache, cacheKey, CacheTTL } from '../services/kv-cache'
 
 export const invoiceCostVarianceDashboardRoutes = new Hono<{ Bindings: Env }>()
 
@@ -291,7 +292,10 @@ invoiceCostVarianceDashboardRoutes.get('/date-limits', async (c) => {
   }
 
   try {
-    const result = await client.rawQuery(getDateLimitsSQL(), {}, 'esp')
+    const kv = c.env.AUTH_CACHE
+    const result = await kvCache(kv, 'invoice-cv:date-limits', CacheTTL.DATE_LIMITS, () =>
+      client.rawQuery(getDateLimitsSQL(), {}, 'esp')
+    )
     return c.json(result)
   } catch (err) {
     if (err instanceof KiwiplanError) {
@@ -445,29 +449,37 @@ invoiceCostVarianceDashboardRoutes.get('/filter-options', async (c) => {
   const { customer, spec, hasCustomer, hasSpec } = parseDashboardFilters(c)
 
   try {
-    const customerParams: Record<string, unknown> = {
-      startDate: dates.startDate,
-      endDate: dates.endDate,
-    }
-    if (hasSpec) customerParams.spec = spec
+    const kv = c.env.AUTH_CACHE
+    const key = cacheKey('invoice-cv:filter-options', {
+      s: dates.startDate, e: dates.endDate,
+      c: customer, sp: spec,
+    })
 
-    const specParams: Record<string, unknown> = {
-      startDate: dates.startDate,
-      endDate: dates.endDate,
-    }
-    if (hasCustomer) specParams.customer = customer
+    const result = await kvCache(kv, key, CacheTTL.FILTER_OPTIONS, async () => {
+      const customerParams: Record<string, unknown> = {
+        startDate: dates.startDate,
+        endDate: dates.endDate,
+      }
+      if (hasSpec) customerParams.spec = spec
 
-    const [customersRes, specsRes] = await Promise.all([
-      client.rawQuery(getCustomerOptionsSQL(hasSpec), customerParams, 'esp'),
-      client.rawQuery(getSpecOptionsSQL(hasCustomer), specParams, 'esp'),
-    ])
+      const specParams: Record<string, unknown> = {
+        startDate: dates.startDate,
+        endDate: dates.endDate,
+      }
+      if (hasCustomer) specParams.customer = customer
 
-    return c.json({
-      data: {
+      const [customersRes, specsRes] = await Promise.all([
+        client.rawQuery(getCustomerOptionsSQL(hasSpec), customerParams, 'esp'),
+        client.rawQuery(getSpecOptionsSQL(hasCustomer), specParams, 'esp'),
+      ])
+
+      return {
         customers: ((customersRes.data as Array<Record<string, unknown>>) ?? []).map((r) => String(r.customerName ?? '')),
         specs: ((specsRes.data as Array<Record<string, unknown>>) ?? []).map((r) => String(r.specNumber ?? '')),
-      },
+      }
     })
+
+    return c.json({ data: result })
   } catch (err) {
     if (err instanceof KiwiplanError) {
       return c.json({ error: err.message }, err.statusCode as 400)
