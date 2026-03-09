@@ -99,6 +99,8 @@ export function useSalesByCustomer(startDate: string, endDate: string, limit = 5
 export interface SalesDetailRow {
   invoiceDate: string
   invoiceNumber: string
+  jobNumber: string | null
+  specNumber: string | null
   customerName: string
   repName: string | null
   totalSales: number

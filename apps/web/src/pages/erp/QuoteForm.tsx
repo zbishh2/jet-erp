@@ -13,6 +13,7 @@ import {
   useDespatchMode,
   useRoutingByStyle,
   useRoutingStyleIds,
+  useScoreFormulas,
   type KiwiplanCustomer,
   type KiwiplanBoardGrade,
   type KiwiplanStyle,
@@ -294,6 +295,7 @@ export default function QuoteForm() {
   const [isGlued, setIsGlued] = useState(true)
   const [qtyPerHour, setQtyPerHour] = useState(0) // QTY/H — primary what-if input (machine speed)
   const [qtyPerHourTouched, setQtyPerHourTouched] = useState(false) // Track manual QTY/H entry
+  const [sqFtOverride, setSqFtOverride] = useState<number | null>(null) // Manual blank area override
 
   // --- What-if editable field ---
   const [whatIfField, setWhatIfField] = useState<SolverTarget["type"] | null>(null)
@@ -311,6 +313,7 @@ export default function QuoteForm() {
   const despatchModeQuery = useDespatchMode(selectedAddress?.standardDespatchModeID)
   const routingQuery = useRoutingByStyle(selectedStyle?.styleId)
   const routingStyleIdsQuery = useRoutingStyleIds()
+  const scoreFormulasQuery = useScoreFormulas()
 
   const customers = customersQuery.data?.data ?? []
   const boards = boardsQuery.data?.data ?? []
@@ -499,7 +502,11 @@ export default function QuoteForm() {
     sgaPercent: 18,
     fixedMfgPercent: 35,
     quantity,
-  }), [length, width, depth, selectedBoard, inkCoveragePct, isGlued, machineSteps, shippingMethod, effectiveFreightPerCwt, freightZone, quantity])
+    styleCode: selectedStyle?.code,
+    basicBoardName: selectedBoard?.basicBoardName,
+    formulaData: scoreFormulasQuery.data,
+    blankAreaOverride: sqFtOverride,
+  }), [length, width, depth, selectedBoard, inkCoveragePct, isGlued, machineSteps, shippingMethod, effectiveFreightPerCwt, freightZone, quantity, selectedStyle, scoreFormulasQuery.data, sqFtOverride])
 
   const costs = useMemo(() => calculateCosts(costInputs), [costInputs])
 
@@ -670,15 +677,15 @@ export default function QuoteForm() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,7fr)] gap-6">
           {/* ====== LEFT COLUMN: Input Form ====== */}
-          <div className="space-y-6">
+          <div className="space-y-3">
             {/* Customer & Ship-To */}
-            <div className="border border-border rounded-lg p-4 bg-background-secondary">
-              <h3 className="text-base font-semibold mb-4">Customer & Shipping</h3>
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <Label className="text-sm text-foreground-secondary">Customer</Label>
+            <div className="border border-border rounded-lg p-3 bg-background-secondary">
+              <h3 className="text-xs font-semibold mb-2 text-foreground-secondary uppercase tracking-wide">Customer & Shipping</h3>
+              <div className="space-y-2">
+                <div className="space-y-0.5">
+                  <Label className="text-xs text-foreground-secondary">Customer</Label>
                   <SearchableSelectWithQuery
                     items={customers}
                     value={selectedCustomer}
@@ -695,15 +702,15 @@ export default function QuoteForm() {
 
                 {/* Ship-To Address */}
                 {selectedCustomer && (
-                  <div className="space-y-1">
-                    <Label className="text-sm text-foreground-secondary">Ship To</Label>
+                  <div className="space-y-0.5">
+                    <Label className="text-xs text-foreground-secondary">Ship To</Label>
                     {addressesQuery.isLoading ? (
-                      <div className="flex items-center gap-2 text-sm text-foreground-tertiary py-1">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading addresses...
+                      <div className="flex items-center gap-2 text-xs text-foreground-tertiary py-1">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Loading...
                       </div>
                     ) : addresses.length === 0 ? (
-                      <span className="text-sm text-foreground-tertiary">No addresses found</span>
+                      <span className="text-xs text-foreground-tertiary">No addresses</span>
                     ) : (
                       <SearchableSelect
                         items={addresses}
@@ -718,88 +725,62 @@ export default function QuoteForm() {
                   </div>
                 )}
 
-                {/* Shipping Method */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <Label className="text-sm text-foreground-secondary">Shipping</Label>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => { setShippingMethod("freight"); setWhatIfField(null) }}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded border text-sm font-medium transition-colors ${
-                          shippingMethod === "freight"
-                            ? "bg-accent text-white border-accent"
-                            : "bg-background text-foreground border-border hover:bg-muted"
-                        }`}
-                      >
-                        <Truck className="h-3.5 w-3.5" />
-                        Freight
-                      </button>
-                      <button
-                        onClick={() => { setShippingMethod("cpu"); setWhatIfField(null) }}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded border text-sm font-medium transition-colors ${
-                          shippingMethod === "cpu"
-                            ? "bg-accent text-white border-accent"
-                            : "bg-background text-foreground border-border hover:bg-muted"
-                        }`}
-                      >
-                        <Package className="h-3.5 w-3.5" />
-                        CPU
-                      </button>
-                    </div>
+                {/* Shipping & Quantity */}
+                <div className="flex items-center justify-between">
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => { setShippingMethod("freight"); setWhatIfField(null) }}
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded border text-xs font-medium transition-colors ${
+                        shippingMethod === "freight"
+                          ? "bg-accent text-white border-accent"
+                          : "bg-background text-foreground border-border hover:bg-muted"
+                      }`}
+                    >
+                      <Truck className="h-3 w-3" />
+                      Freight
+                    </button>
+                    <button
+                      onClick={() => { setShippingMethod("cpu"); setWhatIfField(null) }}
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded border text-xs font-medium transition-colors ${
+                        shippingMethod === "cpu"
+                          ? "bg-accent text-white border-accent"
+                          : "bg-background text-foreground border-border hover:bg-muted"
+                      }`}
+                    >
+                      <Package className="h-3 w-3" />
+                      CPU
+                    </button>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-sm text-foreground-secondary">Quantity</Label>
-                    <Input
-                      type="number"
-                      value={quantity}
-                      onChange={(e) => { setQuantity(parseInt(e.target.value) || 0); setWhatIfField(null) }}
-                      className="border-0 bg-transparent px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-foreground-secondary">Qty</Label>
+                  <Input
+                    type="number"
+                    value={quantity}
+                    onChange={(e) => { setQuantity(parseInt(e.target.value) || 0); setWhatIfField(null) }}
+                    className="border-0 bg-transparent px-0 w-20 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
                 </div>
 
                 {shippingMethod === "freight" && freightZone && (
-                  <p className="text-xs text-foreground-tertiary">
+                  <p className="text-[10px] text-foreground-tertiary">
                     {freightZone.journeydistance} mi / ${fmt(effectiveFreightPerCwt)}/cwt
                   </p>
                 )}
               </div>
             </div>
 
-            {/* Dimensions */}
-            <div className="border border-border rounded-lg p-4 bg-background-secondary">
-              <h3 className="text-base font-semibold mb-4">Dimensions (inches)</h3>
-              <div className="grid grid-cols-3 gap-4">
-                {[
-                  { label: "Length", value: length, set: setLength },
-                  { label: "Width", value: width, set: setWidth },
-                  { label: "Depth", value: depth, set: setDepth },
-                ].map(({ label, value, set }) => (
-                  <div key={label} className="space-y-1">
-                    <Label className="text-sm text-foreground-secondary">{label}</Label>
-                    <Input
-                      type="number"
-                      step="0.125"
-                      value={value}
-                      onChange={(e) => { set(parseFloat(e.target.value) || 0); setWhatIfField(null) }}
-                      className="border-0 bg-transparent px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
             {/* Materials */}
-            <div className="border border-border rounded-lg p-4 bg-background-secondary">
-              <h3 className="text-base font-semibold mb-4">Materials</h3>
+            <div className="border border-border rounded-lg p-3 bg-background-secondary">
+              <h3 className="text-xs font-semibold mb-2 text-foreground-secondary uppercase tracking-wide">Materials</h3>
               {isLoading ? (
                 <div className="flex items-center justify-center py-4">
                   <Loader2 className="h-5 w-5 animate-spin text-foreground-secondary" />
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <Label className="text-sm text-foreground-secondary">Board Grade</Label>
+                <div className="space-y-2">
+                  <div className="space-y-0.5">
+                    <Label className="text-xs text-foreground-secondary">Board Grade</Label>
                     <SearchableSelect
                       items={boards}
                       value={selectedBoard}
@@ -811,8 +792,8 @@ export default function QuoteForm() {
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <Label className="text-sm text-foreground-secondary">Box Style</Label>
+                  <div className="space-y-0.5">
+                    <Label className="text-xs text-foreground-secondary">Box Style</Label>
                     <SearchableSelect
                       items={styles}
                       value={selectedStyle}
@@ -828,36 +809,84 @@ export default function QuoteForm() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <Label className="text-sm text-foreground-secondary">Ink Coverage %</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={5}
-                        value={inkCoveragePct}
-                        onChange={(e) => { setInkCoveragePct(parseFloat(e.target.value) || 0); setWhatIfField(null) }}
-                        className="border-0 bg-transparent px-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                    </div>
-                    <div className="flex items-center justify-between bg-background rounded-md p-2 border border-border">
-                      <Label className="text-sm text-foreground-secondary">Glue Joint</Label>
-                      <Switch
-                        checked={isGlued}
-                        onCheckedChange={(checked) => { setIsGlued(checked); setWhatIfField(null) }}
-                      />
-                    </div>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-foreground-secondary">Ink %</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={inkCoveragePct}
+                      onChange={(e) => { setInkCoveragePct(parseFloat(e.target.value) || 0); setWhatIfField(null) }}
+                      className="border-0 bg-transparent px-0 w-16 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-foreground-secondary">Glue Joint</Label>
+                    <Switch
+                      checked={isGlued}
+                      onCheckedChange={(checked) => { setIsGlued(checked); setWhatIfField(null) }}
+                    />
                   </div>
                 </div>
               )}
             </div>
 
+            {/* Dimensions */}
+            <div className="border border-border rounded-lg p-3 bg-background-secondary">
+              <h3 className="text-xs font-semibold mb-2 text-foreground-secondary uppercase tracking-wide">Dimensions (in)</h3>
+              <div className="space-y-1">
+                {[
+                  { label: "Length", value: length, set: setLength },
+                  { label: "Width", value: width, set: setWidth },
+                  { label: "Depth", value: depth, set: setDepth },
+                ].map(({ label, value, set }) => (
+                  <div key={label} className="flex items-center justify-between">
+                    <Label className="text-xs text-foreground-secondary">{label}</Label>
+                    <Input
+                      type="number"
+                      step="0.125"
+                      value={value}
+                      onChange={(e) => { set(parseFloat(e.target.value) || 0); setWhatIfField(null); setSqFtOverride(null) }}
+                      className="border-0 bg-transparent px-0 w-20 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="mt-1.5 pt-1.5 border-t border-border flex items-center justify-between gap-2">
+                <Label className="text-xs text-foreground-secondary whitespace-nowrap">Sq Ft</Label>
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    step="0.001"
+                    value={sqFtOverride != null ? sqFtOverride : costs.blankAreaSqFt.toFixed(3)}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value)
+                      setSqFtOverride(isNaN(v) ? null : v)
+                    }}
+                    className="border-0 bg-transparent px-0 w-20 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  {sqFtOverride != null && (
+                    <button
+                      onClick={() => setSqFtOverride(null)}
+                      className="text-foreground-tertiary hover:text-foreground"
+                      title="Reset to calculated"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                  {sqFtOverride == null && costs.formulaUsed === 'kiwiplan' && (
+                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 leading-none font-semibold text-indigo-500 border-indigo-300">KP</Badge>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Routing Display */}
             {machineSteps.length > 0 && (
-              <div className="border border-border rounded-lg p-4 bg-background-secondary">
-                <h3 className="text-base font-semibold mb-4 flex items-center gap-2">
-                  Machine Routing
+              <div className="border border-border rounded-lg p-3 bg-background-secondary">
+                <h3 className="text-xs font-semibold mb-2 text-foreground-secondary uppercase tracking-wide flex items-center gap-2">
+                  Routing
                   {routeSteps.length > 0 && (
                     <Badge variant="secondary" className="text-xs font-normal">Kiwiplan</Badge>
                   )}
@@ -997,7 +1026,12 @@ export default function QuoteForm() {
                 <div className="mt-3 pt-3 border-t border-border grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-foreground-secondary">Blank Area:</span>
-                    <span>{fmt(costs.blankAreaSqFt, 3)} sq ft</span>
+                    <span className="flex items-center gap-1">
+                      {fmt(costs.blankAreaSqFt, 3)} sq ft
+                      {costs.formulaUsed === 'kiwiplan' && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 leading-none font-semibold text-indigo-500 border-indigo-300">KP</Badge>
+                      )}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-foreground-secondary">Weight/M:</span>

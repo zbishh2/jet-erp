@@ -31,11 +31,13 @@ function kdwFromClause(
   hasLine: boolean,
   hasCustomer: boolean,
   hasSpec: boolean,
-  includeDateRange = true
+  includeDateRange = true,
+  hasJob = false
 ) {
   const lineWhere = hasLine ? `AND cc.costcenter_number = @line` : ''
   const customerWhere = hasCustomer ? `AND ISNULL(po.customer_name, '') = @customer` : ''
   const specWhere = hasSpec ? `AND ISNULL(po.spec_number, '') = @spec` : ''
+  const jobWhere = hasJob ? `AND ISNULL(po.job_number, '') = @job` : ''
   const dateWhere = includeDateRange
     ? `AND pf.feedback_report_date >= @startDate
       AND pf.feedback_report_date < @endDate`
@@ -55,13 +57,15 @@ function kdwFromClause(
       ${lineWhere}
       ${customerWhere}
       ${specWhere}
+      ${jobWhere}
   `
 }
 
-function getBaseRowsSQL(hasLine: boolean, hasCustomer: boolean, hasSpec: boolean) {
+function getBaseRowsSQL(hasLine: boolean, hasCustomer: boolean, hasSpec: boolean, hasJob = false) {
   const lineWhere = hasLine ? `AND cc.costcenter_number = @line` : ''
   const customerWhere = hasCustomer ? `AND ISNULL(po.customer_name, '') = @customer` : ''
   const specWhere = hasSpec ? `AND ISNULL(po.spec_number, '') = @spec` : ''
+  const jobWhere = hasJob ? `AND ISNULL(po.job_number, '') = @job` : ''
 
   return `
     SELECT
@@ -75,7 +79,10 @@ function getBaseRowsSQL(hasLine: boolean, hasCustomer: boolean, hasSpec: boolean
       (DATEDIFF(SECOND, jss.feedback_start, jss.feedback_finish) - CAST(pf.setup_duration_seconds AS FLOAT))
         / 3600.0
         + ISNULL(dt.setupDowntimeHours, 0)
-        - ISNULL(dt.totalDowntimeHours, 0) as uptimeHours
+        - ISNULL(dt.totalDowntimeHours, 0) as uptimeHours,
+      CASE WHEN ISNULL(jss.number_up_exit_1, 0) > 0
+        THEN CAST(jss.number_up_entry_1 AS FLOAT) / jss.number_up_exit_1
+        ELSE 1 END as numberOut
     FROM dwproductionfeedback pf
     INNER JOIN dwjobseriesstep jss
       ON pf.feedback_job_series_step_id = jss.job_series_step_id
@@ -100,6 +107,7 @@ function getBaseRowsSQL(hasLine: boolean, hasCustomer: boolean, hasSpec: boolean
       ${lineWhere}
       ${customerWhere}
       ${specWhere}
+      ${jobWhere}
   `
 }
 
@@ -277,6 +285,7 @@ interface ComputedRow {
   actMaterialCost: number
   actLaborCost: number
   actFreightCost: number
+  numberOut: number
 }
 
 async function computeCostVarianceRows(
@@ -287,9 +296,11 @@ async function computeCostVarianceRows(
     line: string
     customer: string
     spec: string
+    job: string
     hasLine: boolean
     hasCustomer: boolean
     hasSpec: boolean
+    hasJob: boolean
   }
 ): Promise<ComputedRow[]> {
   // Step 1: fetch base rows from KDW
@@ -300,9 +311,10 @@ async function computeCostVarianceRows(
   if (args.hasLine) baseParams.line = parseInt(args.line, 10)
   if (args.hasCustomer) baseParams.customer = args.customer
   if (args.hasSpec) baseParams.spec = args.spec
+  if (args.hasJob) baseParams.job = args.job
 
   const baseRes = await client.rawQuery<BaseRow>(
-    getBaseRowsSQL(args.hasLine, args.hasCustomer, args.hasSpec),
+    getBaseRowsSQL(args.hasLine, args.hasCustomer, args.hasSpec, args.hasJob),
     baseParams,
     'kdw'
   )
@@ -311,50 +323,46 @@ async function computeCostVarianceRows(
 
   const jobs = [...new Set(baseRows.map((r) => String(r.jobNumber ?? '')).filter((j) => j.length > 0))]
 
-  // Step 2: fetch machine counts from KDW + cost estimates + routing steps from ESP in parallel
-  const espInClause = jobs.length > 0 ? buildStringInClause('o.jobnumber', jobs, 'jobEsp') : null
-  const [machineRes, costRes, routingRes] = await Promise.all([
-    jobs.length > 0
-      ? (() => {
-          const inClause = buildStringInClause('po.job_number', jobs, 'jobKdw')
-          return client.rawQuery<MachineCountRow>(getMachineCountsSQL(inClause.clause), inClause.params, 'kdw')
-        })()
-      : Promise.resolve({ data: [] as MachineCountRow[] }),
-    espInClause
-      ? client.rawQuery<CostEstimateRow>(getCostEstimatesSQL(espInClause.clause), espInClause.params, 'esp')
-      : Promise.resolve({ data: [] as CostEstimateRow[] }),
-    espInClause
-      ? client.rawQuery<RoutingStepRow>(getRoutingStepsSQL(espInClause.clause), espInClause.params, 'esp')
-      : Promise.resolve({ data: [] as RoutingStepRow[] }),
-  ])
-
-  // Step 3: build lookup maps
+  // Step 2: fetch machine counts from KDW + cost estimates + routing steps from ESP
+  // Batch jobs to avoid massive IN clauses that time out on large date ranges
+  const JOB_BATCH_SIZE = 500
   const machineCountByJob = new Map<string, number>()
-  for (const row of machineRes.data ?? []) {
-    machineCountByJob.set(String(row.jobNumber ?? ''), toNumber(row.machineCount))
-  }
-
   const costByJob = new Map<string, {
     preMat: number; preLab: number; preFrt: number
     postMat: number; postLab: number; postFrt: number
   }>()
-  for (const row of costRes.data ?? []) {
-    costByJob.set(String(row.jobNumber ?? ''), {
-      preMat: toNumber(row.preMaterialCostPerUnit),
-      preLab: toNumber(row.preLaborCostPerUnit),
-      preFrt: toNumber(row.preFreightCostPerUnit),
-      postMat: toNumber(row.postMaterialCostPerUnit),
-      postLab: toNumber(row.postLaborCostPerUnit),
-      postFrt: toNumber(row.postFreightCostPerUnit),
-    })
-  }
-
   const routingByJob = new Map<string, { runRate: number; setupMins: number }[]>()
-  for (const row of routingRes.data ?? []) {
-    const job = String(row.jobNumber ?? '')
-    const steps = routingByJob.get(job) ?? []
-    steps.push({ runRate: toNumber(row.runRate), setupMins: toNumber(row.setupMins) })
-    routingByJob.set(job, steps)
+
+  for (let i = 0; i < jobs.length; i += JOB_BATCH_SIZE) {
+    const batch = jobs.slice(i, i + JOB_BATCH_SIZE)
+    const espInClause = buildStringInClause('o.jobnumber', batch, `jobEsp${i}`)
+    const kdwInClause = buildStringInClause('po.job_number', batch, `jobKdw${i}`)
+
+    const [machineRes, costRes, routingRes] = await Promise.all([
+      client.rawQuery<MachineCountRow>(getMachineCountsSQL(kdwInClause.clause), kdwInClause.params, 'kdw'),
+      client.rawQuery<CostEstimateRow>(getCostEstimatesSQL(espInClause.clause), espInClause.params, 'esp'),
+      client.rawQuery<RoutingStepRow>(getRoutingStepsSQL(espInClause.clause), espInClause.params, 'esp'),
+    ])
+
+    for (const row of machineRes.data ?? []) {
+      machineCountByJob.set(String(row.jobNumber ?? ''), toNumber(row.machineCount))
+    }
+    for (const row of costRes.data ?? []) {
+      costByJob.set(String(row.jobNumber ?? ''), {
+        preMat: toNumber(row.preMaterialCostPerUnit),
+        preLab: toNumber(row.preLaborCostPerUnit),
+        preFrt: toNumber(row.preFreightCostPerUnit),
+        postMat: toNumber(row.postMaterialCostPerUnit),
+        postLab: toNumber(row.postLaborCostPerUnit),
+        postFrt: toNumber(row.postFreightCostPerUnit),
+      })
+    }
+    for (const row of routingRes.data ?? []) {
+      const job = String(row.jobNumber ?? '')
+      const steps = routingByJob.get(job) ?? []
+      steps.push({ runRate: toNumber(row.runRate), setupMins: toNumber(row.setupMins) })
+      routingByJob.set(job, steps)
+    }
   }
 
   // Step 4a: compute total adjusted quantity per job (for estimated hours)
@@ -421,6 +429,7 @@ async function computeCostVarianceRows(
       actMaterialCost: (costs?.postMat ?? 0) * adjQty,
       actLaborCost: (costs?.postLab ?? 0) * adjQty,
       actFreightCost: (costs?.postFrt ?? 0) * adjQty,
+      numberOut: toNumber((row as unknown as Record<string, unknown>).numberOut) || 1,
     })
   }
 
@@ -469,19 +478,33 @@ function getSpecOptionsSQL(hasLine: boolean, hasCustomer: boolean) {
   `
 }
 
+function getJobOptionsSQL(hasLine: boolean, hasCustomer: boolean, hasSpec: boolean) {
+  return `
+    SELECT DISTINCT
+      ISNULL(po.job_number, '') as jobNumber
+    ${kdwFromClause(hasLine, hasCustomer, hasSpec)}
+      AND po.job_number IS NOT NULL
+      AND po.job_number <> ''
+    ORDER BY jobNumber
+  `
+}
+
 function parseDashboardFilters(c: {
   req: { query: (name: string) => string | undefined }
 }) {
   const line = c.req.query('line') || ''
   const customer = c.req.query('customer') || ''
   const spec = c.req.query('spec') || ''
+  const job = c.req.query('job') || ''
   return {
     line,
     customer,
     spec,
+    job,
     hasLine: line.length > 0,
     hasCustomer: customer.length > 0,
     hasSpec: spec.length > 0,
+    hasJob: job.length > 0,
   }
 }
 
@@ -537,13 +560,13 @@ costVarianceDashboardRoutes.get('/summary', async (c) => {
     return c.json({ error: 'granularity must be daily, weekly, monthly, or yearly' }, 400)
   }
 
-  const { line, customer, spec, hasLine, hasCustomer, hasSpec } = parseDashboardFilters(c)
+  const { line, customer, spec, job, hasLine, hasCustomer, hasSpec, hasJob } = parseDashboardFilters(c)
 
   try {
     const rows = await computeCostVarianceRows(client, {
       startDate: dates.startDate,
       endDate: dates.endDate,
-      line, customer, spec, hasLine, hasCustomer, hasSpec,
+      line, customer, spec, job, hasLine, hasCustomer, hasSpec, hasJob,
     })
 
     // Aggregate by period
@@ -595,13 +618,17 @@ costVarianceDashboardRoutes.get('/details', async (c) => {
   const dates = requireDates(c)
   if ('error' in dates) return dates.error
 
-  const { line, customer, spec, hasLine, hasCustomer, hasSpec } = parseDashboardFilters(c)
+  const { line, customer, spec, job, hasLine, hasCustomer, hasSpec, hasJob } = parseDashboardFilters(c)
+  const page = Math.max(1, parseInt(c.req.query('page') || '1', 10))
+  const pageSize = Math.min(500, Math.max(1, parseInt(c.req.query('pageSize') || '100', 10)))
+  const sortField = c.req.query('sortField') || 'feedbackDate'
+  const sortDir = (c.req.query('sortDir') || 'desc') as 'asc' | 'desc'
 
   try {
     const rows = await computeCostVarianceRows(client, {
       startDate: dates.startDate,
       endDate: dates.endDate,
-      line, customer, spec, hasLine, hasCustomer, hasSpec,
+      line, customer, spec, job, hasLine, hasCustomer, hasSpec, hasJob,
     })
 
     // Aggregate by date+job+customer+spec+line
@@ -626,13 +653,52 @@ costVarianceDashboardRoutes.get('/details', async (c) => {
       }
     }
 
-    const data = [...byDetail.values()].sort((a, b) => {
-      const dateCmp = b.feedbackDate.localeCompare(a.feedbackDate)
-      if (dateCmp !== 0) return dateCmp
-      return b.jobNumber.localeCompare(a.jobNumber)
+    // Resolve computed sort fields that don't exist on the raw row
+    const getSortVal = (r: ComputedRow, field: string): unknown => {
+      switch (field) {
+        case 'estFull': return r.estMaterialCost + r.estLaborCost
+        case 'actFull': return r.actMaterialCost + r.actLaborCost
+        case 'variance': return (r.estMaterialCost + r.estLaborCost) - (r.actMaterialCost + r.actLaborCost)
+        case 'materialVariance': return r.estMaterialCost - r.actMaterialCost
+        case 'laborVariance': return r.estLaborCost - r.actLaborCost
+        case 'hoursVariance': return r.orderHours - r.estimatedHours
+        case 'vsUptime': return r.uptimeHours - r.estimatedHours
+        case 'estHours': return r.estimatedHours
+        default: return (r as unknown as Record<string, unknown>)[field]
+      }
+    }
+
+    const allData = [...byDetail.values()].sort((a, b) => {
+      const aVal = getSortVal(a, sortField)
+      const bVal = getSortVal(b, sortField)
+      const dir = sortDir === 'asc' ? 1 : -1
+      if (typeof aVal === 'number' && typeof bVal === 'number') return (aVal - bVal) * dir
+      return String(aVal ?? '').localeCompare(String(bVal ?? '')) * dir
     })
 
-    return c.json({ data })
+    // Compute totals from full dataset
+    const totals = {
+      estMaterialCost: 0, estLaborCost: 0, estFreightCost: 0,
+      actMaterialCost: 0, actLaborCost: 0, actFreightCost: 0,
+      orderHours: 0, uptimeHours: 0, estimatedHours: 0, adjQty: 0, quantity: 0,
+    }
+    for (const r of allData) {
+      totals.estMaterialCost += r.estMaterialCost
+      totals.estLaborCost += r.estLaborCost
+      totals.estFreightCost += r.estFreightCost
+      totals.actMaterialCost += r.actMaterialCost
+      totals.actLaborCost += r.actLaborCost
+      totals.actFreightCost += r.actFreightCost
+      totals.orderHours += r.orderHours
+      totals.uptimeHours += r.uptimeHours
+      totals.estimatedHours += r.estimatedHours
+      totals.adjQty += r.adjQty
+    }
+
+    const total = allData.length
+    const data = allData.slice((page - 1) * pageSize, page * pageSize)
+
+    return c.json({ data, totals, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } })
   } catch (err) {
     if (err instanceof KiwiplanError) {
       return c.json({ error: err.message }, err.statusCode as 400)
@@ -641,7 +707,7 @@ costVarianceDashboardRoutes.get('/details', async (c) => {
   }
 })
 
-// GET /api/erp/cost-variance/filter-options?startDate=&endDate=&line=&customer=&spec=
+// GET /api/erp/cost-variance/filter-options?startDate=&endDate=&line=&customer=&spec=&job=
 costVarianceDashboardRoutes.get('/filter-options', async (c) => {
   const client = getClient(c.env)
   if (!client) {
@@ -651,19 +717,20 @@ costVarianceDashboardRoutes.get('/filter-options', async (c) => {
   const dates = requireDates(c)
   if ('error' in dates) return dates.error
 
-  const { line, customer, spec, hasLine, hasCustomer, hasSpec } = parseDashboardFilters(c)
+  const { line, customer, spec, job, hasLine, hasCustomer, hasSpec, hasJob } = parseDashboardFilters(c)
 
   try {
     const kv = c.env.AUTH_CACHE
     const key = cacheKey('cost-variance:filter-options', {
       s: dates.startDate, e: dates.endDate,
-      l: line, c: customer, sp: spec,
+      l: line, c: customer, sp: spec, j: job,
     })
 
     const result = await kvCache(kv, key, CacheTTL.FILTER_OPTIONS, async () => {
       const lineSql = getLineOptionsSQL(hasCustomer, hasSpec)
       const customerSql = getCustomerOptionsSQL(hasLine, hasSpec)
       const specSql = getSpecOptionsSQL(hasLine, hasCustomer)
+      const jobSql = getJobOptionsSQL(hasLine, hasCustomer, hasSpec)
 
       const lineParams: Record<string, unknown> = {
         startDate: dates.startDate,
@@ -686,16 +753,26 @@ costVarianceDashboardRoutes.get('/filter-options', async (c) => {
       if (hasLine) specParams.line = parseInt(line, 10)
       if (hasCustomer) specParams.customer = customer
 
-      const [linesRes, customersRes, specsRes] = await Promise.all([
+      const jobParams: Record<string, unknown> = {
+        startDate: dates.startDate,
+        endDate: dates.endDate,
+      }
+      if (hasLine) jobParams.line = parseInt(line, 10)
+      if (hasCustomer) jobParams.customer = customer
+      if (hasSpec) jobParams.spec = spec
+
+      const [linesRes, customersRes, specsRes, jobsRes] = await Promise.all([
         client.rawQuery(lineSql, lineParams, 'kdw'),
         client.rawQuery(customerSql, customerParams, 'kdw'),
         client.rawQuery(specSql, specParams, 'kdw'),
+        client.rawQuery(jobSql, jobParams, 'kdw'),
       ])
 
       return {
         lineNumbers: ((linesRes.data as Array<Record<string, unknown>>) ?? []).map((r) => String(r.lineNumber ?? '')),
         customers: ((customersRes.data as Array<Record<string, unknown>>) ?? []).map((r) => String(r.customerName ?? '')),
         specs: ((specsRes.data as Array<Record<string, unknown>>) ?? []).map((r) => String(r.specNumber ?? '')),
+        jobs: ((jobsRes.data as Array<Record<string, unknown>>) ?? []).map((r) => String(r.jobNumber ?? '')),
       }
     })
 

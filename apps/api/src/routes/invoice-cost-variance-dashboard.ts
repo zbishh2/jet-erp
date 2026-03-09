@@ -60,11 +60,14 @@ function parseDashboardFilters(c: {
 }) {
   const customer = c.req.query('customer') || ''
   const spec = c.req.query('spec') || ''
+  const salesRep = c.req.query('salesRep') || ''
   return {
     customer,
     spec,
+    salesRep,
     hasCustomer: customer.length > 0,
     hasSpec: spec.length > 0,
+    hasSalesRep: salesRep.length > 0,
   }
 }
 
@@ -84,9 +87,10 @@ function requireDates(c: {
 // SQL: single ESP query with all JOINs
 // ---------------------------------------------------------------------------
 
-function getInvoiceCostVarianceSQL(hasCustomer: boolean, hasSpec: boolean) {
+function getInvoiceCostVarianceSQL(hasCustomer: boolean, hasSpec: boolean, hasSalesRep: boolean) {
   const customerWhere = hasCustomer ? `AND cust.name = @customer` : ''
   const specWhere = hasSpec ? `AND pd.designnumber = @spec` : ''
+  const salesRepWhere = hasSalesRep ? `AND ISNULL(salescon.firstname + ' ' + salescon.lastname, '') = @salesRep` : ''
 
   return `
     SELECT
@@ -95,6 +99,7 @@ function getInvoiceCostVarianceSQL(hasCustomer: boolean, hasSpec: boolean) {
       o.jobnumber as jobNumber,
       ISNULL(cust.name, 'Unknown') as customerName,
       ISNULL(pd.designnumber, '') as specNumber,
+      ISNULL(salescon.firstname + ' ' + salescon.lastname, '') as salesRep,
       TRY_CAST(il.quantity AS FLOAT) as quantity,
       CASE WHEN pce.ID IS NOT NULL THEN TRY_CAST(pce.materialcost AS FLOAT) / 1000.0 ELSE NULL END as preMaterialCostPerUnit,
       CASE WHEN pce.ID IS NOT NULL THEN TRY_CAST(pce.labourcost AS FLOAT) / 1000.0 ELSE NULL END as preLaborCostPerUnit,
@@ -105,13 +110,15 @@ function getInvoiceCostVarianceSQL(hasCustomer: boolean, hasSpec: boolean) {
       routing.totalSetupHours,
       routing.hoursPerThousand,
       routing.stdRunRate,
-      routing.totalSetupMins
+      routing.totalSetupMins,
+      ISNULL(pd.noperset, 1) * ISNULL(pd.noofsets, 1) as numberOut
     FROM dbo.espInvoiceLine il
     INNER JOIN dbo.espInvoice inv ON il.invoiceID = inv.ID
     INNER JOIN dbo.espOrder o ON il.orderID = o.ID
-    LEFT JOIN dbo.orgCompany cust ON inv.companyID = cust.ID
     LEFT JOIN dbo.ebxProductPrice pp ON o.productpriceID = pp.ID
     LEFT JOIN dbo.ebxProductDesign pd ON pp.productDesignID = pd.ID
+    LEFT JOIN dbo.orgCompany cust ON pd.companyID = cust.ID
+    LEFT JOIN dbo.orgContact salescon ON cust.salesContactID = salescon.ID
     LEFT JOIN dbo.cstCostEstimate pce ON o.precostestimateID = pce.ID
     LEFT JOIN dbo.ocsPostcostedorder pco ON o.ID = pco.orderID
     LEFT JOIN dbo.cstCostEstimate postce ON pco.costEstimateID = postce.ID
@@ -141,6 +148,7 @@ function getInvoiceCostVarianceSQL(hasCustomer: boolean, hasSpec: boolean) {
       AND inv.transactiondate >= @startDate
       AND inv.transactiondate < @endDate
       ${customerWhere}
+      ${salesRepWhere}
       ${specWhere}
   `
 }
@@ -155,6 +163,7 @@ type InvoiceRow = {
   jobNumber: unknown
   customerName: unknown
   specNumber: unknown
+  salesRep: unknown
   quantity: unknown
   preMaterialCostPerUnit: unknown
   preLaborCostPerUnit: unknown
@@ -166,6 +175,7 @@ type InvoiceRow = {
   hoursPerThousand: unknown
   stdRunRate: unknown
   totalSetupMins: unknown
+  numberOut: unknown
 }
 
 interface ComputedRow {
@@ -174,6 +184,7 @@ interface ComputedRow {
   jobNumber: string
   customerName: string
   specNumber: string
+  salesRep: string
   quantity: number
   estimatedHours: number
   stdRunRate: number
@@ -184,6 +195,7 @@ interface ComputedRow {
   actMaterialCost: number
   actLaborCost: number
   actFreightCost: number
+  numberOut: number
 }
 
 // ---------------------------------------------------------------------------
@@ -210,6 +222,7 @@ function computeRows(rawRows: InvoiceRow[]): ComputedRow[] {
       jobNumber: String(row.jobNumber ?? ''),
       customerName: String(row.customerName ?? 'Unknown'),
       specNumber: String(row.specNumber ?? ''),
+      salesRep: String(row.salesRep ?? ''),
       quantity: qty,
       estimatedHours,
       stdRunRate: toNumber(row.stdRunRate),
@@ -220,6 +233,7 @@ function computeRows(rawRows: InvoiceRow[]): ComputedRow[] {
       actMaterialCost: postMat * qty,
       actLaborCost: postLab * qty,
       actFreightCost: postFrt * qty,
+      numberOut: toNumber(row.numberOut) || 1,
     }
   })
 }
@@ -240,35 +254,63 @@ function getDateLimitsSQL() {
   `
 }
 
-function getCustomerOptionsSQL(hasSpec: boolean) {
+function getCustomerOptionsSQL(hasSpec: boolean, hasSalesRep: boolean = false) {
   const specWhere = hasSpec ? `AND pd.designnumber = @spec` : ''
+  const salesRepWhere = hasSalesRep ? `AND ISNULL(salescon.firstname + ' ' + salescon.lastname, '') = @salesRep` : ''
   return `
     SELECT DISTINCT ISNULL(cust.name, 'Unknown') as customerName
     FROM dbo.espInvoiceLine il
     INNER JOIN dbo.espInvoice inv ON il.invoiceID = inv.ID
     INNER JOIN dbo.espOrder o ON il.orderID = o.ID
-    LEFT JOIN dbo.orgCompany cust ON inv.companyID = cust.ID
     LEFT JOIN dbo.ebxProductPrice pp ON o.productpriceID = pp.ID
     LEFT JOIN dbo.ebxProductDesign pd ON pp.productDesignID = pd.ID
+    LEFT JOIN dbo.orgCompany cust ON pd.companyID = cust.ID
+    LEFT JOIN dbo.orgContact salescon ON cust.salesContactID = salescon.ID
     WHERE inv.invoicestatus = 'Final'
       AND il.invoiceLineType = 'Goods Invoice Line'
       AND inv.transactiondate >= @startDate
       AND inv.transactiondate < @endDate
       ${specWhere}
+      ${salesRepWhere}
     ORDER BY customerName
   `
 }
 
-function getSpecOptionsSQL(hasCustomer: boolean) {
+function getSalesRepOptionsSQL(hasCustomer: boolean, hasSpec: boolean) {
   const customerWhere = hasCustomer ? `AND cust.name = @customer` : ''
+  const specWhere = hasSpec ? `AND pd.designnumber = @spec` : ''
+  return `
+    SELECT DISTINCT ISNULL(salescon.firstname + ' ' + salescon.lastname, '') as salesRep
+    FROM dbo.espInvoiceLine il
+    INNER JOIN dbo.espInvoice inv ON il.invoiceID = inv.ID
+    INNER JOIN dbo.espOrder o ON il.orderID = o.ID
+    LEFT JOIN dbo.ebxProductPrice pp ON o.productpriceID = pp.ID
+    LEFT JOIN dbo.ebxProductDesign pd ON pp.productDesignID = pd.ID
+    LEFT JOIN dbo.orgCompany cust ON pd.companyID = cust.ID
+    LEFT JOIN dbo.orgContact salescon ON cust.salesContactID = salescon.ID
+    WHERE inv.invoicestatus = 'Final'
+      AND il.invoiceLineType = 'Goods Invoice Line'
+      AND inv.transactiondate >= @startDate
+      AND inv.transactiondate < @endDate
+      AND ISNULL(salescon.firstname + ' ' + salescon.lastname, '') <> ''
+      ${customerWhere}
+      ${specWhere}
+    ORDER BY salesRep
+  `
+}
+
+function getSpecOptionsSQL(hasCustomer: boolean, hasSalesRep: boolean = false) {
+  const customerWhere = hasCustomer ? `AND cust.name = @customer` : ''
+  const salesRepWhere = hasSalesRep ? `AND ISNULL(salescon.firstname + ' ' + salescon.lastname, '') = @salesRep` : ''
   return `
     SELECT DISTINCT pd.designnumber as specNumber
     FROM dbo.espInvoiceLine il
     INNER JOIN dbo.espInvoice inv ON il.invoiceID = inv.ID
     INNER JOIN dbo.espOrder o ON il.orderID = o.ID
-    LEFT JOIN dbo.orgCompany cust ON inv.companyID = cust.ID
     LEFT JOIN dbo.ebxProductPrice pp ON o.productpriceID = pp.ID
     LEFT JOIN dbo.ebxProductDesign pd ON pp.productDesignID = pd.ID
+    LEFT JOIN dbo.orgCompany cust ON pd.companyID = cust.ID
+    LEFT JOIN dbo.orgContact salescon ON cust.salesContactID = salescon.ID
     WHERE inv.invoicestatus = 'Final'
       AND il.invoiceLineType = 'Goods Invoice Line'
       AND inv.transactiondate >= @startDate
@@ -276,6 +318,7 @@ function getSpecOptionsSQL(hasCustomer: boolean) {
       AND pd.designnumber IS NOT NULL
       AND pd.designnumber <> ''
       ${customerWhere}
+      ${salesRepWhere}
     ORDER BY specNumber
   `
 }
@@ -320,7 +363,7 @@ invoiceCostVarianceDashboardRoutes.get('/summary', async (c) => {
     return c.json({ error: 'granularity must be daily, weekly, monthly, or yearly' }, 400)
   }
 
-  const { customer, spec, hasCustomer, hasSpec } = parseDashboardFilters(c)
+  const { customer, spec, salesRep, hasCustomer, hasSpec, hasSalesRep } = parseDashboardFilters(c)
 
   try {
     const params: Record<string, unknown> = {
@@ -329,9 +372,10 @@ invoiceCostVarianceDashboardRoutes.get('/summary', async (c) => {
     }
     if (hasCustomer) params.customer = customer
     if (hasSpec) params.spec = spec
+    if (hasSalesRep) params.salesRep = salesRep
 
     const result = await client.rawQuery<InvoiceRow>(
-      getInvoiceCostVarianceSQL(hasCustomer, hasSpec),
+      getInvoiceCostVarianceSQL(hasCustomer, hasSpec, hasSalesRep),
       params,
       'esp'
     )
@@ -385,7 +429,11 @@ invoiceCostVarianceDashboardRoutes.get('/details', async (c) => {
   const dates = requireDates(c)
   if ('error' in dates) return dates.error
 
-  const { customer, spec, hasCustomer, hasSpec } = parseDashboardFilters(c)
+  const { customer, spec, salesRep, hasCustomer, hasSpec, hasSalesRep } = parseDashboardFilters(c)
+  const page = Math.max(1, parseInt(c.req.query('page') || '1', 10))
+  const pageSize = Math.min(500, Math.max(1, parseInt(c.req.query('pageSize') || '100', 10)))
+  const sortField = c.req.query('sortField') || 'invoiceDate'
+  const sortDir = (c.req.query('sortDir') || 'desc') as 'asc' | 'desc'
 
   try {
     const params: Record<string, unknown> = {
@@ -394,9 +442,10 @@ invoiceCostVarianceDashboardRoutes.get('/details', async (c) => {
     }
     if (hasCustomer) params.customer = customer
     if (hasSpec) params.spec = spec
+    if (hasSalesRep) params.salesRep = salesRep
 
     const result = await client.rawQuery<InvoiceRow>(
-      getInvoiceCostVarianceSQL(hasCustomer, hasSpec),
+      getInvoiceCostVarianceSQL(hasCustomer, hasSpec, hasSalesRep),
       params,
       'esp'
     )
@@ -421,13 +470,48 @@ invoiceCostVarianceDashboardRoutes.get('/details', async (c) => {
       }
     }
 
-    const data = [...byDetail.values()].sort((a, b) => {
-      const dateCmp = b.invoiceDate.localeCompare(a.invoiceDate)
-      if (dateCmp !== 0) return dateCmp
-      return b.invoiceNumber.localeCompare(a.invoiceNumber)
+    // Resolve computed sort fields that don't exist on the raw row
+    const getSortVal = (r: ComputedRow, field: string): unknown => {
+      switch (field) {
+        case 'estFull': return r.estMaterialCost + r.estLaborCost
+        case 'actFull': return r.actMaterialCost + r.actLaborCost
+        case 'variance': return (r.estMaterialCost + r.estLaborCost) - (r.actMaterialCost + r.actLaborCost)
+        case 'materialVariance': return r.estMaterialCost - r.actMaterialCost
+        case 'laborVariance': return r.estLaborCost - r.actLaborCost
+        case 'estHours': return r.estimatedHours
+        default: return (r as unknown as Record<string, unknown>)[field]
+      }
+    }
+
+    const allData = [...byDetail.values()].sort((a, b) => {
+      const aVal = getSortVal(a, sortField)
+      const bVal = getSortVal(b, sortField)
+      const dir = sortDir === 'asc' ? 1 : -1
+      if (typeof aVal === 'number' && typeof bVal === 'number') return (aVal - bVal) * dir
+      return String(aVal ?? '').localeCompare(String(bVal ?? '')) * dir
     })
 
-    return c.json({ data })
+    // Compute totals from full dataset
+    const totals = {
+      estMaterialCost: 0, estLaborCost: 0, estFreightCost: 0,
+      actMaterialCost: 0, actLaborCost: 0, actFreightCost: 0,
+      quantity: 0, estimatedHours: 0,
+    }
+    for (const r of allData) {
+      totals.estMaterialCost += r.estMaterialCost
+      totals.estLaborCost += r.estLaborCost
+      totals.estFreightCost += r.estFreightCost
+      totals.actMaterialCost += r.actMaterialCost
+      totals.actLaborCost += r.actLaborCost
+      totals.actFreightCost += r.actFreightCost
+      totals.quantity += r.quantity
+      totals.estimatedHours += r.estimatedHours
+    }
+
+    const total = allData.length
+    const data = allData.slice((page - 1) * pageSize, page * pageSize)
+
+    return c.json({ data, totals, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } })
   } catch (err) {
     if (err instanceof KiwiplanError) {
       return c.json({ error: err.message }, err.statusCode as 400)
@@ -446,13 +530,13 @@ invoiceCostVarianceDashboardRoutes.get('/filter-options', async (c) => {
   const dates = requireDates(c)
   if ('error' in dates) return dates.error
 
-  const { customer, spec, hasCustomer, hasSpec } = parseDashboardFilters(c)
+  const { customer, spec, salesRep, hasCustomer, hasSpec, hasSalesRep } = parseDashboardFilters(c)
 
   try {
     const kv = c.env.AUTH_CACHE
     const key = cacheKey('invoice-cv:filter-options', {
       s: dates.startDate, e: dates.endDate,
-      c: customer, sp: spec,
+      c: customer, sp: spec, sr: salesRep,
     })
 
     const result = await kvCache(kv, key, CacheTTL.FILTER_OPTIONS, async () => {
@@ -461,20 +545,31 @@ invoiceCostVarianceDashboardRoutes.get('/filter-options', async (c) => {
         endDate: dates.endDate,
       }
       if (hasSpec) customerParams.spec = spec
+      if (hasSalesRep) customerParams.salesRep = salesRep
+
+      const salesRepParams: Record<string, unknown> = {
+        startDate: dates.startDate,
+        endDate: dates.endDate,
+      }
+      if (hasCustomer) salesRepParams.customer = customer
+      if (hasSpec) salesRepParams.spec = spec
 
       const specParams: Record<string, unknown> = {
         startDate: dates.startDate,
         endDate: dates.endDate,
       }
       if (hasCustomer) specParams.customer = customer
+      if (hasSalesRep) specParams.salesRep = salesRep
 
-      const [customersRes, specsRes] = await Promise.all([
-        client.rawQuery(getCustomerOptionsSQL(hasSpec), customerParams, 'esp'),
-        client.rawQuery(getSpecOptionsSQL(hasCustomer), specParams, 'esp'),
+      const [customersRes, salesRepsRes, specsRes] = await Promise.all([
+        client.rawQuery(getCustomerOptionsSQL(hasSpec, hasSalesRep), customerParams, 'esp'),
+        client.rawQuery(getSalesRepOptionsSQL(hasCustomer, hasSpec), salesRepParams, 'esp'),
+        client.rawQuery(getSpecOptionsSQL(hasCustomer, hasSalesRep), specParams, 'esp'),
       ])
 
       return {
         customers: ((customersRes.data as Array<Record<string, unknown>>) ?? []).map((r) => String(r.customerName ?? '')),
+        salesReps: ((salesRepsRes.data as Array<Record<string, unknown>>) ?? []).map((r) => String(r.salesRep ?? '')),
         specs: ((specsRes.data as Array<Record<string, unknown>>) ?? []).map((r) => String(r.specNumber ?? '')),
       }
     })

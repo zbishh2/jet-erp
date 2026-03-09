@@ -199,6 +199,85 @@
     background-color: var(--color-bg-hover);
   }
 
+  /* Plant TV Dashboard cells */
+  .tv-th {
+    @apply py-2 px-3 text-xs font-semibold text-center border-b-2 border-border;
+    color: var(--color-text-secondary);
+  }
+
+  .tv-td {
+    @apply py-2 px-3 text-sm;
+    border-bottom: 1px solid var(--color-border-secondary);
+  }
+
+  .tv-cell-good {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+  }
+
+  .tv-cell-close {
+    background-color: rgba(234, 179, 8, 0.15);
+    color: #ca8a04;
+  }
+
+  .tv-cell-under {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+
+  .dark .tv-cell-good {
+    background-color: rgba(52, 211, 153, 0.2);
+    color: #34d399;
+  }
+
+  .dark .tv-cell-close {
+    background-color: rgba(250, 204, 21, 0.2);
+    color: #fde047;
+  }
+
+  .dark .tv-cell-under {
+    background-color: rgba(248, 113, 113, 0.2);
+    color: #f87171;
+  }
+
+  /* Plant TV Dashboard — visual card layout */
+  .tv-dashboard {
+    background: #0a0c10;
+    color: white;
+  }
+
+  .tv-btn {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.7);
+  }
+
+  .tv-btn:hover {
+    background: rgba(255,255,255,0.1);
+    color: white;
+  }
+
+  .tv-machine-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .tv-machine-card-plant {
+    background: rgba(99,102,241,0.08);
+    border-color: rgba(99,102,241,0.2);
+  }
+
+  .tv-stat-card {
+    background: rgba(255,255,255,0.04);
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+
   /* Remove focus outlines and borders from recharts */
   .recharts-wrapper,
   .recharts-wrapper *,

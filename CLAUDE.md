@@ -37,6 +37,57 @@ apps/api/src/db/schema/        # Drizzle schemas
 - **Animations**: Disable Recharts animations (`isAnimationActive={false}`) for snappy interactions.
 - **Recharts + shadcn Tooltip conflict**: Import Recharts Tooltip as `RechartsTooltip` to avoid name collision.
 
+## Querying KDW (Kiwiplan Data Warehouse) Freely
+
+The Kiwiplan gateway allows read-only SQL queries against the KDW (SQL Server) database. To run ad-hoc queries during development:
+
+### Local dev server approach
+
+```bash
+# 1. Seed local D1 with module data (one-time)
+npx wrangler d1 execute jet-erp-db --local --command "INSERT OR IGNORE INTO module (id, code, name, description, created_at, updated_at) VALUES ('mod-erp', 'erp', 'ERP', 'Enterprise Resource Planning', '2024-01-01', '2024-01-01');"
+npx wrangler d1 execute jet-erp-db --local --command "INSERT OR IGNORE INTO organization_module (id, organization_id, module_id, is_active, created_at, updated_at) VALUES ('om-1', '00000000-0000-0000-0000-000000000001', 'mod-erp', 1, '2024-01-01', '2024-01-01');"
+npx wrangler d1 execute jet-erp-db --local --command "INSERT OR IGNORE INTO user_organization_module (id, user_id, organization_id, module_id, role, created_at, updated_at) VALUES ('uom-1', 'dev', '00000000-0000-0000-0000-000000000001', 'mod-erp', 'ADMIN', '2024-01-01', '2024-01-01');"
+
+# 2. Start dev server (uses prod wrangler.toml for real KV/gateway, local D1, overrides for dev auth)
+npx wrangler dev --port 3099 --var ENVIRONMENT:development --var ALLOW_DEV_AUTH:true
+
+# 3. Query KDW via the plant-tv query endpoint (POST /api/erp/plant-tv/query)
+curl -s -X POST http://localhost:3099/api/erp/plant-tv/query \
+  -H "Content-Type: application/json" \
+  -H 'X-Dev-User: {"userId":"dev","email":"dev@test.com","displayName":"Dev","roles":["ADMIN"],"organizationId":"00000000-0000-0000-0000-000000000001"}' \
+  -H "X-Organization-Id: 00000000-0000-0000-0000-000000000001" \
+  -H "X-Module-Code: erp" \
+  -d '{"sql": "SELECT TOP 10 * FROM dwcostcenters"}'
+
+# Query ESP database instead of KDW:
+  -d '{"sql": "SELECT TOP 10 * FROM ebxStandardBoard", "database": "esp"}'
+```
+
+- The gateway only allows `SELECT` statements (read-only)
+- Default database is `kdw` (Kiwiplan Data Warehouse). Pass `"database": "esp"` for the ESP database.
+- Queries hit the real SQL Server via `KIWIPLAN_GATEWAY_URL` + `KIWIPLAN_SERVICE_TOKEN` (from `.dev.vars`)
+- The endpoint requires ADMIN role
+- Returns `{ data: [...] }` format
+
+### Key KDW tables
+
+| Table | Purpose |
+|-------|---------|
+| `dwproductionfeedback` | Production events (quantity_fed_in, run duration, dates) |
+| `dwjobseriesstep` | Job/order details (feedback_start/finish, shift_split_code) |
+| `dwcostcenters` | Machine/line definitions (costcenter_number, optimum_run_speed) |
+| `dwdowntimes` | Downtime events |
+| `dwproductionorders` | Order/customer info |
+| `dwshiftcalendar` | Shift definitions (First=06:00-16:00, Second=16:00-22:00) |
+| `dwoeerecord` | OEE records with shift info |
+
+### Shift handling
+
+- `jss.crew_id` is **unreliable** (often NULL or contains machine numbers)
+- Use time-based derivation from `jss.feedback_start`: First (06-16), Second (16-22)
+- Or join to `dwshiftcalendar` for the canonical shift schedule
+
 ## Security & Audit Logging (MANDATORY)
 
 All new API routes and features **must** include audit logging. This is a non-negotiable requirement.

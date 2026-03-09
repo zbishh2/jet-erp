@@ -282,6 +282,19 @@ export default function SalesDashboard() {
 
   const summaryQuery = useSalesSummary(summaryStart, summaryEnd, granularity, activeRep, activeCustomer)
   const priorYearQuery = useSalesSummary(priorYearStart, priorYearEnd, granularity, activeRep, activeCustomer)
+
+  // Dedicated monthly query for the budget tab — independent of chart granularity
+  const [budgetMonthStart, budgetMonthEnd] = useMemo(() => {
+    const [y, m] = budgetMonth.split("-").map(Number)
+    const nextM = m === 12 ? 1 : m + 1
+    const nextY = m === 12 ? y + 1 : y
+    return [
+      `${y}-${String(m).padStart(2, "0")}-01`,
+      `${nextY}-${String(nextM).padStart(2, "0")}-01`,
+    ]
+  }, [budgetMonth])
+  const budgetSummaryQuery = useSalesSummary(budgetMonthStart, budgetMonthEnd, "monthly", activeRep, activeCustomer)
+
   const byRepQuery = useSalesByRep(detailStart, detailEnd)
   const byCustomerQuery = useSalesByCustomer(detailStart, detailEnd)
   const salesDetailQuery = useSalesDetail(detailStart, detailEnd)
@@ -729,13 +742,11 @@ export default function SalesDashboard() {
     }
   }, [filteredSummary, summaryData, budgetByPeriod, selectedMonth, detailStart, detailEnd, holidayDates, viewingCurrentYear, granularity, seasonalityIndices])
 
-  // Budget tab KPIs — scoped to budgetMonth, independent of selectedMonth
+  // Budget tab KPIs — scoped to budgetMonth, independent of chart granularity
+  const budgetMonthlyData = budgetSummaryQuery.data?.data ?? []
   const budgetKpis = useMemo(() => {
-    // Match summary periods that fall within budgetMonth regardless of granularity
-    // monthly: "2026-02" === "2026-02", weekly/daily: "2026-02-03".startsWith("2026-02")
-    const periods = summaryData.filter((m) =>
-      granularity === "monthly" ? m.period === budgetMonth : m.period.startsWith(budgetMonth)
-    )
+    // Use the dedicated monthly query — always has exactly one period matching budgetMonth
+    const periods = budgetMonthlyData.filter((m) => m.period === budgetMonth)
     const totalSales = periods.reduce((sum, m) => sum + m.totalSales, 0)
     const totalMSF = periods.reduce((sum, m) => sum + m.totalMSF, 0)
     const totalCost = periods.reduce((sum, m) => sum + m.totalCost, 0)
@@ -798,7 +809,7 @@ export default function SalesDashboard() {
       perMsfToBudgetPct: budgetedPerMSF > 0 ? (salesPerMSF / budgetedPerMSF) * 100 : 0,
       contPerMsfToBudgetPct: budgetedContPerMSF > 0 ? (contPerMSF / budgetedContPerMSF) * 100 : 0,
     }
-  }, [summaryData, budgets, repFilter, granularity, budgetMonth, holidayDates])
+  }, [budgetMonthlyData, budgets, repFilter, budgetMonth, holidayDates])
 
   // Detail table state
   const [detailTab, setDetailTab] = usePersistedState<"detail" | "budget">("detailTab", "detail")
@@ -808,8 +819,10 @@ export default function SalesDashboard() {
     ["customerName", "Customer"],
     ["repName", "Rep"],
     ["invoiceNumber", "Invoice #"],
+    ["jobNumber", "Job #"],
+    ["specNumber", "Spec #"],
   ] as const
-  const [groupByDims, setGroupByDims] = usePersistedState<string[]>("groupByDims", ["invoiceDate", "customerName", "repName", "invoiceNumber"])
+  const [groupByDims, setGroupByDims] = usePersistedState<string[]>("groupByDims", ["invoiceDate", "customerName", "repName", "invoiceNumber", "jobNumber", "specNumber"])
 
   // Detail date helpers
   function parseSalesDate(value: string): Date | null {
@@ -857,6 +870,8 @@ export default function SalesDashboard() {
         customerName: row.customerName,
         repName: row.repName || "Unassigned",
         invoiceNumber: row.invoiceNumber,
+        jobNumber: row.jobNumber || "",
+        specNumber: row.specNumber || "",
         totalSales: row.totalSales,
         totalMSF: row.totalMSF,
         totalCost: row.totalCost,
@@ -1000,7 +1015,7 @@ export default function SalesDashboard() {
     setSelectedDetailKey(null)
     setDetailSort({ key: "invoiceDate", dir: "desc" })
     setDetailTab("detail")
-    setGroupByDims(["invoiceDate", "customerName", "repName", "invoiceNumber"])
+    setGroupByDims(["invoiceDate", "customerName", "repName", "invoiceNumber", "jobNumber", "specNumber"])
   }, [setTimeWindow, setQuarter, setRepFilter, setCustomerFilter, setChartMode, setGranularity, setDetailSort, setDetailTab, setGroupByDims])
 
   // Rep bar chart data

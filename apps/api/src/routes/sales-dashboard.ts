@@ -139,6 +139,8 @@ const SALES_SQL = {
     SELECT
       CONVERT(VARCHAR(10), inv.transactiondate, 23) as invoiceDate,
       inv.invoicenumber as invoiceNumber,
+      o.jobnumber as jobNumber,
+      o.designnumber as specNumber,
       cust.name as customerName,
       con.firstname + ' ' + con.lastname as repName,
       SUM(il.totalvalue) as totalSales,
@@ -153,7 +155,7 @@ const SALES_SQL = {
     WHERE inv.transactiondate >= @startDate
       AND inv.transactiondate < @endDate
       AND inv.invoicestatus = 'Final'
-    GROUP BY inv.transactiondate, inv.invoicenumber, cust.name, con.firstname + ' ' + con.lastname
+    GROUP BY inv.transactiondate, inv.invoicenumber, o.jobnumber, o.designnumber, cust.name, con.firstname + ' ' + con.lastname
     ORDER BY inv.transactiondate DESC
   `,
 
@@ -317,8 +319,19 @@ salesDashboardRoutes.get('/detail', async (c) => {
   }
 
   try {
-    const result = await client.rawQuery(SALES_SQL.detail, { startDate, endDate })
-    return c.json(result)
+    const result = await client.rawQuery<Record<string, unknown>>(SALES_SQL.detail, { startDate, endDate })
+    const data = (result.data ?? []).map((r) => ({
+      invoiceDate: String(r.invoiceDate ?? r.invoicedate ?? ''),
+      invoiceNumber: String(r.invoiceNumber ?? r.invoicenumber ?? ''),
+      jobNumber: String(r.jobNumber ?? r.jobnumber ?? ''),
+      specNumber: String(r.specNumber ?? r.specnumber ?? r.designnumber ?? ''),
+      customerName: String(r.customerName ?? r.customername ?? ''),
+      repName: String(r.repName ?? r.repname ?? ''),
+      totalSales: Number(r.totalSales ?? r.totalsales ?? 0),
+      totalMSF: Number(r.totalMSF ?? r.totalmsf ?? 0),
+      totalCost: Number(r.totalCost ?? r.totalcost ?? 0),
+    }))
+    return c.json({ data })
   } catch (err) {
     if (err instanceof KiwiplanError) {
       return c.json({ error: err.message }, err.statusCode as 400)

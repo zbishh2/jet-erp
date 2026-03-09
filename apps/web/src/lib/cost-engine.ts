@@ -12,6 +12,9 @@
  * - *100DEX = *PLANT + SGA+ (total cost at 100% index)
  */
 
+import { calcBlankDimensions, type BlankResult } from './score-formula'
+import type { ScoreFormulaData } from '@/api/hooks/useKiwiplan'
+
 // --- Input Types ---
 
 export interface MachineStep {
@@ -51,6 +54,14 @@ export interface CostInputs {
 
   // Order
   quantity: number          // total pieces
+
+  // Score formula (optional — enables flute-aware blank area)
+  styleCode?: string
+  basicBoardName?: string | null
+  formulaData?: ScoreFormulaData
+
+  // Manual blank area override (sq ft) — bypasses formula calculation
+  blankAreaOverride?: number | null
 }
 
 export interface CostResult {
@@ -81,27 +92,12 @@ export interface CostResult {
   // Metrics
   machineHours: number      // total machine hours for order
   pricePerM: number         // = total (at 100% index)
+
+  // Formula source
+  formulaUsed: 'kiwiplan' | 'fallback'
 }
 
 // --- Calculation ---
-
-/**
- * Calculate RSC blank area
- *
- * RSC (Regular Slotted Container) formula:
- * - Blank length = 2L + 2W + tab (1.5")
- * - Blank width = W + D + flap allowance (= D for standard RSC)
- * - Area in sq ft = (blankL × blankW) / 144
- */
-function calcBlankAreaSqFt(length: number, width: number, depth: number): number {
-  const tabSize = 1.5 // inches — manufacturer's joint
-  const flapAllowance = depth // standard RSC: flaps = depth
-
-  const blankLength = (2 * length) + (2 * width) + tabSize
-  const blankWidth = width + depth + flapAllowance
-
-  return (blankLength * blankWidth) / 144  // sq inches → sq ft
-}
 
 /**
  * Calculate all costs from inputs.
@@ -117,12 +113,17 @@ export function calculateCosts(inputs: CostInputs): CostResult {
     shippingMethod, freightPer, journeyDistance,
     inkStdRate, glueCostPerPiece, sgaPercent, fixedMfgPercent,
     quantity,
+    styleCode, basicBoardName, formulaData,
+    blankAreaOverride,
   } = inputs
 
   const qtyM = quantity / 1000 // quantity in thousands
 
   // --- Physical ---
-  const blankAreaSqFt = calcBlankAreaSqFt(length, width, depth)
+  const blank: BlankResult = (blankAreaOverride && blankAreaOverride > 0)
+    ? { blankAreaSqFt: blankAreaOverride, blankLengthMm: 0, blankWidthMm: 0, formulaUsed: 'fallback' as const }
+    : calcBlankDimensions(styleCode ?? '', basicBoardName, length, width, depth, formulaData)
+  const blankAreaSqFt = blank.blankAreaSqFt
   const areaMSF = blankAreaSqFt // area per piece in sq ft = area/MSF when × 1000 pieces
   // For 1000 pieces: total area = blankAreaSqFt * 1000 sq ft = blankAreaSqFt MSF
   // So areaMSF (area of 1M pieces in MSF) = blankAreaSqFt
@@ -209,6 +210,8 @@ export function calculateCosts(inputs: CostInputs): CostResult {
 
     machineHours: totalMachineHours,
     pricePerM: totalPerM,  // at 100% index, price = total cost
+
+    formulaUsed: blank.formulaUsed,
   }
 }
 

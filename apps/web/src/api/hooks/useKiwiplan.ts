@@ -354,3 +354,45 @@ export function useRoutingByStyle(styleId: number | undefined) {
     staleTime: 1000 * 60 * 10, // 10 minutes — routing templates don't change often
   })
 }
+
+// Score formula types
+export interface ScoreFormula {
+  groupId: number
+  groupName: string
+  formulaId: number
+  formulaDescription: string | null
+  formula: string
+}
+
+export interface StyleFormulaGroup {
+  styleId: number
+  code: string
+  lwGroupId: number | null
+  wwGroupId: number | null
+}
+
+export interface ScoreFormulaData {
+  formulas: ScoreFormula[]
+  styleGroups: StyleFormulaGroup[]
+}
+
+export function useScoreFormulas() {
+  return useQuery({
+    queryKey: ["kiwiplan", "scoreFormulas"],
+    queryFn: () => apiFetch<ScoreFormulaData>("/erp/score-formulas"),
+    staleTime: 1000 * 60 * 30, // 30 minutes
+  })
+}
+
+export interface VolumeRankings {
+  boards: Record<string, number>  // code → rank (0 = most popular)
+  styles: Record<string, number>
+}
+
+export function useVolumeRankings() {
+  return useQuery({
+    queryKey: ["kiwiplan", "volumeRankings"],
+    queryFn: () => apiFetch<VolumeRankings>("/erp/volume-rankings"),
+    staleTime: 1000 * 60 * 60, // 1 hour
+  })
+}

@@ -14,6 +14,7 @@ import {
   Activity,
   Ruler,
   Package,
+  Monitor,
   Terminal,
   Users,
   type LucideIcon,
@@ -56,6 +57,12 @@ const navGroups: NavGroup[] = [
       { label: "OEE Dashboard", href: "/erp/production", icon: Activity },
       { label: "Sq Ft Dashboard", href: "/erp/sqft", icon: Ruler },
       { label: "MRP & Inventory", href: "/erp/mrp", icon: Package },
+    ],
+  },
+  {
+    label: "TV Dashboards",
+    items: [
+      { label: "Sheets/Order Hour", href: "/erp/plant-tv", icon: Monitor },
     ],
   },
   {

@@ -5,6 +5,7 @@ import {
   isKiwiplanConfigured,
   KiwiplanError,
 } from '../services/kiwiplan-client'
+import { kvCache, CacheTTL } from '../services/kv-cache'
 
 export const kiwiplanRoutes = new Hono<{ Bindings: Env }>()
 
@@ -118,7 +119,7 @@ kiwiplanRoutes.get('/costing/estimate/:id', async (c) => {
   }
 })
 
-// GET /api/erp/boards - List board grades (reference data)
+// GET /api/erp/boards - List board grades sorted by order volume (KV cached 30min)
 kiwiplanRoutes.get('/boards', async (c) => {
   const client = getClient(c.env)
   if (!client) {
@@ -126,7 +127,25 @@ kiwiplanRoutes.get('/boards', async (c) => {
   }
 
   try {
-    const result = await client.listBoardGrades()
+    const result = await kvCache(c.env.AUTH_CACHE, 'boards-by-volume', CacheTTL.LOOKUP_DATA, () =>
+      client.rawQuery(
+        `SELECT sb.ID as boardId, sb.code, sb.description, sb.density, sb.thickness,
+                sb.costperarea as costPerArea, sb.isobsolete as isObsolete,
+                sb.basicboardname as basicBoardName,
+                ISNULL(vol.cnt, 0) as orderCount
+         FROM ebxStandardBoard sb
+         LEFT JOIN (
+           SELECT pd.standardboardID, COUNT(*) as cnt
+           FROM espOrder o
+           INNER JOIN ebxProductDesign pd ON o.designnumber = pd.designnumber
+           WHERE o.cancelleddate IS NULL
+             AND o.entrydate >= DATEADD(month, -12, GETDATE())
+           GROUP BY pd.standardboardID
+         ) vol ON vol.standardboardID = sb.ID
+         WHERE sb.isobsolete = 0
+         ORDER BY ISNULL(vol.cnt, 0) DESC, sb.code`,
+      )
+    )
     return c.json(result)
   } catch (err) {
     if (err instanceof KiwiplanError) {
@@ -154,7 +173,7 @@ kiwiplanRoutes.get('/inks', async (c) => {
   }
 })
 
-// GET /api/erp/styles - List box styles (reference data)
+// GET /api/erp/styles - List box styles sorted by order volume (KV cached 30min)
 kiwiplanRoutes.get('/styles', async (c) => {
   const client = getClient(c.env)
   if (!client) {
@@ -162,7 +181,25 @@ kiwiplanRoutes.get('/styles', async (c) => {
   }
 
   try {
-    const result = await client.listStyles()
+    const result = await kvCache(c.env.AUTH_CACHE, 'styles-by-volume', CacheTTL.LOOKUP_DATA, () =>
+      client.rawQuery(
+        `SELECT s.ID as styleId, s.stylecode as code, s.description,
+                s.stylestatus as status, s.analysisgroup as analysisGroup,
+                s.imagename as imageName, s.unitdescription as unitDescription,
+                ISNULL(vol.cnt, 0) as orderCount
+         FROM ebxStyle s
+         LEFT JOIN (
+           SELECT pd.styleID, COUNT(*) as cnt
+           FROM espOrder o
+           INNER JOIN ebxProductDesign pd ON o.designnumber = pd.designnumber
+           WHERE o.cancelleddate IS NULL
+             AND o.entrydate >= DATEADD(month, -12, GETDATE())
+           GROUP BY pd.styleID
+         ) vol ON vol.styleID = s.ID
+         WHERE s.stylestatus IS NULL OR s.stylestatus <> 'Obsolete'
+         ORDER BY ISNULL(vol.cnt, 0) DESC, s.stylecode`,
+      )
+    )
     return c.json(result)
   } catch (err) {
     if (err instanceof KiwiplanError) {
@@ -400,6 +437,107 @@ kiwiplanRoutes.get('/schema/tables', async (c) => {
   try {
     const result = await client.findTables(pattern)
     return c.json(result)
+  } catch (err) {
+    if (err instanceof KiwiplanError) {
+      return c.json({ error: err.message }, err.statusCode as 400)
+    }
+    throw err
+  }
+})
+
+// GET /api/erp/score-formulas - Score formulas + style-to-group mappings (KV cached 30min)
+kiwiplanRoutes.get('/score-formulas', async (c) => {
+  const client = getClient(c.env)
+  if (!client) {
+    return c.json({ error: 'Kiwiplan gateway not configured' }, 503)
+  }
+
+  try {
+    const data = await kvCache(c.env.AUTH_CACHE, 'score-formulas', CacheTTL.LOOKUP_DATA, async () => {
+      const [formulaResult, styleResult] = await Promise.all([
+        client.rawQuery<{
+          groupId: number
+          groupName: string
+          formulaId: number
+          formulaDescription: string | null
+          formula: string
+        }>(
+          `SELECT sf.scoreFormulaGroupID as groupId, sfg.name as groupName,
+                  sf.ID as formulaId, sf.description as formulaDescription,
+                  sf.scoreformula as formula
+           FROM ebxScoreFormula sf
+           INNER JOIN ebxScoreFormulaGroup sfg ON sfg.ID = sf.scoreFormulaGroupID`,
+        ),
+        client.rawQuery<{
+          styleId: number
+          code: string
+          lwGroupId: number | null
+          wwGroupId: number | null
+        }>(
+          `SELECT s.ID as styleId, s.stylecode as code,
+                  s.sumtolengthScoreFormulaGroupID as lwGroupId,
+                  s.sumtowidthScoreFormulaGroupID as wwGroupId
+           FROM ebxStyle s WHERE s.stylestatus IS NULL OR s.stylestatus <> 'Obsolete'`,
+        ),
+      ])
+
+      return {
+        formulas: formulaResult.data,
+        styleGroups: styleResult.data,
+      }
+    })
+
+    return c.json(data)
+  } catch (err) {
+    if (err instanceof KiwiplanError) {
+      return c.json({ error: err.message }, err.statusCode as 400)
+    }
+    throw err
+  }
+})
+
+// GET /api/erp/volume-rankings - Invoice line counts per board/style (KV cached 24h)
+kiwiplanRoutes.get('/volume-rankings', async (c) => {
+  const client = getClient(c.env)
+  if (!client) {
+    return c.json({ error: 'Kiwiplan gateway not configured' }, 503)
+  }
+
+  try {
+    const data = await kvCache(c.env.AUTH_CACHE, 'volume-rankings', CacheTTL.DATE_LIMITS, async () => {
+      const [boardResult, styleResult] = await Promise.all([
+        client.rawQuery<{ code: string; cnt: number }>(
+          `SELECT sb.code, COUNT(*) as cnt
+           FROM espOrder o
+           INNER JOIN ebxProductDesign pd ON o.designnumber = pd.designnumber
+           INNER JOIN ebxStandardBoard sb ON pd.standardboardID = sb.ID
+           WHERE o.cancelleddate IS NULL
+             AND o.entrydate >= DATEADD(month, -12, GETDATE())
+           GROUP BY sb.code
+           ORDER BY cnt DESC`,
+        ),
+        client.rawQuery<{ code: string; cnt: number }>(
+          `SELECT s.stylecode as code, COUNT(*) as cnt
+           FROM espOrder o
+           INNER JOIN ebxProductDesign pd ON o.designnumber = pd.designnumber
+           INNER JOIN ebxStyle s ON pd.styleID = s.ID
+           WHERE o.cancelleddate IS NULL
+             AND o.entrydate >= DATEADD(month, -12, GETDATE())
+           GROUP BY s.stylecode
+           ORDER BY cnt DESC`,
+        ),
+      ])
+
+      // Convert to code → rank maps for fast lookup
+      const boards: Record<string, number> = {}
+      boardResult.data.forEach((r, i) => { boards[r.code] = i })
+      const styles: Record<string, number> = {}
+      styleResult.data.forEach((r, i) => { styles[r.code] = i })
+
+      return { boards, styles }
+    })
+
+    return c.json(data)
   } catch (err) {
     if (err instanceof KiwiplanError) {
       return c.json({ error: err.message }, err.statusCode as 400)

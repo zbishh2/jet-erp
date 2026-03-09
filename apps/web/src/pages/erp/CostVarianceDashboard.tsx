@@ -18,6 +18,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -29,7 +30,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { ArrowLeft, RotateCcw, RefreshCw, Info, ChevronLeft, ChevronRight } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { ArrowLeft, RotateCcw, RefreshCw, Info, ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react"
 import {
   useCostVarianceDateLimits,
   useCostVarianceSummary,
@@ -43,22 +46,52 @@ import {
   useInvoiceCostVarianceFilterOptions,
 } from "@/api/hooks/useInvoiceCostVarianceDashboard"
 import type { CostVarianceGranularity } from "@/api/hooks/useCostVarianceDashboard"
-import { TimePresetBar } from "@/components/ui/time-preset-bar"
+import { DateRangePicker } from "@/components/ui/date-range-picker"
+import { CalendarIcon } from "lucide-react"
 import {
-  type TimeWindow,
   type DateRange,
-  getDefaultPreset,
-  getTimeWindowRange as sharedGetTimeWindowRange,
-  isValidPreset,
   formatDateISO,
   addDays,
   parseISODate,
+  startOfQuarter,
 } from "@/lib/time-presets"
 
 type DataSource = "production" | "invoice"
 type ChartTab = "calendar" | "area"
 type CostType = "full" | "material" | "labor" | "freight" | "hours-order" | "hours-uptime"
 type DetailTab = "costs" | "hours"
+type CVTimeWindow = "ytd" | "last-year" | "qtd" | "last-qtr" | "custom"
+
+const CV_TIME_PRESETS: { key: CVTimeWindow; label: string }[] = [
+  { key: "ytd", label: "This Year" },
+  { key: "last-year", label: "Last Year" },
+  { key: "qtd", label: "QTD" },
+  { key: "last-qtr", label: "Last QTR" },
+]
+
+function getCVTimeRange(window: CVTimeWindow, customRange: DateRange | null, dateLimits: { minDate: string | null; maxDate: string | null } | null): DateRange {
+  const now = new Date()
+  const maxDataDate = dateLimits?.maxDate ? parseISODate(dateLimits.maxDate) : null
+  const dataEndExclusive = maxDataDate
+    ? formatDateISO(addDays(maxDataDate, 1))
+    : formatDateISO(addDays(now, 1))
+
+  if (window === "custom" && customRange) return customRange
+  if (window === "ytd") return { startDate: `${now.getFullYear()}-01-01`, endDate: dataEndExclusive }
+  if (window === "last-year") {
+    const y = now.getFullYear() - 1
+    return { startDate: `${y}-01-01`, endDate: `${y + 1}-01-01` }
+  }
+  if (window === "qtd") return { startDate: formatDateISO(startOfQuarter(now)), endDate: dataEndExclusive }
+  if (window === "last-qtr") {
+    const qStart = startOfQuarter(now)
+    const prevQEnd = formatDateISO(qStart)
+    const prevQStart = new Date(qStart)
+    prevQStart.setMonth(prevQStart.getMonth() - 3)
+    return { startDate: formatDateISO(prevQStart), endDate: prevQEnd }
+  }
+  return { startDate: `${now.getFullYear()}-01-01`, endDate: dataEndExclusive }
+}
 
 // ---------------------------------------------------------------------------
 // Shared utilities
@@ -66,14 +99,20 @@ type DetailTab = "costs" | "hours"
 
 function usePersistedState<T>(prefix: string, key: string, defaultValue: T): [T, (val: T | ((prev: T) => T)) => void] {
   const storageKey = `${prefix}${key}`
-  const [value, setValue] = useState<T>(() => {
+  const readStorage = useCallback(() => {
     try {
       const stored = localStorage.getItem(storageKey)
-      return stored !== null ? JSON.parse(stored) : defaultValue
+      return stored !== null ? JSON.parse(stored) as T : defaultValue
     } catch {
       return defaultValue
     }
-  })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey])
+  const [value, setValue] = useState<T>(readStorage)
+  // Re-read from localStorage when the storage key changes (e.g. prefix swap)
+  useEffect(() => {
+    setValue(readStorage())
+  }, [readStorage])
   const setPersisted = useCallback((val: T | ((prev: T) => T)) => {
     setValue((prev) => {
       const next = typeof val === "function" ? (val as (prev: T) => T)(prev) : val
@@ -122,7 +161,7 @@ function formatCurrency(value: number): string {
 }
 
 function formatCurrencyDetail(value: number): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value)
 }
 
 function formatNumber(value: number, decimals = 0): string {
@@ -286,7 +325,7 @@ const VARIANT_CONFIG = {
       ["specNumber", "Spec"],
       ["lineNumber", "Line"],
     ] as [string, string][],
-    costTypes: ["full", "material", "labor", "freight", "hours-order", "hours-uptime"] as CostType[],
+    costTypes: ["full", "material", "labor", "hours-order", "hours-uptime"] as CostType[],
     hasLineFilter: true,
     hasHoursMode: true,
     chartTitle: "Cost Variance Trend",
@@ -307,7 +346,7 @@ const VARIANT_CONFIG = {
       ["customerName", "Customer"],
       ["specNumber", "Spec"],
     ] as [string, string][],
-    costTypes: ["full", "material", "labor", "freight"] as CostType[],
+    costTypes: ["full", "material", "labor"] as CostType[],
     hasLineFilter: false,
     hasHoursMode: false,
     chartTitle: "Invoice Cost Variance Trend",
@@ -315,6 +354,8 @@ const VARIANT_CONFIG = {
     gradientIdAct: "gradActInv",
   },
 }
+
+const DETAIL_PAGE_SIZE = 100
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -332,13 +373,15 @@ export default function CostVarianceDashboard() {
   const cfg = VARIANT_CONFIG[dataSource]
 
   // Per-variant persisted state
-  const [timeWindow, setTimeWindow] = usePersistedState<TimeWindow>(cfg.storagePrefix, "timeWindow", "last-14d")
+  const [timeWindow, setTimeWindow] = usePersistedState<CVTimeWindow>(cfg.storagePrefix, "timeWindow", "ytd")
   const [granularity, setGranularity] = usePersistedState<CostVarianceGranularity>(cfg.storagePrefix, "granularity", "daily")
   const [chartTab, setChartTab] = usePersistedState<ChartTab>(cfg.storagePrefix, "chartTab", "area")
   const [costType, setCostType] = usePersistedState<CostType>(cfg.storagePrefix, "costType", "full")
   const [lineFilter, setLineFilter] = usePersistedState<string>(cfg.storagePrefix, "lineFilter", "all")
   const [customerFilter, setCustomerFilter] = usePersistedState<string>(cfg.storagePrefix, "customerFilter", "all")
+  const [salesRepFilter, setSalesRepFilter] = usePersistedState<string>(cfg.storagePrefix, "salesRepFilter", "all")
   const [specFilter, setSpecFilter] = usePersistedState<string>(cfg.storagePrefix, "specFilter", "all")
+  const [jobFilter, setJobFilter] = usePersistedState<string>(cfg.storagePrefix, "jobFilter", "all")
   const [tableSort, setTableSort] = usePersistedState<{ key: string; dir: "asc" | "desc" }>(cfg.storagePrefix, "tableSort", { key: cfg.defaultSortKey, dir: "desc" })
   const [groupByDims, setGroupByDims] = usePersistedState<string[]>(cfg.storagePrefix, "groupByDims", cfg.defaultGroupByDims)
   const [customStart, setCustomStart] = usePersistedState<string>(cfg.storagePrefix, "customStart", "")
@@ -346,22 +389,24 @@ export default function CostVarianceDashboard() {
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null)
   const customRange: DateRange | null = customStart && customEnd ? { startDate: customStart, endDate: customEnd } : null
 
-  // Switch presets when granularity changes
-  const prevGranularityRef = useRef(granularity)
-  useEffect(() => {
-    if (prevGranularityRef.current === granularity) return
-    prevGranularityRef.current = granularity
-    setTimeWindow(getDefaultPreset(granularity as any))
-  }, [granularity, setTimeWindow])
+  // Scroll pagination state for detail table
+  const [detailPage, setDetailPage] = useState(1)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [allDetailData, setAllDetailData] = useState<any[]>([])
+  const lastLoadedPageRef = useRef(0)
+  const detailScrollRef = useRef<HTMLDivElement>(null)
+  const hasMoreDetailRef = useRef(false)
+  const isFetchingDetailRef = useRef(false)
 
-  // Validate persisted timeWindow against current granularity (handles old localStorage values)
+  // Validate persisted timeWindow (handles old localStorage values from granularity-based presets)
   useEffect(() => {
-    if (!isValidPreset(timeWindow, granularity as any)) {
-      setTimeWindow(getDefaultPreset(granularity as any))
-    }
+    const validKeys = new Set<string>(CV_TIME_PRESETS.map((p) => p.key))
+    validKeys.add("custom")
+    if (!validKeys.has(timeWindow)) setTimeWindow("ytd")
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix, "detailTab", "costs")
+const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix, "detailTab", "costs")
+  const [costPer1000, setCostPer1000] = usePersistedState<boolean>(cfg.storagePrefix, "costPer1000", false)
   const [hoursSort, setHoursSort] = usePersistedState<{ key: string; dir: "asc" | "desc" }>(cfg.storagePrefix, "hoursSort", { key: cfg.defaultSortKey, dir: "desc" })
   const [calendarMonth, setCalendarMonth] = usePersistedState<string>(
     cfg.storagePrefix, "calendarMonth",
@@ -372,12 +417,13 @@ export default function CostVarianceDashboard() {
   const prodDateLimits = useCostVarianceDateLimits()
   const prodLimits = prodDateLimits.data?.data?.[0]
   const prodTimeRange = useMemo(
-    () => dataSource === "production" ? sharedGetTimeWindowRange(timeWindow, prodLimits ? { minDate: prodLimits.minDate, maxDate: prodLimits.maxDate } : null, customRange) : { startDate: "", endDate: "" },
+    () => dataSource === "production" ? getCVTimeRange(timeWindow, customRange, prodLimits ? { minDate: prodLimits.minDate, maxDate: prodLimits.maxDate } : null) : { startDate: "", endDate: "" },
     [dataSource, timeWindow, prodLimits?.minDate, prodLimits?.maxDate, customRange]
   )
   const prodActiveLine = lineFilter !== "all" ? lineFilter : undefined
   const prodActiveCustomer = dataSource === "production" && customerFilter !== "all" ? customerFilter : undefined
   const prodActiveSpec = dataSource === "production" && specFilter !== "all" ? specFilter : undefined
+  const prodActiveJob = dataSource === "production" && jobFilter !== "all" ? jobFilter : undefined
 
   const prodDetailRange = useMemo(() => {
     if (dataSource !== "production") return { start: "", end: "" }
@@ -391,19 +437,21 @@ export default function CostVarianceDashboard() {
 
   const prodCalendarRange = useMemo(() => dataSource === "production" ? getMonthDateRange(calendarMonth) : { startDate: "", endDate: "" }, [dataSource, calendarMonth])
 
-  const prodSummaryQuery = useCostVarianceSummary(prodTimeRange.startDate, prodTimeRange.endDate, granularity, prodActiveLine, prodActiveCustomer, prodActiveSpec)
-  const prodDetailsQuery = useCostVarianceDetails(prodDetailRange.start, prodDetailRange.end, prodActiveLine, prodActiveCustomer, prodActiveSpec)
-  const prodFilterOptionsQuery = useCostVarianceFilterOptions(prodTimeRange.startDate, prodTimeRange.endDate, prodActiveLine, prodActiveCustomer, prodActiveSpec)
-  const prodCalendarQuery = useCostVarianceSummary(prodCalendarRange.startDate, prodCalendarRange.endDate, "daily", prodActiveLine, prodActiveCustomer, prodActiveSpec)
+  const activeSort = detailTab === "costs" ? tableSort : hoursSort
+  const prodSummaryQuery = useCostVarianceSummary(prodTimeRange.startDate, prodTimeRange.endDate, granularity, prodActiveLine, prodActiveCustomer, prodActiveSpec, prodActiveJob)
+  const prodDetailsQuery = useCostVarianceDetails(prodDetailRange.start, prodDetailRange.end, detailPage, DETAIL_PAGE_SIZE, activeSort.key, activeSort.dir, prodActiveLine, prodActiveCustomer, prodActiveSpec, prodActiveJob)
+  const prodFilterOptionsQuery = useCostVarianceFilterOptions(prodTimeRange.startDate, prodTimeRange.endDate, prodActiveLine, prodActiveCustomer, prodActiveSpec, prodActiveJob)
+  const prodCalendarQuery = useCostVarianceSummary(prodCalendarRange.startDate, prodCalendarRange.endDate, "daily", prodActiveLine, prodActiveCustomer, prodActiveSpec, prodActiveJob)
 
   // ---- Invoice hooks (always called for stable hook order) ----
   const invDateLimits = useInvoiceCostVarianceDateLimits()
   const invLimits = invDateLimits.data?.data?.[0]
   const invTimeRange = useMemo(
-    () => dataSource === "invoice" ? sharedGetTimeWindowRange(timeWindow, invLimits ? { minDate: invLimits.minDate, maxDate: invLimits.maxDate } : null, customRange) : { startDate: "", endDate: "" },
+    () => dataSource === "invoice" ? getCVTimeRange(timeWindow, customRange, invLimits ? { minDate: invLimits.minDate, maxDate: invLimits.maxDate } : null) : { startDate: "", endDate: "" },
     [dataSource, timeWindow, invLimits?.minDate, invLimits?.maxDate, customRange]
   )
   const invActiveCustomer = dataSource === "invoice" && customerFilter !== "all" ? customerFilter : undefined
+  const invActiveSalesRep = dataSource === "invoice" && salesRepFilter !== "all" ? salesRepFilter : undefined
   const invActiveSpec = dataSource === "invoice" && specFilter !== "all" ? specFilter : undefined
 
   const invDetailRange = useMemo(() => {
@@ -418,10 +466,10 @@ export default function CostVarianceDashboard() {
 
   const invCalendarRange = useMemo(() => dataSource === "invoice" ? getMonthDateRange(calendarMonth) : { startDate: "", endDate: "" }, [dataSource, calendarMonth])
 
-  const invSummaryQuery = useInvoiceCostVarianceSummary(invTimeRange.startDate, invTimeRange.endDate, granularity, invActiveCustomer, invActiveSpec)
-  const invDetailsQuery = useInvoiceCostVarianceDetails(invDetailRange.start, invDetailRange.end, invActiveCustomer, invActiveSpec)
-  const invFilterOptionsQuery = useInvoiceCostVarianceFilterOptions(invTimeRange.startDate, invTimeRange.endDate, invActiveCustomer, invActiveSpec)
-  const invCalendarQuery = useInvoiceCostVarianceSummary(invCalendarRange.startDate, invCalendarRange.endDate, "daily", invActiveCustomer, invActiveSpec)
+  const invSummaryQuery = useInvoiceCostVarianceSummary(invTimeRange.startDate, invTimeRange.endDate, granularity, invActiveCustomer, invActiveSalesRep, invActiveSpec)
+  const invDetailsQuery = useInvoiceCostVarianceDetails(invDetailRange.start, invDetailRange.end, detailPage, DETAIL_PAGE_SIZE, activeSort.key, activeSort.dir, invActiveCustomer, invActiveSalesRep, invActiveSpec)
+  const invFilterOptionsQuery = useInvoiceCostVarianceFilterOptions(invTimeRange.startDate, invTimeRange.endDate, invActiveCustomer, invActiveSalesRep, invActiveSpec)
+  const invCalendarQuery = useInvoiceCostVarianceSummary(invCalendarRange.startDate, invCalendarRange.endDate, "daily", invActiveCustomer, invActiveSalesRep, invActiveSpec)
 
   // ---- Select active data based on dataSource ----
   const summaryQuery = dataSource === "production" ? prodSummaryQuery : invSummaryQuery
@@ -430,14 +478,54 @@ export default function CostVarianceDashboard() {
   const calendarQuery = dataSource === "production" ? prodCalendarQuery : invCalendarQuery
 
   const summaryData = summaryQuery.data?.data ?? []
-  const detailData = detailsQuery.data?.data ?? []
+  const detailPagination = detailsQuery.data?.pagination
+  const serverTotals = detailsQuery.data?.totals
+  const hasMoreDetail = detailPagination ? detailPagination.page < detailPagination.totalPages : false
+  hasMoreDetailRef.current = hasMoreDetail
+  isFetchingDetailRef.current = detailsQuery.isFetching
   const filterOptions = filterOptionsQuery.data?.data
   const calendarDailyData = calendarQuery.data?.data ?? []
 
   // Reset selectedPeriod when filters change
   useEffect(() => {
     setSelectedPeriod(null)
-  }, [timeWindow, lineFilter, customerFilter, specFilter, granularity, calendarMonth, dataSource])
+  }, [timeWindow, lineFilter, customerFilter, salesRepFilter, specFilter, jobFilter, granularity, calendarMonth, dataSource])
+
+  // Reset detail pagination when filters/range/sort change
+  useEffect(() => {
+    setDetailPage(1)
+    setAllDetailData([])
+    lastLoadedPageRef.current = 0
+  }, [dataSource, timeWindow, customStart, customEnd, selectedPeriod, granularity, calendarMonth, lineFilter, customerFilter, salesRepFilter, specFilter, jobFilter, activeSort.key, activeSort.dir])
+
+  // Accumulate detail rows across pages
+  useEffect(() => {
+    if (detailsQuery.isPlaceholderData) return
+    const rows = detailsQuery.data?.data
+    const pg = detailsQuery.data?.pagination
+    if (!rows || !pg) return
+    if (pg.page === 1) {
+      setAllDetailData(rows)
+      lastLoadedPageRef.current = 1
+    } else if (pg.page > lastLoadedPageRef.current) {
+      setAllDetailData(prev => [...prev, ...rows])
+      lastLoadedPageRef.current = pg.page
+    }
+  }, [detailsQuery.data, detailsQuery.isPlaceholderData])
+
+  // Scroll listener for detail table infinite loading
+  useEffect(() => {
+    const container = detailScrollRef.current
+    if (!container) return
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container
+      if (scrollHeight - scrollTop - clientHeight < 200 && hasMoreDetailRef.current && !isFetchingDetailRef.current) {
+        setDetailPage(prev => prev + 1)
+      }
+    }
+    container.addEventListener("scroll", handleScroll, { passive: true })
+    return () => container.removeEventListener("scroll", handleScroll)
+  }, [detailsQuery.isFetching, allDetailData.length])
 
   // ---- Derived chart data ----
   const isHoursMode = dataSource === "production" && (costType === "hours-order" || costType === "hours-uptime")
@@ -484,9 +572,9 @@ export default function CostVarianceDashboard() {
         periodKey: row.period,
         label: getPeriodLabel(row.period, granularity),
         estMaterial, estLabor, estFreight,
-        estFull: estMaterial + estLabor + estFreight,
+        estFull: estMaterial + estLabor,
         actMaterial, actLabor, actFreight,
-        actFull: actMaterial + actLabor + actFreight,
+        actFull: actMaterial + actLabor,
         orderHours: toNumber((row as unknown as Record<string, unknown>).orderHours),
         uptimeHours: toNumber((row as unknown as Record<string, unknown>).uptimeHours),
         estimatedHours: toNumber(row.estimatedHours),
@@ -494,13 +582,13 @@ export default function CostVarianceDashboard() {
     })
   }, [summaryData, granularity])
 
-  const estKey = isHoursMode ? "estimatedHours" : costType === "full" ? "estFull" : costType === "material" ? "estMaterial" : costType === "labor" ? "estLabor" : "estFreight"
-  const actKey = costType === "hours-order" ? "orderHours" : costType === "hours-uptime" ? "uptimeHours" : costType === "full" ? "actFull" : costType === "material" ? "actMaterial" : costType === "labor" ? "actLabor" : "actFreight"
-  const costLabel = costType === "hours-order" ? "vs Order Hrs" : costType === "hours-uptime" ? "vs Uptime" : costType === "full" ? "Full" : costType === "material" ? "Material" : costType === "labor" ? "Labor" : "Freight"
+  const estKey = isHoursMode ? "estimatedHours" : costType === "full" ? "estFull" : costType === "material" ? "estMaterial" : "estLabor"
+  const actKey = costType === "hours-order" ? "orderHours" : costType === "hours-uptime" ? "uptimeHours" : costType === "full" ? "actFull" : costType === "material" ? "actMaterial" : "actLabor"
+  const costLabel = costType === "hours-order" ? "vs Order Hrs" : costType === "hours-uptime" ? "vs Uptime" : costType === "full" ? "Full" : costType === "material" ? "Material" : "Labor"
 
   // ---- Detail rows ----
   const detailRows = useMemo(() => {
-    return detailData.map((row) => {
+    return allDetailData.map((row: Record<string, unknown>) => {
       const dateField = cfg.dateField as string
       const dateRaw = String((row as unknown as Record<string, unknown>)[dateField] ?? "")
       const estMat = toNumber(row.estMaterialCost)
@@ -525,9 +613,11 @@ export default function CostVarianceDashboard() {
         actMaterialCost: actMat,
         actLaborCost: actLab,
         actFreightCost: actFrt,
-        estFull: estMat + estLab + estFrt,
-        actFull: actMat + actLab + actFrt,
-        variance: (estMat + estLab + estFrt) - (actMat + actLab + actFrt),
+        estFull: estMat + estLab,
+        actFull: actMat + actLab,
+        variance: (estMat + estLab) - (actMat + actLab),
+        materialVariance: estMat - actMat,
+        laborVariance: estLab - actLab,
         orderHours: toNumber(r.orderHours),
         uptimeHours: toNumber(r.uptimeHours),
         estHours: toNumber(r.estimatedHours),
@@ -536,9 +626,10 @@ export default function CostVarianceDashboard() {
         adjQty: toNumber(r.adjQty),
         stdRunRate: toNumber(r.stdRunRate),
         setupMins: toNumber(r.setupMins),
+        numberOut: toNumber(r.numberOut) || 1,
       }
     })
-  }, [detailData, cfg.dateField])
+  }, [allDetailData, cfg.dateField])
 
   // Map dateField dim names to the unified "date" key used in detailRows
   const dateFieldDim = cfg.dateField
@@ -579,6 +670,8 @@ export default function CostVarianceDashboard() {
         existing.estFull += row.estFull
         existing.actFull += row.actFull
         existing.variance += row.variance
+        existing.materialVariance += row.materialVariance
+        existing.laborVariance += row.laborVariance
         existing.orderHours += row.orderHours
         existing.uptimeHours += row.uptimeHours
         existing.estHours += row.estHours
@@ -591,10 +684,10 @@ export default function CostVarianceDashboard() {
     return [...grouped.values()]
   }, [detailRows, groupByDims, cfg.groupByOptions, dateFieldDim])
 
-  const makeSortedRows = useCallback((sort: { key: string; dir: "asc" | "desc" }) => {
-    const data = [...groupedDetailRows]
+  // Server handles primary sort order; client re-sorts after grouping for display
+  const sortRows = useCallback((rows: typeof groupedDetailRows, sort: { key: string; dir: "asc" | "desc" }) => {
+    const data = [...rows]
     const key = sort.key as keyof (typeof data)[number]
-    // Map the variant-specific dateField dim name to our unified "date" property
     const isDateSort = sort.key === dateFieldDim
     data.sort((a, b) => {
       const aVal = isDateSort ? a.dateSort : a[key]
@@ -607,10 +700,10 @@ export default function CostVarianceDashboard() {
       return sort.dir === "asc" ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr)
     })
     return data
-  }, [groupedDetailRows, dateFieldDim])
+  }, [dateFieldDim])
 
-  const sortedDetailRows = useMemo(() => makeSortedRows(tableSort), [makeSortedRows, tableSort])
-  const sortedHoursRows = useMemo(() => makeSortedRows(hoursSort), [makeSortedRows, hoursSort])
+  const sortedDetailRows = useMemo(() => sortRows(groupedDetailRows, tableSort), [sortRows, groupedDetailRows, tableSort])
+  const sortedHoursRows = useMemo(() => sortRows(groupedDetailRows, hoursSort), [sortRows, groupedDetailRows, hoursSort])
 
   // ---- KPIs ----
   const kpis = useMemo(() => {
@@ -619,54 +712,62 @@ export default function CostVarianceDashboard() {
       if (dayRow) {
         const estMat = toNumber(dayRow.estMaterialCost)
         const estLab = toNumber(dayRow.estLaborCost)
-        const estFrt = toNumber(dayRow.estFreightCost)
         const actMat = toNumber(dayRow.actMaterialCost)
         const actLab = toNumber(dayRow.actLaborCost)
-        const actFrt = toNumber(dayRow.actFreightCost)
         return {
-          estFull: estMat + estLab + estFrt, actFull: actMat + actLab + actFrt,
-          fullVariance: (estMat + estLab + estFrt) - (actMat + actLab + actFrt),
-          materialVariance: estMat - actMat, laborVariance: estLab - actLab, freightVariance: estFrt - actFrt,
+          estFull: estMat + estLab, actFull: actMat + actLab,
+          fullVariance: (estMat + estLab) - (actMat + actLab),
+          materialVariance: estMat - actMat, laborVariance: estLab - actLab,
         }
       }
-      return { estFull: 0, actFull: 0, fullVariance: 0, materialVariance: 0, laborVariance: 0, freightVariance: 0 }
+      return { estFull: 0, actFull: 0, fullVariance: 0, materialVariance: 0, laborVariance: 0 }
     }
     const rows = selectedPeriod ? chartData.filter((d) => d.periodKey === selectedPeriod) : chartData
     const estMat = rows.reduce((s, d) => s + d.estMaterial, 0)
     const estLab = rows.reduce((s, d) => s + d.estLabor, 0)
-    const estFrt = rows.reduce((s, d) => s + d.estFreight, 0)
     const actMat = rows.reduce((s, d) => s + d.actMaterial, 0)
     const actLab = rows.reduce((s, d) => s + d.actLabor, 0)
-    const actFrt = rows.reduce((s, d) => s + d.actFreight, 0)
     return {
-      estFull: estMat + estLab + estFrt, actFull: actMat + actLab + actFrt,
-      fullVariance: (estMat + estLab + estFrt) - (actMat + actLab + actFrt),
-      materialVariance: estMat - actMat, laborVariance: estLab - actLab, freightVariance: estFrt - actFrt,
+      estFull: estMat + estLab, actFull: actMat + actLab,
+      fullVariance: (estMat + estLab) - (actMat + actLab),
+      materialVariance: estMat - actMat, laborVariance: estLab - actLab,
     }
   }, [chartData, selectedPeriod, chartTab, calendarDailyData])
 
   const detailTotals = useMemo(() => {
-    const estMat = detailRows.reduce((s, r) => s + r.estMaterialCost, 0)
-    const estLab = detailRows.reduce((s, r) => s + r.estLaborCost, 0)
-    const estFrt = detailRows.reduce((s, r) => s + r.estFreightCost, 0)
-    const actMat = detailRows.reduce((s, r) => s + r.actMaterialCost, 0)
-    const actLab = detailRows.reduce((s, r) => s + r.actLaborCost, 0)
-    const actFrt = detailRows.reduce((s, r) => s + r.actFreightCost, 0)
-    const estFull = estMat + estLab + estFrt
-    const actFull = actMat + actLab + actFrt
-    return {
-      estMaterialCost: estMat, estLaborCost: estLab, estFreightCost: estFrt,
-      actMaterialCost: actMat, actLaborCost: actLab, actFreightCost: actFrt,
-      estFull, actFull, variance: estFull - actFull,
-      orderHours: detailRows.reduce((s, r) => s + r.orderHours, 0),
-      uptimeHours: detailRows.reduce((s, r) => s + r.uptimeHours, 0),
-      estHours: detailRows.reduce((s, r) => s + r.estHours, 0),
-      hoursVariance: detailRows.reduce((s, r) => s + r.orderHours, 0) - detailRows.reduce((s, r) => s + r.estHours, 0),
-      vsUptime: detailRows.reduce((s, r) => s + r.uptimeHours, 0) - detailRows.reduce((s, r) => s + r.estHours, 0),
-      adjQty: detailRows.reduce((s, r) => s + r.adjQty, 0),
-      quantity: detailRows.reduce((s, r) => s + r.quantity, 0),
+    if (!serverTotals) {
+      return {
+        estMaterialCost: 0, estLaborCost: 0,
+        actMaterialCost: 0, actLaborCost: 0,
+        materialVariance: 0, laborVariance: 0,
+        estFull: 0, actFull: 0, variance: 0,
+        orderHours: 0, uptimeHours: 0, estHours: 0,
+        hoursVariance: 0, vsUptime: 0,
+        adjQty: 0, quantity: 0,
+      }
     }
-  }, [detailRows])
+    const t = serverTotals as unknown as Record<string, unknown>
+    const estMat = toNumber(t.estMaterialCost)
+    const estLab = toNumber(t.estLaborCost)
+    const actMat = toNumber(t.actMaterialCost)
+    const actLab = toNumber(t.actLaborCost)
+    const estFull = estMat + estLab
+    const actFull = actMat + actLab
+    const orderHours = toNumber(t.orderHours)
+    const uptimeHours = toNumber(t.uptimeHours)
+    const estHours = toNumber(t.estimatedHours)
+    return {
+      estMaterialCost: estMat, estLaborCost: estLab,
+      actMaterialCost: actMat, actLaborCost: actLab,
+      materialVariance: estMat - actMat, laborVariance: estLab - actLab,
+      estFull, actFull, variance: estFull - actFull,
+      orderHours, uptimeHours, estHours,
+      hoursVariance: orderHours - estHours,
+      vsUptime: uptimeHours - estHours,
+      adjQty: toNumber(t.adjQty),
+      quantity: toNumber(t.quantity),
+    }
+  }, [serverTotals])
 
   // ---- Chart interactions ----
   const dimRegions = useMemo(() => {
@@ -700,16 +801,21 @@ export default function CostVarianceDashboard() {
   }, [setHoursSort])
 
   const resetFilters = useCallback(() => {
-    setTimeWindow(getDefaultPreset("daily"))
+    setTimeWindow("ytd")
     setGranularity("daily")
     setCostType("full")
     setLineFilter("all")
     setCustomerFilter("all")
+    setSalesRepFilter("all")
     setSpecFilter("all")
+    setJobFilter("all")
     setTableSort({ key: cfg.defaultSortKey, dir: "desc" })
     setHoursSort({ key: cfg.defaultSortKey, dir: "desc" })
     setSelectedPeriod(null)
-  }, [cfg.defaultSortKey, setCostType, setCustomerFilter, setGranularity, setLineFilter, setSpecFilter, setTableSort, setHoursSort, setTimeWindow])
+    setDetailPage(1)
+    setAllDetailData([])
+    lastLoadedPageRef.current = 0
+  }, [cfg.defaultSortKey, setCostType, setCustomerFilter, setGranularity, setJobFilter, setLineFilter, setSpecFilter, setTableSort, setHoursSort, setTimeWindow])
 
   const maxVisiblePoints = 16
   const needsScroll = chartData.length > maxVisiblePoints
@@ -722,6 +828,7 @@ export default function CostVarianceDashboard() {
   }, [needsScroll, chartData.length])
 
   const isLoading = summaryQuery.isLoading || detailsQuery.isLoading || filterOptionsQuery.isLoading
+  const queryError = summaryQuery.error || detailsQuery.error
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true)
@@ -747,6 +854,11 @@ export default function CostVarianceDashboard() {
     if (dim === "feedbackDate" || dim === "invoiceDate") return "date"
     return dim as keyof typeof detailRows[number]
   }
+
+  const perM = useCallback((cost: number, qty: number) => {
+    if (!costPer1000 || qty === 0) return cost
+    return cost / qty * 1000
+  }, [costPer1000])
 
   return (
     <div className="flex-1 overflow-y-auto px-6 pb-6 -mx-6 -mt-6 pt-3 space-y-4">
@@ -774,48 +886,119 @@ export default function CostVarianceDashboard() {
 
         <span className="mx-1 text-border">|</span>
 
-        <TimePresetBar
-          granularity={granularity as any}
-          value={timeWindow}
-          onChange={setTimeWindow}
-          dateLimits={dataSource === "production" && prodLimits ? { minDate: prodLimits.minDate, maxDate: prodLimits.maxDate } : dataSource === "invoice" && invLimits ? { minDate: invLimits.minDate, maxDate: invLimits.maxDate } : null}
-          customRange={customRange}
-          onCustomRangeChange={(s, e) => { setCustomStart(s); setCustomEnd(e) }}
-        />
+        <Select value={timeWindow} onValueChange={(v) => setTimeWindow(v as CVTimeWindow)}>
+          <SelectTrigger className="h-7 w-auto min-w-[100px] text-xs gap-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CV_TIME_PRESETS.map((preset) => (
+              <SelectItem key={preset.key} value={preset.key}>{preset.label}</SelectItem>
+            ))}
+            <SelectItem value="custom">Custom</SelectItem>
+          </SelectContent>
+        </Select>
+        <DateRangePicker
+          startDate={customRange?.startDate}
+          endDate={customRange?.endDate}
+          onChange={(start, end) => { setCustomStart(start); setCustomEnd(end); setTimeWindow("custom") }}
+        >
+          <Button
+            variant={timeWindow === "custom" ? "default" : "outline"}
+            size="sm"
+            className="h-7 px-2.5 text-xs gap-1"
+          >
+            <CalendarIcon className="h-3.5 w-3.5" />
+            {timeWindow === "custom" && customRange
+              ? `${customRange.startDate} – ${customRange.endDate}`
+              : "Pick"}
+          </Button>
+        </DateRangePicker>
 
         <div className="ml-auto flex items-center gap-2">
-          {cfg.hasLineFilter && (
-            <SearchableSelect
-              value={lineFilter}
-              onValueChange={setLineFilter}
-              options={(filterOptions as unknown as Record<string, unknown>)?.lineNumbers as string[] ?? []}
-              placeholder="All Lines"
-              searchPlaceholder="Search lines..."
-              width="w-[150px]"
-            />
-          )}
-
-          <SearchableSelect
-            value={customerFilter}
-            onValueChange={setCustomerFilter}
-            options={(filterOptions as unknown as Record<string, unknown>)?.customers as string[] ?? []}
-            placeholder="All Customers"
-            searchPlaceholder="Search customers..."
-            width="w-[240px]"
-          />
-
-          <SearchableSelect
-            value={specFilter}
-            onValueChange={setSpecFilter}
-            options={(filterOptions as unknown as Record<string, unknown>)?.specs as string[] ?? []}
-            placeholder="All Specs"
-            searchPlaceholder="Search specs..."
-            width="w-[140px]"
-          />
-
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetFilters}>
-            <RotateCcw className="h-4 w-4" />
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs gap-1.5 relative">
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Filters
+                {(() => {
+                  const count = (lineFilter !== "all" ? 1 : 0) + (customerFilter !== "all" ? 1 : 0) + (salesRepFilter !== "all" ? 1 : 0) + (specFilter !== "all" ? 1 : 0) + (jobFilter !== "all" ? 1 : 0)
+                  return count > 0 ? <span className="ml-1 inline-flex items-center justify-center h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] font-medium">{count}</span> : null
+                })()}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-3 space-y-3 bg-[var(--color-bg-secondary)]" align="end">
+              {cfg.hasLineFilter && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Line</label>
+                  <SearchableSelect
+                    value={lineFilter}
+                    onValueChange={setLineFilter}
+                    options={(filterOptions as unknown as Record<string, unknown>)?.lineNumbers as string[] ?? []}
+                    placeholder="All Lines"
+                    searchPlaceholder="Search lines..."
+                    width="w-full"
+                    popoverWidth="w-[248px]"
+                  />
+                </div>
+              )}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Customer</label>
+                <SearchableSelect
+                  value={customerFilter}
+                  onValueChange={setCustomerFilter}
+                  options={(filterOptions as unknown as Record<string, unknown>)?.customers as string[] ?? []}
+                  placeholder="All Customers"
+                  searchPlaceholder="Search customers..."
+                  width="w-full"
+                  popoverWidth="w-[248px]"
+                />
+              </div>
+              {dataSource === "invoice" && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Sales Rep</label>
+                  <SearchableSelect
+                    value={salesRepFilter}
+                    onValueChange={setSalesRepFilter}
+                    options={(filterOptions as unknown as Record<string, unknown>)?.salesReps as string[] ?? []}
+                    placeholder="All Sales Reps"
+                    searchPlaceholder="Search sales reps..."
+                    width="w-full"
+                    popoverWidth="w-[248px]"
+                  />
+                </div>
+              )}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Spec</label>
+                <SearchableSelect
+                  value={specFilter}
+                  onValueChange={setSpecFilter}
+                  options={(filterOptions as unknown as Record<string, unknown>)?.specs as string[] ?? []}
+                  placeholder="All Specs"
+                  searchPlaceholder="Search specs..."
+                  width="w-full"
+                  popoverWidth="w-[248px]"
+                />
+              </div>
+              {dataSource === "production" && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Job</label>
+                  <SearchableSelect
+                    value={jobFilter}
+                    onValueChange={setJobFilter}
+                    options={(filterOptions as unknown as Record<string, unknown>)?.jobs as string[] ?? []}
+                    placeholder="All Jobs"
+                    searchPlaceholder="Search jobs..."
+                    width="w-full"
+                    popoverWidth="w-[248px]"
+                  />
+                </div>
+              )}
+              <Button variant="outline" size="sm" className="w-full text-xs" onClick={resetFilters}>
+                <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                Reset Filters
+              </Button>
+            </PopoverContent>
+          </Popover>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleRefresh} disabled={isRefreshing} title="Refresh data">
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
           </Button>
@@ -827,14 +1010,19 @@ export default function CostVarianceDashboard() {
         </div>
       </div>
 
+      {queryError && (
+        <div className="rounded-md border border-red-500/50 bg-red-500/10 px-4 py-2 text-sm text-red-600 dark:text-red-400">
+          Failed to load data: {(queryError as Error).message ?? "Unknown error"}
+        </div>
+      )}
+
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-        <KpiCard title="Est Full Cost" value={formatCurrency(kpis.estFull)} tooltip="Sum of estimated material + labor + freight" />
-        <KpiCard title="Act Full Cost" value={formatCurrency(kpis.actFull)} tooltip="Sum of actual material + labor + freight" />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <KpiCard title="Est Full Cost" value={formatCurrency(kpis.estFull)} tooltip="Sum of estimated material + labor" />
+        <KpiCard title="Act Full Cost" value={formatCurrency(kpis.actFull)} tooltip="Sum of actual material + labor" />
         <KpiCard title="Full Variance" value={formatCurrency(kpis.fullVariance)} color={varianceColor(kpis.fullVariance)} tooltip="Estimated - Actual (positive = under budget)" />
         <KpiCard title="Material Var" value={formatCurrency(kpis.materialVariance)} color={varianceColor(kpis.materialVariance)} />
         <KpiCard title="Labor Var" value={formatCurrency(kpis.laborVariance)} color={varianceColor(kpis.laborVariance)} />
-        <KpiCard title="Freight Var" value={formatCurrency(kpis.freightVariance)} color={varianceColor(kpis.freightVariance)} />
       </div>
 
       {/* Chart Card */}
@@ -862,49 +1050,34 @@ export default function CostVarianceDashboard() {
               </div>
               <div className="flex items-center gap-2">
                 {chartTab === "area" && (
-                  <div className="flex items-center gap-1">
-                    {(["yearly", "monthly", "weekly", "daily"] as CostVarianceGranularity[]).map((g) => (
-                      <Button
-                        key={g}
-                        variant={granularity === g ? "default" : "outline"}
-                        size="sm"
-                        className="h-7 w-7 px-0 text-xs"
-                        onClick={() => setGranularity(g)}
-                      >
-                        {g[0].toUpperCase()}
-                      </Button>
-                    ))}
-                  </div>
+                  <Select value={granularity} onValueChange={(v) => setGranularity(v as CostVarianceGranularity)}>
+                    <SelectTrigger className="h-7 w-auto min-w-[90px] text-xs gap-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yearly">Yearly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="daily">Daily</SelectItem>
+                    </SelectContent>
+                  </Select>
                 )}
-                <div className="flex items-center gap-1">
-                  {(["full", "material", "labor", "freight"] as CostType[]).map((ct) => (
-                    <Button
-                      key={ct}
-                      variant={costType === ct ? "default" : "outline"}
-                      size="sm"
-                      className="h-7 px-2.5 text-xs capitalize"
-                      onClick={() => setCostType(ct)}
-                    >
-                      {ct}
-                    </Button>
-                  ))}
-                  {cfg.hasHoursMode && (
-                    <>
-                      <span className="mx-1 text-border">|</span>
-                      {([["hours-order", "vs Order Hrs"], ["hours-uptime", "vs Uptime"]] as [CostType, string][]).map(([ct, label]) => (
-                        <Button
-                          key={ct}
-                          variant={costType === ct ? "default" : "outline"}
-                          size="sm"
-                          className="h-7 px-2.5 text-xs"
-                          onClick={() => setCostType(ct)}
-                        >
-                          {label}
-                        </Button>
-                      ))}
-                    </>
-                  )}
-                </div>
+                <Select value={costType} onValueChange={(v) => setCostType(v as CostType)}>
+                  <SelectTrigger className="h-7 w-auto min-w-[100px] text-xs gap-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full">Full</SelectItem>
+                    <SelectItem value="material">Material</SelectItem>
+                    <SelectItem value="labor">Labor</SelectItem>
+                    {cfg.hasHoursMode && (
+                      <>
+                        <SelectItem value="hours-order">vs Order Hrs</SelectItem>
+                        <SelectItem value="hours-uptime">vs Uptime</SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <p className="text-sm text-muted-foreground">
@@ -1072,6 +1245,16 @@ export default function CostVarianceDashboard() {
                   </Button>
                 ))}
               </div>
+              {detailTab === "costs" && (
+                <Button
+                  variant={costPer1000 ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 px-3 text-xs"
+                  onClick={() => setCostPer1000((prev) => !prev)}
+                >
+                  Per 1000
+                </Button>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <span className="text-xs text-muted-foreground mr-1">Group by:</span>
@@ -1097,7 +1280,7 @@ export default function CostVarianceDashboard() {
         </CardHeader>
         <CardContent className="p-0">
           {detailTab === "costs" ? (
-          <div className="relative overflow-x-auto max-h-[400px] overflow-y-auto [&>div]:!overflow-visible [&_td]:py-1.5 [&_th]:py-1.5">
+          <div ref={detailScrollRef} className="relative overflow-x-auto max-h-[400px] overflow-y-auto [&>div]:!overflow-visible [&_td]:py-1.5 [&_th]:py-1.5 [&_tfoot_td]:sticky [&_tfoot_td]:bottom-[-1px] [&_tfoot_td]:z-20 [&_tfoot_td]:bg-[var(--color-bg-secondary)]">
             <Table>
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-[var(--color-bg-secondary)]">
                 <TableRow>
@@ -1108,28 +1291,29 @@ export default function CostVarianceDashboard() {
                       </TableHead>
                     ) : null
                   )}
-                  {dataSource === "invoice" && (
-                    <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("quantity")}>
-                      Qty{sortIndicator("quantity")}
-                    </TableHead>
-                  )}
+                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort(dataSource === "production" ? "adjQty" : "quantity")}>
+                    Qty{sortIndicator(dataSource === "production" ? "adjQty" : "quantity")}
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("numberOut")}>
+                    # Out{sortIndicator("numberOut")}
+                  </TableHead>
                   <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("estMaterialCost")}>
                     Est Mat{sortIndicator("estMaterialCost")}
-                  </TableHead>
-                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("estLaborCost")}>
-                    Est Lab{sortIndicator("estLaborCost")}
-                  </TableHead>
-                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("estFreightCost")}>
-                    Est Frt{sortIndicator("estFreightCost")}
                   </TableHead>
                   <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("actMaterialCost")}>
                     Act Mat{sortIndicator("actMaterialCost")}
                   </TableHead>
+                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("materialVariance")}>
+                    Mat Var{sortIndicator("materialVariance")}
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("estLaborCost")}>
+                    Est Lab{sortIndicator("estLaborCost")}
+                  </TableHead>
                   <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("actLaborCost")}>
                     Act Lab{sortIndicator("actLaborCost")}
                   </TableHead>
-                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("actFreightCost")}>
-                    Act Frt{sortIndicator("actFreightCost")}
+                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("laborVariance")}>
+                    Lab Var{sortIndicator("laborVariance")}
                   </TableHead>
                   <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("estFull")}>
                     Est Full{sortIndicator("estFull")}
@@ -1140,15 +1324,15 @@ export default function CostVarianceDashboard() {
                   <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("variance")}>
                     Variance{sortIndicator("variance")}
                   </TableHead>
-                  {dataSource === "production" && (
-                    <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("orderHours")}>
-                      Hrs{sortIndicator("orderHours")}
-                    </TableHead>
-                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedDetailRows.map((row, idx) => (
+                {sortedDetailRows.map((row, idx) => {
+                  const q = dataSource === "production" ? row.adjQty : row.quantity
+                  const mVar = perM(row.materialVariance, q)
+                  const lVar = perM(row.laborVariance, q)
+                  const fVar = perM(row.variance, q)
+                  return (
                   <TableRow key={`${row.date}-${row.jobNumber}-${row.lineNumber}-${row.invoiceNumber}-${idx}`}>
                     {cfg.groupByOptions.map(([dim]) =>
                       groupByDims.includes(dim) ? (
@@ -1157,52 +1341,69 @@ export default function CostVarianceDashboard() {
                         </TableCell>
                       ) : null
                     )}
-                    {dataSource === "invoice" && <TableCell className="text-right">{formatNumber(row.quantity, 0)}</TableCell>}
-                    <TableCell className="text-right">{formatCurrencyDetail(row.estMaterialCost)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyDetail(row.estLaborCost)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyDetail(row.estFreightCost)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyDetail(row.actMaterialCost)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyDetail(row.actLaborCost)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyDetail(row.actFreightCost)}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrencyDetail(row.estFull)}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrencyDetail(row.actFull)}</TableCell>
-                    <TableCell className={`text-right font-medium ${row.variance > 0 ? "text-emerald-600 dark:text-emerald-400" : row.variance < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
-                      {formatCurrencyDetail(row.variance)}
+                    <TableCell className="text-right">{formatNumber(q, 0)}</TableCell>
+                    <TableCell className="text-right">{row.numberOut}</TableCell>
+                    <TableCell className="text-right">{formatCurrencyDetail(perM(row.estMaterialCost, q))}</TableCell>
+                    <TableCell className="text-right">{formatCurrencyDetail(perM(row.actMaterialCost, q))}</TableCell>
+                    <TableCell className={`text-right ${mVar > 0 ? "text-emerald-600 dark:text-emerald-400" : mVar < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
+                      {formatCurrencyDetail(mVar)}
                     </TableCell>
-                    {dataSource === "production" && <TableCell className="text-right">{formatNumber(row.orderHours, 1)}</TableCell>}
+                    <TableCell className="text-right">{formatCurrencyDetail(perM(row.estLaborCost, q))}</TableCell>
+                    <TableCell className="text-right">{formatCurrencyDetail(perM(row.actLaborCost, q))}</TableCell>
+                    <TableCell className={`text-right ${lVar > 0 ? "text-emerald-600 dark:text-emerald-400" : lVar < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
+                      {formatCurrencyDetail(lVar)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">{formatCurrencyDetail(perM(row.estFull, q))}</TableCell>
+                    <TableCell className="text-right font-medium">{formatCurrencyDetail(perM(row.actFull, q))}</TableCell>
+                    <TableCell className={`text-right font-medium ${fVar > 0 ? "text-emerald-600 dark:text-emerald-400" : fVar < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
+                      {formatCurrencyDetail(fVar)}
+                    </TableCell>
                   </TableRow>
-                ))}
-                {sortedDetailRows.length === 0 && !isLoading && (
+                  )
+                })}
+                {sortedDetailRows.length === 0 && !isLoading && !detailsQuery.isFetching && (
                   <TableRow>
                     <TableCell colSpan={99} className="text-center text-muted-foreground py-8">
                       No cost variance detail rows for this selection
                     </TableCell>
                   </TableRow>
                 )}
-                {sortedDetailRows.length > 0 && (
-                  <TableRow className="font-semibold border-t">
-                    <TableCell colSpan={groupByDims.length || 1}>Total</TableCell>
-                    {dataSource === "invoice" && <TableCell className="text-right">{formatNumber(detailTotals.quantity, 0)}</TableCell>}
-                    <TableCell className="text-right">{formatCurrencyDetail(detailTotals.estMaterialCost)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyDetail(detailTotals.estLaborCost)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyDetail(detailTotals.estFreightCost)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyDetail(detailTotals.actMaterialCost)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyDetail(detailTotals.actLaborCost)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyDetail(detailTotals.actFreightCost)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyDetail(detailTotals.estFull)}</TableCell>
-                    <TableCell className="text-right">{formatCurrencyDetail(detailTotals.actFull)}</TableCell>
-                    <TableCell className={`text-right ${detailTotals.variance > 0 ? "text-emerald-600 dark:text-emerald-400" : detailTotals.variance < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
-                      {formatCurrencyDetail(detailTotals.variance)}
-                    </TableCell>
-                    {dataSource === "production" && <TableCell className="text-right">{formatNumber(detailTotals.orderHours, 1)}</TableCell>}
-                  </TableRow>
-                )}
               </TableBody>
+              {sortedDetailRows.length > 0 && (() => {
+                const tq = dataSource === "production" ? detailTotals.adjQty : detailTotals.quantity
+                const tmVar = perM(detailTotals.materialVariance, tq)
+                const tlVar = perM(detailTotals.laborVariance, tq)
+                const tfVar = perM(detailTotals.variance, tq)
+                return (
+                <TableFooter>
+                  <TableRow className="font-semibold border-t">
+                    <TableCell colSpan={groupByDims.length || 1}>{costPer1000 ? "Avg /M" : "Total"}</TableCell>
+                    <TableCell className="text-right">{formatNumber(tq, 0)}</TableCell>
+                    <TableCell />
+                    <TableCell className="text-right">{formatCurrencyDetail(perM(detailTotals.estMaterialCost, tq))}</TableCell>
+                    <TableCell className="text-right">{formatCurrencyDetail(perM(detailTotals.actMaterialCost, tq))}</TableCell>
+                    <TableCell className={`text-right ${tmVar > 0 ? "text-emerald-600 dark:text-emerald-400" : tmVar < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
+                      {formatCurrencyDetail(tmVar)}
+                    </TableCell>
+                    <TableCell className="text-right">{formatCurrencyDetail(perM(detailTotals.estLaborCost, tq))}</TableCell>
+                    <TableCell className="text-right">{formatCurrencyDetail(perM(detailTotals.actLaborCost, tq))}</TableCell>
+                    <TableCell className={`text-right ${tlVar > 0 ? "text-emerald-600 dark:text-emerald-400" : tlVar < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
+                      {formatCurrencyDetail(tlVar)}
+                    </TableCell>
+                    <TableCell className="text-right">{formatCurrencyDetail(perM(detailTotals.estFull, tq))}</TableCell>
+                    <TableCell className="text-right">{formatCurrencyDetail(perM(detailTotals.actFull, tq))}</TableCell>
+                    <TableCell className={`text-right ${tfVar > 0 ? "text-emerald-600 dark:text-emerald-400" : tfVar < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
+                      {formatCurrencyDetail(tfVar)}
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
+                )
+              })()}
             </Table>
           </div>
           ) : dataSource === "production" ? (
           /* Production hours table */
-          <div className="relative overflow-x-auto max-h-[400px] overflow-y-auto [&>div]:!overflow-visible [&_td]:py-1.5 [&_th]:py-1.5">
+          <div ref={detailScrollRef} className="relative overflow-x-auto max-h-[400px] overflow-y-auto [&>div]:!overflow-visible [&_td]:py-1.5 [&_th]:py-1.5 [&_tfoot_td]:sticky [&_tfoot_td]:bottom-[-1px] [&_tfoot_td]:z-20 [&_tfoot_td]:bg-[var(--color-bg-secondary)]">
             <Table>
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-[var(--color-bg-secondary)]">
                 <TableRow>
@@ -1263,14 +1464,16 @@ export default function CostVarianceDashboard() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {sortedHoursRows.length === 0 && !isLoading && (
+                {sortedHoursRows.length === 0 && !isLoading && !detailsQuery.isFetching && (
                   <TableRow>
                     <TableCell colSpan={99} className="text-center text-muted-foreground py-8">
                       No hours detail rows for this selection
                     </TableCell>
                   </TableRow>
                 )}
-                {sortedHoursRows.length > 0 && (
+              </TableBody>
+              {sortedHoursRows.length > 0 && (
+                <TableFooter>
                   <TableRow className="font-semibold border-t">
                     <TableCell colSpan={groupByDims.length || 1}>Total</TableCell>
                     <TableCell className="text-right">{formatNumber(detailTotals.adjQty, 0)}</TableCell>
@@ -1286,13 +1489,13 @@ export default function CostVarianceDashboard() {
                       {formatNumber(detailTotals.vsUptime, 1)}
                     </TableCell>
                   </TableRow>
-                )}
-              </TableBody>
+                </TableFooter>
+              )}
             </Table>
           </div>
           ) : (
           /* Invoice hours table */
-          <div className="relative overflow-x-auto max-h-[400px] overflow-y-auto [&>div]:!overflow-visible [&_td]:py-1.5 [&_th]:py-1.5">
+          <div ref={detailScrollRef} className="relative overflow-x-auto max-h-[400px] overflow-y-auto [&>div]:!overflow-visible [&_td]:py-1.5 [&_th]:py-1.5 [&_tfoot_td]:sticky [&_tfoot_td]:bottom-[-1px] [&_tfoot_td]:z-20 [&_tfoot_td]:bg-[var(--color-bg-secondary)]">
             <Table>
               <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-[var(--color-bg-secondary)]">
                 <TableRow>
@@ -1333,14 +1536,16 @@ export default function CostVarianceDashboard() {
                     <TableCell className="text-right">{formatNumber(row.estHours, 1)}</TableCell>
                   </TableRow>
                 ))}
-                {sortedHoursRows.length === 0 && !isLoading && (
+                {sortedHoursRows.length === 0 && !isLoading && !detailsQuery.isFetching && (
                   <TableRow>
                     <TableCell colSpan={99} className="text-center text-muted-foreground py-8">
                       No hours detail rows for this selection
                     </TableCell>
                   </TableRow>
                 )}
-                {sortedHoursRows.length > 0 && (
+              </TableBody>
+              {sortedHoursRows.length > 0 && (
+                <TableFooter>
                   <TableRow className="font-semibold border-t">
                     <TableCell colSpan={groupByDims.length || 1}>Total</TableCell>
                     <TableCell className="text-right">{formatNumber(detailTotals.quantity, 0)}</TableCell>
@@ -1348,10 +1553,20 @@ export default function CostVarianceDashboard() {
                     <TableCell className="text-right"></TableCell>
                     <TableCell className="text-right">{formatNumber(detailTotals.estHours, 1)}</TableCell>
                   </TableRow>
-                )}
-              </TableBody>
+                </TableFooter>
+              )}
             </Table>
           </div>
+          )}
+          {detailsQuery.isFetching && allDetailData.length > 0 && (
+            <div className="py-2 text-center text-sm text-muted-foreground">Loading more...</div>
+          )}
+          {allDetailData.length > 0 && detailPagination && (
+            <div className="flex items-center border-t border-border px-3 py-1.5">
+              <p className="text-xs text-muted-foreground">
+                Showing {allDetailData.length} of {detailPagination.total} rows
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>
