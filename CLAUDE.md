@@ -23,6 +23,11 @@ apps/api/src/db/schema/        # Drizzle schemas
 |-------|-----|
 | **Dashboard creation** | [docs/dashboard-patterns.md](./docs/dashboard-patterns.md) — Complete reference for building dashboards. Covers header, KPI cards, area charts, bar charts, tables, theming, and state management. Copy the Sales Dashboard and adapt. |
 | **Sq Ft Dashboard** | [docs/sqft-dashboard.md](./docs/sqft-dashboard.md) — Full technical reference for the Sq Ft production dashboard. Covers data model, SQL calculations, PBIP cross-reference, API endpoints, frontend architecture, and common pitfalls. |
+| **Cost Variance Investigation** | [docs/investigations/job-11001-cost-variance-investigation.md](./docs/investigations/job-11001-cost-variance-investigation.md) — Reference investigation for post-cost double-counting bug. |
+
+## Skills
+
+- **`/investigate-cost-variance`** — When the user asks to investigate cost variance, analyze post-cost vs pre-cost, or look into why a job's costs are high, **always invoke this skill**. Pass the job number, spec number, or customer name as an argument (e.g. `/investigate-cost-variance 11001`).
 
 ## Theme Rules
 

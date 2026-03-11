@@ -156,7 +156,7 @@ function Gauge({
   const ny = cy - needleLen * Math.sin(needleAngle)
 
   return (
-    <svg width={size} height={size / 2 + 24} viewBox={`0 0 ${size} ${size / 2 + 24}`}>
+    <svg viewBox={`0 0 ${size} ${size / 2 + 24}`} preserveAspectRatio="xMidYMid meet" className="tv-gauge-svg">
       {/* Background arc */}
       <path
         d={arcPath(startAngle, endAngle)}
@@ -225,11 +225,17 @@ function Gauge({
 
 // ── Data aggregation ──────────────────────────────────────────────────
 
+interface ShiftValue {
+  shift: string
+  value: number
+}
+
 interface MachineStats {
   lineNumber: number
   lineName: string
-  currentShift: { value: number; shift: string } | null
-  yesterday: { value: number; shifts: Array<{ shift: string; value: number }> } | null
+  currentShift: { value: number; shift: string; orderHours: number; sheetsFed: number } | null
+  todayShifts: ShiftValue[]
+  yesterday: { value: number; shifts: ShiftValue[] } | null
   lastWeek: number | null
   mtd: number | null
 }
@@ -265,9 +271,13 @@ function aggregateStats(rows: TvDataRow[]): { machines: MachineStats[]; plant: M
   function calcForMachine(machineRows: TvDataRow[]): Omit<MachineStats, "lineNumber" | "lineName"> {
     // Current shift: latest entry for today
     const todayRows = machineRows.filter((r) => r.feedbackDate === today)
-    const currentShift = todayRows.length > 0
-      ? { value: todayRows[todayRows.length - 1].sheetsPerOrderHour, shift: todayRows[todayRows.length - 1].shiftName }
+    const latestToday = todayRows.length > 0 ? todayRows[todayRows.length - 1] : null
+    const currentShift = latestToday
+      ? { value: latestToday.sheetsPerOrderHour, shift: latestToday.shiftName, orderHours: latestToday.totalOrderHours, sheetsFed: latestToday.totalSheetsFed }
       : null
+
+    // All shifts for today
+    const todayShifts: ShiftValue[] = todayRows.map((r) => ({ shift: r.shiftName, value: r.sheetsPerOrderHour }))
 
     // Yesterday: aggregate + per-shift
     const yesterdayRows = machineRows.filter((r) => r.feedbackDate === yesterday)
@@ -299,7 +309,7 @@ function aggregateStats(rows: TvDataRow[]): { machines: MachineStats[]; plant: M
       mtd = totalHours > 0 ? totalSheets / totalHours : 0
     }
 
-    return { currentShift, yesterday: yesterdayData, lastWeek, mtd }
+    return { currentShift, todayShifts, yesterday: yesterdayData, lastWeek, mtd }
   }
 
   const machines: MachineStats[] = MACHINES.map((m) => {
@@ -311,12 +321,49 @@ function aggregateStats(rows: TvDataRow[]): { machines: MachineStats[]; plant: M
     }
   })
 
-  // Plant total: aggregate all machines per time period
-  const plantStats = calcForMachine(rows)
+  // Plant total: sum each machine's sheets/hour (not weighted average)
+  const plantCurrentShiftValues = machines.filter((m) => m.currentShift !== null)
+  const plantCurrentShift = plantCurrentShiftValues.length > 0
+    ? {
+        value: plantCurrentShiftValues.reduce((s, m) => s + m.currentShift!.value, 0),
+        shift: plantCurrentShiftValues[0].currentShift!.shift,
+        orderHours: plantCurrentShiftValues.reduce((s, m) => s + m.currentShift!.orderHours, 0),
+        sheetsFed: plantCurrentShiftValues.reduce((s, m) => s + m.currentShift!.sheetsFed, 0),
+      }
+    : null
+
+  const plantYesterdayValues = machines.filter((m) => m.yesterday !== null)
+  const plantYesterday = plantYesterdayValues.length > 0
+    ? { value: plantYesterdayValues.reduce((s, m) => s + m.yesterday!.value, 0), shifts: [] as Array<{ shift: string; value: number }> }
+    : null
+
+  const plantLastWeekValues = machines.filter((m) => m.lastWeek !== null)
+  const plantLastWeek = plantLastWeekValues.length > 0
+    ? plantLastWeekValues.reduce((s, m) => s + m.lastWeek!, 0)
+    : null
+
+  const plantMtdValues = machines.filter((m) => m.mtd !== null)
+  const plantMtd = plantMtdValues.length > 0
+    ? plantMtdValues.reduce((s, m) => s + m.mtd!, 0)
+    : null
+
+  // Plant today shifts: sum each shift across machines
+  const plantShiftMap = new Map<string, number>()
+  for (const m of machines) {
+    for (const s of m.todayShifts) {
+      plantShiftMap.set(s.shift, (plantShiftMap.get(s.shift) ?? 0) + s.value)
+    }
+  }
+  const plantTodayShifts: ShiftValue[] = Array.from(plantShiftMap.entries()).map(([shift, value]) => ({ shift, value }))
+
   const plant: MachineStats = {
     lineNumber: 0,
     lineName: "Plant Total",
-    ...plantStats,
+    currentShift: plantCurrentShift,
+    todayShifts: plantTodayShifts,
+    yesterday: plantYesterday,
+    lastWeek: plantLastWeek,
+    mtd: plantMtd,
   }
 
   return { machines, plant }
@@ -340,8 +387,8 @@ function StatCard({
   if (value === null) {
     return (
       <div className="tv-stat-card">
-        <div className="text-xs font-medium text-white/40 uppercase tracking-wider">{label}</div>
-        <div className="text-2xl font-mono text-white/20">—</div>
+        <div className="text-[10px] font-medium text-white/40 uppercase tracking-wider">{label}</div>
+        <div className="text-base font-mono text-white/20">—</div>
       </div>
     )
   }
@@ -350,16 +397,16 @@ function StatCard({
 
   return (
     <div className="tv-stat-card">
-      <div className="text-xs font-medium text-white/40 uppercase tracking-wider">{label}</div>
-      <div className="text-2xl font-mono font-bold tabular-nums" style={{ color }}>
+      <div className="text-[10px] font-medium text-white/40 uppercase tracking-wider">{label}</div>
+      <div className="text-base font-mono font-bold tabular-nums leading-tight" style={{ color }}>
         {formatNumber(value)}
       </div>
       {shifts && shifts.length > 1 && (
-        <div className="flex gap-3 mt-1">
+        <div className="flex gap-2 mt-0.5">
           {shifts.map((s) => (
             <span
               key={s.shift}
-              className="text-xs font-mono tabular-nums"
+              className="text-[10px] font-mono tabular-nums"
               style={{ color: getStatusColor(s.value, goal100, goal85) }}
             >
               {s.shift}: {formatNumber(s.value)}
@@ -367,6 +414,64 @@ function StatCard({
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Shift Scoreboard ─────────────────────────────────────────────────
+
+function ShiftScoreboard({
+  shifts,
+  goal100,
+  goal85,
+}: {
+  shifts: ShiftValue[]
+  goal100: number
+  goal85: number
+}) {
+  if (shifts.length < 2) return null
+
+  const maxVal = Math.max(...shifts.map((s) => s.value), goal100)
+  const leader = shifts.reduce((a, b) => (a.value >= b.value ? a : b))
+
+  return (
+    <div className="px-3 shrink-0 space-y-1">
+      <div className="text-[10px] font-medium text-white/30 uppercase tracking-wider text-center">Today by Shift</div>
+      {shifts.map((s) => {
+        const pct = maxVal > 0 ? (s.value / maxVal) * 100 : 0
+        const goalPct = maxVal > 0 ? (goal100 / maxVal) * 100 : 0
+        const color = getStatusColor(s.value, goal100, goal85)
+        const isLeader = s.shift === leader.shift && shifts.filter((x) => x.value === leader.value).length === 1
+
+        return (
+          <div key={s.shift} className="flex items-center gap-2">
+            <span className="text-[10px] font-medium text-white/50 w-12 text-right shrink-0 truncate">
+              {s.shift}
+            </span>
+            <div className="flex-1 h-3.5 rounded-sm bg-white/5 relative overflow-hidden">
+              <div
+                className="h-full rounded-sm transition-all"
+                style={{ width: `${pct}%`, backgroundColor: color, boxShadow: `0 0 6px ${color}30` }}
+              />
+              {/* Goal marker */}
+              <div
+                className="absolute top-0 bottom-0 w-px bg-white/30"
+                style={{ left: `${goalPct}%` }}
+              />
+            </div>
+            <span
+              className="text-[11px] font-mono font-bold tabular-nums w-12 text-right shrink-0"
+              style={{ color }}
+            >
+              {formatNumber(s.value)}
+            </span>
+            {isLeader && (
+              <span className="text-[10px] shrink-0" title="Shift leader">👑</span>
+            )}
+            {!isLeader && <span className="w-[18px] shrink-0" />}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -388,15 +493,15 @@ function MachineCard({
   const statusText = stats.currentShift ? getStatusLabel(currentValue, goal.pct100, goal.pct85) : "No Data"
 
   return (
-    <div className={cn("tv-machine-card flex flex-col", isPlant && "tv-machine-card-plant")}>
+    <div className={cn("tv-machine-card flex flex-col min-h-0", isPlant && "tv-machine-card-plant")}>
       {/* Header */}
-      <div className="px-4 pt-3 pb-1">
+      <div className="px-3 pt-2 pb-0.5 shrink-0">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-white">
+          <h3 className="text-sm font-bold text-white leading-tight">
             #{stats.lineNumber > 0 ? stats.lineNumber : ""} {stats.lineName}
           </h3>
           <span
-            className="text-xs font-semibold px-2 py-1 rounded-full"
+            className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
             style={{
               backgroundColor: `${statusColor}20`,
               color: statusColor,
@@ -408,26 +513,39 @@ function MachineCard({
       </div>
 
       {/* Gauge + Current Value */}
-      <div className="flex flex-col items-center px-4 flex-1 justify-center">
-        <Gauge
-          value={currentValue}
-          maxValue={goal.pct112 * 1.1}
-          goal85={goal.pct85}
-          goal100={goal.pct100}
-          size={220}
-        />
-        <div className="-mt-1 text-center">
-          <div className="text-4xl font-mono font-bold tabular-nums" style={{ color: statusColor }}>
+      <div className="flex flex-col items-center px-2 flex-1 justify-center min-h-0">
+        <div className="tv-gauge-wrap">
+          <Gauge
+            value={currentValue}
+            maxValue={goal.pct112 * 1.1}
+            goal85={goal.pct85}
+            goal100={goal.pct100}
+            size={160}
+          />
+        </div>
+        <div className="-mt-1 text-center shrink-0">
+          <div className="text-2xl font-mono font-bold tabular-nums leading-none" style={{ color: statusColor }}>
             {stats.currentShift ? formatNumber(currentValue) : "—"}
           </div>
-          <div className="text-sm text-white/40 mt-1">
+          <div className="text-[11px] text-white/40 mt-0.5">
             {stats.currentShift ? `${stats.currentShift.shift} shift` : "Current Shift"} · Goal: {formatNumber(goal.pct100)}
           </div>
+          {stats.currentShift && (
+            <div className="flex gap-3 mt-1 text-[10px] font-mono text-white/35 tabular-nums">
+              <span>{formatNumber(stats.currentShift.sheetsFed)} sheets</span>
+              <span>{stats.currentShift.orderHours.toFixed(1)} hrs</span>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Shift Scoreboard */}
+      {stats.todayShifts.length >= 2 && (
+        <ShiftScoreboard shifts={stats.todayShifts} goal100={goal.pct100} goal85={goal.pct85} />
+      )}
+
       {/* Goal Reference */}
-      <div className="flex justify-center gap-4 px-4 py-1.5 text-xs text-white/30">
+      <div className="flex justify-center gap-3 px-2 py-1 text-[10px] text-white/30 shrink-0">
         <span>85%: {formatNumber(goal.pct85)}</span>
         <span>90%: {formatNumber(goal.pct90)}</span>
         <span className="text-white/50 font-medium">100%: {formatNumber(goal.pct100)}</span>
@@ -436,7 +554,7 @@ function MachineCard({
 
       {/* Time Period Stats */}
       {hasData && (
-        <div className="grid grid-cols-3 gap-2 px-4 pb-4">
+        <div className="grid grid-cols-3 gap-1.5 px-2 pb-2 shrink-0">
           <StatCard
             label="Yesterday"
             value={stats.yesterday?.value ?? null}
@@ -601,41 +719,41 @@ export default function PlantTvDashboard() {
       isFullscreen && "fixed inset-0 z-50"
     )}>
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-2.5 shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-        <div className="flex items-center gap-3">
-          <Monitor className="h-6 w-6 text-white/40" />
+      <div className="flex items-center justify-between px-4 py-1.5 shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="flex items-center gap-2">
+          <Monitor className="h-5 w-5 text-white/40" />
           <div>
-            <h1 className="text-lg font-semibold text-white">Plant TV — Sheets / Order Hour</h1>
+            <h1 className="text-sm font-semibold text-white leading-tight">Plant TV — Sheets / Order Hour</h1>
             {lastRefreshed && (
-              <p className="text-xs text-white/30">
+              <p className="text-[10px] text-white/30 leading-tight">
                 Last refreshed: {lastRefreshed} · Auto-refreshes every 5 min
               </p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5 tv-btn">
-            <RefreshCw className="h-4 w-4" /> Refresh
+        <div className="flex items-center gap-1.5">
+          <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1 h-7 px-2 text-xs tv-btn">
+            <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </Button>
           {isAdmin && (
-            <Button variant="outline" size="sm" onClick={() => setShowGoals(true)} className="gap-1.5 tv-btn">
-              <Settings className="h-4 w-4" /> Goals
+            <Button variant="outline" size="sm" onClick={() => setShowGoals(true)} className="gap-1 h-7 px-2 text-xs tv-btn">
+              <Settings className="h-3.5 w-3.5" /> Goals
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={toggleFullscreen} className="gap-1.5 tv-btn">
-            {isFullscreen ? <><Minimize className="h-4 w-4" /> Exit</> : <><Maximize className="h-4 w-4" /> Fullscreen</>}
+          <Button variant="outline" size="sm" onClick={toggleFullscreen} className="gap-1 h-7 px-2 text-xs tv-btn">
+            {isFullscreen ? <><Minimize className="h-3.5 w-3.5" /> Exit</> : <><Maximize className="h-3.5 w-3.5" /> Fullscreen</>}
           </Button>
         </div>
       </div>
 
       {/* Card Grid */}
-      <div className="flex-1 overflow-hidden p-4">
+      <div className="flex-1 overflow-hidden p-2 min-h-0">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500" />
           </div>
         ) : (
-          <div className="grid grid-cols-4 grid-rows-2 gap-4 h-full">
+          <div className="tv-grid gap-2 h-full">
             {/* Top row: 4 machines */}
             {machines.slice(0, 4).map((m) => (
               <MachineCard key={m.lineNumber} stats={m} goal={goals[m.lineNumber]} />

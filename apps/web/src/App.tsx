@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate, Outlet } from "react-router-dom"
 import { MainLayout } from "@/components/layout"
-import { ErpCustomers, ErpQuotes, ErpQuoteForm, SalesDashboard, SqFtDashboard, ContributionDashboard, CostVarianceDashboard, SqlExplorer, ProductionDashboard, MrpDashboard, UserManagement, PlantTvDashboard } from "@/pages/erp"
+import { ErpCustomers, ErpQuotes, ErpQuoteForm, SalesDashboard, SqFtDashboard, ContributionDashboard, CostVarianceDashboard, SqlExplorer, ProductionDashboard, MrpDashboard, UserManagement, PlantTvDashboard, CostAnalysis } from "@/pages/erp"
 import { Login } from "@/pages/Login"
 import { Signup } from "@/pages/Signup"
 import { ForgotPassword } from "@/pages/ForgotPassword"
@@ -138,6 +138,7 @@ function App() {
           <Route path="/erp/sales" element={<RoleGuard requiredRoles={["FINANCE", "ADMIN"]}><SalesDashboard /></RoleGuard>} />
           <Route path="/erp/contribution" element={<RoleGuard requiredRoles={["FINANCE", "ADMIN"]}><ContributionDashboard /></RoleGuard>} />
           <Route path="/erp/cost-variance" element={<RoleGuard requiredRoles={["FINANCE", "ADMIN"]}><CostVarianceDashboard /></RoleGuard>} />
+          <Route path="/erp/cost-analysis" element={<RoleGuard requiredRoles={["FINANCE", "ADMIN"]}><CostAnalysis /></RoleGuard>} />
           <Route path="/erp/invoice-cost-variance" element={<Navigate to="/erp/cost-variance" replace />} />
 
           {/* Admin — ADMIN only */}

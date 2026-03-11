@@ -17,6 +17,7 @@ import {
   Monitor,
   Terminal,
   Users,
+  SearchCheck,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -49,6 +50,7 @@ const navGroups: NavGroup[] = [
       { label: "Sales Dashboard", href: "/erp/sales", icon: TrendingUp },
       { label: "Contribution Dashboard", href: "/erp/contribution", icon: DollarSign },
       { label: "Cost Variance", href: "/erp/cost-variance", icon: ArrowLeftRight },
+      { label: "Cost Analysis", href: "/erp/cost-analysis", icon: SearchCheck },
     ],
   },
   {

@@ -365,45 +365,51 @@ async function computeCostVarianceRows(
     }
   }
 
-  // Step 4a: compute total adjusted quantity per job (for estimated hours)
+  // Step 4a: compute total sheets fed per job (for estimated hours)
+  const totalSheetsFedByJob = new Map<string, number>()
   const totalAdjQtyByJob = new Map<string, number>()
   for (const row of baseRows) {
     const jobNumber = String(row.jobNumber ?? '')
     const machineCount = machineCountByJob.get(jobNumber) ?? 0
     const qtyProduced = toNullableNumber(row.quantityProduced)
     const adjQty = qtyProduced !== null && machineCount > 0 ? qtyProduced / machineCount : 0
+    const numberOut = toNumber((row as unknown as Record<string, unknown>).numberOut) || 1
+    const sheetsFed = adjQty / numberOut
+    totalSheetsFedByJob.set(jobNumber, (totalSheetsFedByJob.get(jobNumber) ?? 0) + sheetsFed)
     totalAdjQtyByJob.set(jobNumber, (totalAdjQtyByJob.get(jobNumber) ?? 0) + adjQty)
   }
 
-  // Step 4b: compute total estimated hours per job (setup counted once, run hours for full qty)
+  // Step 4b: compute total estimated hours per job (setup counted once, run hours based on sheets fed)
   const totalEstHoursByJob = new Map<string, number>()
-  for (const [jobNumber, totalAdjQty] of totalAdjQtyByJob) {
+  for (const [jobNumber, totalSheetsFed] of totalSheetsFedByJob) {
     const routingSteps = routingByJob.get(jobNumber)
-    if (!routingSteps || totalAdjQty <= 0) continue
+    if (!routingSteps || totalSheetsFed <= 0) continue
     let totalEstHours = 0
     for (const step of routingSteps) {
       if (step.runRate <= 0) continue
       const setupHours = step.setupMins / 60
-      const runHours = (1000 / step.runRate) * (totalAdjQty / 1000)
+      const runHours = (1000 / step.runRate) * (totalSheetsFed / 1000)
       totalEstHours += setupHours + runHours
     }
     totalEstHoursByJob.set(jobNumber, totalEstHours)
   }
 
-  // Step 4c: compute cost variance rows, distributing est hours proportionally
+  // Step 4c: compute cost variance rows, distributing est hours proportionally by sheets fed
   const result: ComputedRow[] = []
   for (const row of baseRows) {
     const jobNumber = String(row.jobNumber ?? '')
     const machineCount = machineCountByJob.get(jobNumber) ?? 0
     const qtyProduced = toNullableNumber(row.quantityProduced)
     const adjQty = qtyProduced !== null && machineCount > 0 ? qtyProduced / machineCount : 0
+    const numberOut = toNumber((row as unknown as Record<string, unknown>).numberOut) || 1
+    const sheetsFed = adjQty / numberOut
 
     const costs = costByJob.get(jobNumber)
 
-    // Distribute job-level estimated hours proportionally by this row's share of total qty
-    const totalAdjQty = totalAdjQtyByJob.get(jobNumber) ?? 0
+    // Distribute job-level estimated hours proportionally by this row's share of total sheets fed
+    const totalSheetsFed = totalSheetsFedByJob.get(jobNumber) ?? 0
     const totalEstHours = totalEstHoursByJob.get(jobNumber) ?? 0
-    const estimatedHours = totalAdjQty > 0 ? (adjQty / totalAdjQty) * totalEstHours : 0
+    const estimatedHours = totalSheetsFed > 0 ? (sheetsFed / totalSheetsFed) * totalEstHours : 0
 
     // Routing info for display (primary step run rate, total setup)
     const routingSteps = routingByJob.get(jobNumber) ?? []
@@ -680,7 +686,7 @@ costVarianceDashboardRoutes.get('/details', async (c) => {
     const totals = {
       estMaterialCost: 0, estLaborCost: 0, estFreightCost: 0,
       actMaterialCost: 0, actLaborCost: 0, actFreightCost: 0,
-      orderHours: 0, uptimeHours: 0, estimatedHours: 0, adjQty: 0, quantity: 0,
+      orderHours: 0, uptimeHours: 0, estimatedHours: 0, adjQty: 0, quantity: 0, sheetsFed: 0,
     }
     for (const r of allData) {
       totals.estMaterialCost += r.estMaterialCost
@@ -693,6 +699,7 @@ costVarianceDashboardRoutes.get('/details', async (c) => {
       totals.uptimeHours += r.uptimeHours
       totals.estimatedHours += r.estimatedHours
       totals.adjQty += r.adjQty
+      totals.sheetsFed += r.numberOut > 0 ? Math.round(r.adjQty / r.numberOut) : 0
     }
 
     const total = allData.length
@@ -717,7 +724,7 @@ costVarianceDashboardRoutes.get('/filter-options', async (c) => {
   const dates = requireDates(c)
   if ('error' in dates) return dates.error
 
-  const { line, customer, spec, job, hasLine, hasCustomer, hasSpec, hasJob } = parseDashboardFilters(c)
+  const { line, customer, spec, job, hasLine, hasCustomer, hasSpec, hasJob: _hasJob } = parseDashboardFilters(c)
 
   try {
     const kv = c.env.AUTH_CACHE

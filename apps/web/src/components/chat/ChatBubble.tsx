@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useChat, type ChatMessage, type ToolCall } from '@/api/hooks/useChat'
 
 function ToolCallDisplay({ toolCall }: { toolCall: ToolCall }) {
@@ -175,7 +176,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             </div>
           ) : (
             <div className="chat-markdown break-words leading-relaxed prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-headings:text-[var(--color-text)] prose-strong:text-[var(--color-text)] text-[var(--color-text)]">
-              <Markdown>{message.content}</Markdown>
+              <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
             </div>
           )
         )}

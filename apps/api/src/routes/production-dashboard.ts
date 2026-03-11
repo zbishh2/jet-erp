@@ -323,6 +323,7 @@ function getSpeedSummarySQL(granularity: string, hasMachine: boolean, hasShift: 
       ${periodExpr} as period,
       SUM(CAST(pf.quantity_fed_in AS FLOAT)) as totalFedIn,
       SUM(${UPTIME_HOURS_EXPR}) as uptimeHours,
+      SUM(CAST(DATEDIFF(SECOND, jss.feedback_start, jss.feedback_finish) AS FLOAT)) / 3600.0 as orderHours,
       AVG(CAST(cc.optimum_run_speed AS FLOAT)) as avgOptimumSpeed
     ${speedFromClause(hasMachine, hasShift)}
     GROUP BY ${periodExpr}
@@ -464,6 +465,7 @@ const PRODUCTION_SQL = {
         cc.costcenter_number as machineNumber,
         SUM(CAST(pf.quantity_fed_in AS FLOAT)) as totalFedIn,
         SUM(${UPTIME_HOURS_EXPR}) as uptimeHours,
+        SUM(CAST(DATEDIFF(SECOND, jss.feedback_start, jss.feedback_finish) AS FLOAT)) / 3600.0 as orderHours,
         AVG(CAST(cc.optimum_run_speed AS FLOAT)) as optimumSpeed
       FROM dwproductionfeedback pf
       INNER JOIN dwjobseriesstep jss

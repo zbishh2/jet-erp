@@ -181,7 +181,7 @@ export default function ProductionDashboard() {
   const [groupByDims, setGroupByDims] = usePersistedState<string[]>("groupByDims", ["feedbackDate", "jobNum", "customerName", "specNumber", "lineNumber"])
   const [dashboardTab, setDashboardTab] = usePersistedState<DashboardTab>("tab", "quality")
   const [qualityChartTab, setQualityChartTab] = usePersistedState<string>("qualityChartTab", "quality")
-  const [speedChartTab, setSpeedChartTab] = usePersistedState<string>("speedChartTab", "speedToOptimum")
+  const [speedChartTab, setSpeedChartTab] = usePersistedState<string>("speedChartTab", "sheetsPerHour")
   const [uptimeChartTab, setUptimeChartTab] = usePersistedState<string>("uptimeChartTab", "uptimePct")
   const [oeeChartTab, setOeeChartTab] = usePersistedState<string>("oeeChartTab", "oeePct")
   const [customStart, setCustomStart] = usePersistedState<string>("customStart", "")
@@ -364,14 +364,12 @@ export default function ProductionDashboard() {
   // Speed chart data
   const speedChartData = useMemo(() => {
     return speedSummaryData.map((m) => {
-      const sheetsPerHour = m.uptimeHours > 0 ? m.totalFedIn / m.uptimeHours : 0
-      const speedToOptimum = m.avgOptimumSpeed > 0 ? (sheetsPerHour / m.avgOptimumSpeed) * 100 : 0
+      const sheetsPerHour = m.orderHours > 0 ? m.totalFedIn / m.orderHours : 0
       return {
         label: getPeriodLabel(m.period, granularity),
         periodKey: m.period,
-        speedToOptimum,
         sheetsPerHour,
-        uptimeHours: m.uptimeHours,
+        orderHours: m.orderHours,
         totalFedIn: m.totalFedIn,
         avgOptimumSpeed: m.avgOptimumSpeed,
       }
@@ -384,27 +382,27 @@ export default function ProductionDashboard() {
       ? speedSummaryData.filter((m) => m.period === selectedPeriod)
       : speedSummaryData
     const totalFedIn = periods.reduce((sum, m) => sum + m.totalFedIn, 0)
+    const orderHours = periods.reduce((sum, m) => sum + m.orderHours, 0)
     const uptimeHours = periods.reduce((sum, m) => sum + m.uptimeHours, 0)
     const avgOptimumSpeed = periods.length > 0
       ? periods.reduce((sum, m) => sum + m.avgOptimumSpeed, 0) / periods.length
       : 0
-    const sheetsPerHour = uptimeHours > 0 ? totalFedIn / uptimeHours : 0
-    const speedToOptimum = avgOptimumSpeed > 0 ? (sheetsPerHour / avgOptimumSpeed) * 100 : 0
-    return { speedToOptimum, sheetsPerHour, avgOptimumSpeed, totalFedIn, uptimeHours }
+    const sheetsPerHour = orderHours > 0 ? totalFedIn / orderHours : 0
+    const uptimeSheetsPerHour = uptimeHours > 0 ? totalFedIn / uptimeHours : 0
+    const speedToOptimum = avgOptimumSpeed > 0 ? (uptimeSheetsPerHour / avgOptimumSpeed) * 100 : 0
+    return { sheetsPerHour, totalFedIn, orderHours, speedToOptimum }
   }, [speedSummaryData, selectedPeriod])
 
   // Speed by machine bar data
   const speedMachineBarData = useMemo(() => {
     return speedMachineData.map((m) => {
-      const sheetsPerHour = m.uptimeHours > 0 ? m.totalFedIn / m.uptimeHours : 0
-      const speedToOptimum = m.optimumSpeed > 0 ? (sheetsPerHour / m.optimumSpeed) * 100 : 0
+      const sheetsPerHour = m.orderHours > 0 ? m.totalFedIn / m.orderHours : 0
       return {
         name: m.machineName,
         machineNumber: m.machineNumber,
-        speedToOptimum,
         sheetsPerHour,
       }
-    }).sort((a, b) => b.speedToOptimum - a.speedToOptimum)
+    }).sort((a, b) => b.sheetsPerHour - a.sheetsPerHour)
   }, [speedMachineData])
 
   const speedMachineBarHeight = Math.max(200, speedMachineBarData.length * 34)
@@ -911,7 +909,7 @@ export default function ProductionDashboard() {
     setTableTab("machine")
     setDashboardTab("quality")
     setQualityChartTab("quality")
-    setSpeedChartTab("speedToOptimum")
+    setSpeedChartTab("sheetsPerHour")
     setUptimeChartTab("uptimePct")
     setOeeChartTab("oeePct")
     setSpeedCustomerFilter("all")
@@ -1078,21 +1076,11 @@ export default function ProductionDashboard() {
           />
         </div>
       ) : isSpeed ? (
-        <div key="speed-kpis" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div key="speed-kpis" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
           <KpiCard
-            title="Speed to Optimum %"
-            value={formatPercent(speedKpis.speedToOptimum)}
-            tooltip="Sheets Per Hour / Optimum Run Speed"
-          />
-          <KpiCard
-            title="Sheets Per Hour"
+            title="Sheets / Order Hr"
             value={formatNumber(speedKpis.sheetsPerHour, 0)}
-            tooltip="Total Fed In / Uptime Hours"
-          />
-          <KpiCard
-            title="Optimum Speed"
-            value={formatNumber(speedKpis.avgOptimumSpeed, 0)}
-            tooltip="Average optimum_run_speed from dwcostcenters (machine 154 = 15,000)"
+            tooltip="Total Fed In / Order Hours"
           />
           <KpiCard
             title="Total Fed In"
@@ -1100,9 +1088,9 @@ export default function ProductionDashboard() {
             tooltip="Total quantity_fed_in"
           />
           <KpiCard
-            title="Uptime Hours"
-            value={formatNumber(speedKpis.uptimeHours, 1)}
-            tooltip="Order Hours - Setup Hours - Open Downtime - Closed Downtime"
+            title="Order Hours"
+            value={formatNumber(speedKpis.orderHours, 1)}
+            tooltip="Total order duration (feedback_start to feedback_finish)"
           />
         </div>
       ) : isUptime ? (
@@ -1365,8 +1353,7 @@ export default function ProductionDashboard() {
                       ))}
                     </div>
                     <TabsList>
-                      <TabsTrigger value="speedToOptimum">Speed %</TabsTrigger>
-                      <TabsTrigger value="sheetsPerHour">Sheets/Hr</TabsTrigger>
+                      <TabsTrigger value="sheetsPerHour">Sheets / Order Hr</TabsTrigger>
                     </TabsList>
                   </div>
                 </div>
@@ -1379,34 +1366,6 @@ export default function ProductionDashboard() {
                 ) : (
                   <div ref={chartScrollRef} className={needsScroll ? "overflow-x-auto" : ""}>
                   <div style={needsScroll ? { width: chartWidth } : undefined}>
-                    <TabsContent value="speedToOptimum" className="mt-0">
-                      <ResponsiveContainer width="100%" height={300}>
-                        <AreaChart data={speedChartData} margin={{ top: 20, left: 20, right: 30, bottom: 5 }} onClick={handleChartClick} style={{ cursor: "pointer" }}>
-                          <defs>
-                            <linearGradient id="gradSpeedOpt" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                              <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border" />
-                          <XAxis dataKey="label" className="text-xs" tickLine={false} />
-                          <YAxis domain={[0, "auto"]} tickFormatter={(v) => `${v}%`} className="text-xs" />
-                          <RechartsTooltip
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            formatter={((value: number, name: string) => [formatPercent(value), name]) as any}
-                            contentStyle={{ backgroundColor: "var(--color-bg-secondary)", borderColor: "var(--border)", borderRadius: 8 }}
-                            labelStyle={{ color: "var(--color-text)", fontWeight: 600 }}
-                            itemStyle={{ color: "var(--color-text)" }}
-                          />
-                          <Legend />
-                          {dimRegions?.left && <ReferenceArea x1={dimRegions.left.x1} x2={dimRegions.left.x2} fill="#000" fillOpacity={0.35} ifOverflow="visible" />}
-                          {dimRegions?.right && <ReferenceArea x1={dimRegions.right.x1} x2={dimRegions.right.x2} fill="#000" fillOpacity={0.35} ifOverflow="visible" />}
-                          <Area type="monotone" dataKey="speedToOptimum" name="Speed to Optimum %" stroke="#6366f1" fill="url(#gradSpeedOpt)" strokeWidth={2.5} dot={{ r: 4, fill: "#6366f1", stroke: "var(--color-bg)", strokeWidth: 2 }} isAnimationActive={false}>
-                            <LabelList dataKey="speedToOptimum" content={renderAreaLabel(formatPercent)} />
-                          </Area>
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </TabsContent>
                     <TabsContent value="sheetsPerHour" className="mt-0">
                       <ResponsiveContainer width="100%" height={300}>
                         <AreaChart data={speedChartData} margin={{ top: 20, left: 20, right: 30, bottom: 5 }} onClick={handleChartClick} style={{ cursor: "pointer" }}>
@@ -1429,7 +1388,7 @@ export default function ProductionDashboard() {
                           <Legend />
                           {dimRegions?.left && <ReferenceArea x1={dimRegions.left.x1} x2={dimRegions.left.x2} fill="#000" fillOpacity={0.35} ifOverflow="visible" />}
                           {dimRegions?.right && <ReferenceArea x1={dimRegions.right.x1} x2={dimRegions.right.x2} fill="#000" fillOpacity={0.35} ifOverflow="visible" />}
-                          <Area type="monotone" dataKey="sheetsPerHour" name="Sheets Per Hour" stroke="#6366f1" fill="url(#gradSPH)" strokeWidth={2.5} dot={{ r: 4, fill: "#6366f1", stroke: "var(--color-bg)", strokeWidth: 2 }} isAnimationActive={false}>
+                          <Area type="monotone" dataKey="sheetsPerHour" name="Sheets / Order Hr" stroke="#6366f1" fill="url(#gradSPH)" strokeWidth={2.5} dot={{ r: 4, fill: "#6366f1", stroke: "var(--color-bg)", strokeWidth: 2 }} isAnimationActive={false}>
                             <LabelList dataKey="sheetsPerHour" content={renderAreaLabel(formatNumber)} />
                           </Area>
                         </AreaChart>
@@ -1448,7 +1407,7 @@ export default function ProductionDashboard() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Speed by Machine</CardTitle>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[#6366f1]" />Speed to Optimum %</span>
+                  <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[#6366f1]" />Sheets / Order Hr</span>
                 </div>
               </div>
             </CardHeader>
@@ -1483,17 +1442,17 @@ export default function ProductionDashboard() {
                         <YAxis type="category" dataKey="name" width={120} className="text-xs" tick={{ fontSize: 11 }} />
                         <RechartsTooltip
                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          formatter={((value: number, name: string) => [formatPercent(value), name]) as any}
+                          formatter={((value: number, name: string) => [formatNumber(value), name]) as any}
                           contentStyle={{ backgroundColor: "var(--color-bg-secondary)", borderColor: "var(--border)", borderRadius: 8 }}
                           labelStyle={{ color: "var(--color-text)", fontWeight: 600 }}
                           itemStyle={{ color: "var(--color-text)" }}
                           cursor={{ fill: "var(--color-bg-hover)" }}
                         />
-                        <Bar dataKey="speedToOptimum" name="Speed to Optimum %" fill="#6366f1" radius={[0, 2, 2, 0]} isAnimationActive={false}>
+                        <Bar dataKey="sheetsPerHour" name="Sheets / Order Hr" fill="#6366f1" radius={[0, 2, 2, 0]} isAnimationActive={false}>
                           {speedMachineBarData.map((d, i) => (
                             <Cell key={i} fill={machineFilter !== "all" && String(d.machineNumber) !== machineFilter ? "#6366f133" : "#6366f1"} />
                           ))}
-                          <LabelList dataKey="speedToOptimum" position="right" fill="var(--color-text)" fontSize={11} formatter={((v: number) => formatPercent(v)) as never} />
+                          <LabelList dataKey="sheetsPerHour" position="right" fill="var(--color-text)" fontSize={11} formatter={((v: number) => formatNumber(v)) as never} />
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>

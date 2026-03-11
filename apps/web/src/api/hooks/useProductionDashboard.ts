@@ -50,6 +50,7 @@ export interface SpeedSummary {
   period: string
   totalFedIn: number
   uptimeHours: number
+  orderHours: number
   avgOptimumSpeed: number
 }
 
@@ -58,6 +59,7 @@ export interface SpeedByMachine {
   machineNumber: number
   totalFedIn: number
   uptimeHours: number
+  orderHours: number
   optimumSpeed: number
 }
 

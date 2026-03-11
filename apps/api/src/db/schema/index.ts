@@ -19,6 +19,7 @@ export * from './erp-quote'
 export * from './sales-budget'
 export * from './holiday'
 export * from './plant-tv-goal'
+export * from './cost-analysis'
 
 // Audit & security schemas
 export * from './audit-log'

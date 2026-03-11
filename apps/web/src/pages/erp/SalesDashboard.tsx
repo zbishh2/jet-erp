@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
+import { useQueryClient } from "@tanstack/react-query"
 import {
   BarChart,
   Bar,
@@ -33,14 +34,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   ArrowLeft,
   TrendingUp,
   TrendingDown,
   RotateCcw,
+  RefreshCw,
   Info,
   ChevronLeft,
   ChevronRight,
+  SlidersHorizontal,
 } from "lucide-react"
 import {
   useSalesDateLimits,
@@ -181,11 +185,15 @@ function KpiCard({ title, value, description, trend, tooltip }: KpiCardProps) {
 
 export default function SalesDashboard() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const currentYear = new Date().getFullYear()
   const [timeWindow, setTimeWindow] = usePersistedState<TimeWindow>("timeWindow", "last-6m")
   const [quarter, setQuarter] = usePersistedState<Quarter>("quarter", "all")
   const [repFilter, setRepFilter] = usePersistedState<string>("repFilter", "all")
   const [customerFilter, setCustomerFilter] = usePersistedState<string>("customerFilter", "all")
+  const [jobFilter, setJobFilter] = usePersistedState<string>("jobFilter", "all")
   const [chartMode, setChartMode] = usePersistedState<"budget" | "yoy">("chartMode", "budget")
   const [granularity, setGranularity] = usePersistedState<Granularity>("granularity", "monthly")
   const [customStart, setCustomStart] = usePersistedState<string>("customStart", "")
@@ -373,6 +381,15 @@ export default function SalesDashboard() {
     const remaining = customers.filter((c) => !seen.has(c.customerName)).map((c) => c.customerName)
     return [...deduped, ...remaining]
   }, [byCustomerData, customers])
+
+  // Distinct job numbers from detail data, sorted
+  const sortedJobNumbers = useMemo(() => {
+    const jobs = new Set<string>()
+    for (const r of salesDetailData) {
+      if (r.jobNumber) jobs.add(r.jobNumber)
+    }
+    return Array.from(jobs).sort()
+  }, [salesDetailData])
 
   // Build budget lookup keyed by period
   const budgetByPeriod = useMemo(() => {
@@ -860,6 +877,9 @@ export default function SalesDashboard() {
     if (customerFilter !== "all") {
       data = data.filter((r) => r.customerName === customerFilter)
     }
+    if (jobFilter !== "all") {
+      data = data.filter((r) => r.jobNumber === jobFilter)
+    }
     return data.map((row) => {
       const contribution = row.totalSales - row.totalCost
       const salesPerMSF = row.totalMSF > 0 ? row.totalSales / row.totalMSF : 0
@@ -880,7 +900,7 @@ export default function SalesDashboard() {
         contPct,
       }
     })
-  }, [salesDetailData, repFilter, customerFilter])
+  }, [salesDetailData, repFilter, customerFilter, jobFilter])
 
   // Group detail rows by active dims
   const groupedDetailRows = useMemo(() => {
@@ -1009,6 +1029,7 @@ export default function SalesDashboard() {
     setQuarter("all")
     setRepFilter("all")
     setCustomerFilter("all")
+    setJobFilter("all")
     setChartMode("budget")
     setGranularity("monthly")
     setSelectedMonth(null)
@@ -1016,7 +1037,17 @@ export default function SalesDashboard() {
     setDetailSort({ key: "invoiceDate", dir: "desc" })
     setDetailTab("detail")
     setGroupByDims(["invoiceDate", "customerName", "repName", "invoiceNumber", "jobNumber", "specNumber"])
-  }, [setTimeWindow, setQuarter, setRepFilter, setCustomerFilter, setChartMode, setGranularity, setDetailSort, setDetailTab, setGroupByDims])
+  }, [setTimeWindow, setQuarter, setRepFilter, setCustomerFilter, setJobFilter, setChartMode, setGranularity, setDetailSort, setDetailTab, setGroupByDims])
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true)
+    try {
+      await queryClient.invalidateQueries({ queryKey: ["sales"] })
+      setLastUpdated(new Date())
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [queryClient])
 
   // Rep bar chart data
   const repBarData = useMemo(() => repData.map((r) => ({
@@ -1102,35 +1133,78 @@ export default function SalesDashboard() {
             </Button>
           )}
         </div>
-        <div className="ml-auto flex items-center gap-2">
-          <SearchableSelect
-            value={repFilter}
-            onValueChange={setRepFilter}
-            options={sortedReps}
-            placeholder="All Reps"
-            searchPlaceholder="Search reps..."
-            width="w-[160px]"
-          />
-          <SearchableSelect
-            value={customerFilter}
-            onValueChange={setCustomerFilter}
-            options={sortedCustomers}
-            placeholder="All Customers"
-            searchPlaceholder="Search customers..."
-            width="w-[180px]"
-          />
+        <TimePresetBar
+          granularity={granularity}
+          value={timeWindow}
+          onChange={setTimeWindow}
+          dateLimits={salesLimits ? { minDate: salesLimits.minDate, maxDate: salesLimits.maxDate } : null}
+          customRange={customRange}
+          onCustomRangeChange={(s, e) => { setCustomStart(s); setCustomEnd(e) }}
+        />
 
-          <TimePresetBar
-            granularity={granularity}
-            value={timeWindow}
-            onChange={setTimeWindow}
-            dateLimits={salesLimits ? { minDate: salesLimits.minDate, maxDate: salesLimits.maxDate } : null}
-            customRange={customRange}
-            onCustomRangeChange={(s, e) => { setCustomStart(s); setCustomEnd(e) }}
-          />
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetFilters} title="Reset filters">
-            <RotateCcw className="h-4 w-4" />
+        <div className="ml-auto flex items-center gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs gap-1.5 relative">
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Filters
+                {(() => {
+                  const count = (repFilter !== "all" ? 1 : 0) + (customerFilter !== "all" ? 1 : 0) + (jobFilter !== "all" ? 1 : 0)
+                  return count > 0 ? <span className="ml-1 inline-flex items-center justify-center h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] font-medium">{count}</span> : null
+                })()}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-3 space-y-3 bg-[var(--color-bg-secondary)]" align="end">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Sales Rep</label>
+                <SearchableSelect
+                  value={repFilter}
+                  onValueChange={setRepFilter}
+                  options={sortedReps}
+                  placeholder="All Reps"
+                  searchPlaceholder="Search reps..."
+                  width="w-full"
+                  popoverWidth="w-[248px]"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Customer</label>
+                <SearchableSelect
+                  value={customerFilter}
+                  onValueChange={setCustomerFilter}
+                  options={sortedCustomers}
+                  placeholder="All Customers"
+                  searchPlaceholder="Search customers..."
+                  width="w-full"
+                  popoverWidth="w-[248px]"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Job</label>
+                <SearchableSelect
+                  value={jobFilter}
+                  onValueChange={setJobFilter}
+                  options={sortedJobNumbers}
+                  placeholder="All Jobs"
+                  searchPlaceholder="Search job numbers..."
+                  width="w-full"
+                  popoverWidth="w-[248px]"
+                />
+              </div>
+              <Button variant="outline" size="sm" className="w-full text-xs" onClick={resetFilters}>
+                <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                Reset Filters
+              </Button>
+            </PopoverContent>
+          </Popover>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleRefresh} disabled={isRefreshing} title="Refresh data">
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
           </Button>
+          {lastUpdated && (
+            <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+              Last refreshed {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
         </div>
       </div>
 

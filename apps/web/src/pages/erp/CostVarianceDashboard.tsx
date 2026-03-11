@@ -1,15 +1,19 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react"
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import {
   AreaChart,
   Area,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
   ReferenceArea,
+  Line,
+  ComposedChart,
+  Legend,
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -44,7 +48,10 @@ import {
   useInvoiceCostVarianceSummary,
   useInvoiceCostVarianceDetails,
   useInvoiceCostVarianceFilterOptions,
+  useInvoiceJobDetail,
+  useSpecAnalysis,
 } from "@/api/hooks/useInvoiceCostVarianceDashboard"
+import type { JobDetailData, SpecAnalysisData } from "@/api/hooks/useInvoiceCostVarianceDashboard"
 import type { CostVarianceGranularity } from "@/api/hooks/useCostVarianceDashboard"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { CalendarIcon } from "lucide-react"
@@ -59,7 +66,7 @@ import {
 type DataSource = "production" | "invoice"
 type ChartTab = "calendar" | "area"
 type CostType = "full" | "material" | "labor" | "freight" | "hours-order" | "hours-uptime"
-type DetailTab = "costs" | "hours"
+type DetailTab = "costs" | "hours" | "board"
 type CVTimeWindow = "ytd" | "last-year" | "qtd" | "last-qtr" | "custom"
 
 const CV_TIME_PRESETS: { key: CVTimeWindow; label: string }[] = [
@@ -128,6 +135,709 @@ interface KpiCardProps {
   value: string
   tooltip?: string
   color?: "green" | "red" | "default"
+}
+
+// ---------------------------------------------------------------------------
+// Job Detail Panel — shown when a single job is selected on the invoice tab
+// ---------------------------------------------------------------------------
+
+function formatCurrencyPerM(val: number) {
+  return "$" + val.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+}
+
+function varianceCell(pre: number, post: number) {
+  const diff = pre - post // positive = under budget
+  const sign = diff >= 0 ? "+" : ""
+  const color = diff > 0 ? "text-emerald-600 dark:text-emerald-400" : diff < 0 ? "text-red-600 dark:text-red-400" : ""
+  if (pre === 0 && post === 0) return <span>—</span>
+  if (pre === 0) return <span className={color}>{sign}{formatCurrencyPerM(diff)}</span>
+  const pct = (diff / pre) * 100
+  return <span className={color}>{sign}{formatCurrencyPerM(diff)} ({sign}{pct.toFixed(1)}%)</span>
+}
+
+function JobDetailPanel({ data, isLoading, onMfgJobClick, parentCalloffJob, onBackToCalloff }: {
+  data?: JobDetailData
+  isLoading: boolean
+  onMfgJobClick?: (job: string) => void
+  parentCalloffJob?: string | null
+  onBackToCalloff?: () => void
+}) {
+  if (isLoading) {
+    return (
+      <Card className="bg-background-secondary">
+        <CardContent className="py-8 text-center text-sm text-muted-foreground">Loading job detail...</CardContent>
+      </Card>
+    )
+  }
+  if (!data) return null
+
+  const { costComparison: cc, costDrivers, profitability: p } = data
+  const marginColor = p.margin >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+  const [expandedMfgJobs, setExpandedMfgJobs] = useState<Set<string>>(new Set())
+  type CalcLine = JobDetailData["costDrivers"][number]["preCalcLines"][number]
+  const renderCalcLines = (label: string, lines: CalcLine[]) => {
+    if (!lines.length) return null
+    return (
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-semibold">{label}</p>
+        {lines.map((line, i) => (
+          <div key={i} className="text-[11px]">
+            {lines.length > 1 && <p className="text-muted-foreground mb-0.5">Line {i + 1}:</p>}
+            <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">
+              <span className="text-muted-foreground">Unit Cost:</span>
+              <span>${line.costRate.toFixed(4)}</span>
+              <span className="text-muted-foreground">Usage/Piece:</span>
+              <span>{formatNumber(line.variableAmount, 4)}</span>
+              <span className="text-muted-foreground">Calc Qty:</span>
+              <span>{formatNumber(line.calcQty, 0)}</span>
+            </div>
+            <p className="font-medium mt-0.5">
+              ${line.costRate.toFixed(4)} × {formatNumber(line.variableAmount, 4)} × 1000 = {formatCurrencyPerM(line.totalCostPerM)}/M
+            </p>
+          </div>
+        ))}
+        {lines.length > 1 && (
+          <p className="text-[11px] font-semibold border-t border-border pt-1">
+            Total: {formatCurrencyPerM(lines.reduce((s, l) => s + l.totalCostPerM, 0))}/M
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <Card className="bg-background-secondary">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          {parentCalloffJob && onBackToCalloff && (
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onBackToCalloff}>
+              <ArrowLeft className="h-3 w-3 mr-1" /> {parentCalloffJob}
+            </Button>
+          )}
+          <CardTitle className="text-base font-semibold">Job Detail — {data.jobNumber}</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {/* Section 1: Job Summary */}
+        <div>
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Job Summary</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1.5 text-sm">
+            <div><span className="text-muted-foreground">Job #</span> <span className="font-medium ml-1">{data.jobNumber}</span></div>
+            <div><span className="text-muted-foreground">Spec</span> <span className="font-medium ml-1">{data.specNumber || "—"}</span></div>
+            <div><span className="text-muted-foreground">Customer</span> <span className="font-medium ml-1">{data.customerName}</span></div>
+            <div><span className="text-muted-foreground">Route</span> <span className="font-medium ml-1">{data.route || "—"}</span></div>
+            <div><span className="text-muted-foreground">Description</span> <span className="font-medium ml-1">{data.description || "—"}</span></div>
+            <div><span className="text-muted-foreground">Order Qty</span> <span className="font-medium ml-1">{data.orderQty.toLocaleString()} pcs</span></div>
+            <div><span className="text-muted-foreground">Actual Qty</span> <span className="font-medium ml-1">{data.actualQty.toLocaleString()} pcs</span></div>
+            <div><span className="text-muted-foreground">Pre / Post Date</span> <span className="font-medium ml-1">{data.preCostDate || "—"} / {data.postCostDate || "—"}</span></div>
+          </div>
+        </div>
+
+        {/* Section 2: Cost Comparison */}
+        <div>
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Cost Comparison <span className="font-normal">(per M)</span></h4>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[140px]"></TableHead>
+                <TableHead className="text-right">Pre-Cost</TableHead>
+                <TableHead className="text-right">Post-Cost</TableHead>
+                <TableHead className="text-right">Variance</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {([
+                ["Material", cc.materialPerM],
+                ["Labour", cc.labourPerM],
+                ["Freight", cc.freightPerM],
+                ["Full Cost", cc.fullCostPerM],
+              ] as [string, { pre: number; post: number }][]).map(([label, vals]) => (
+                <TableRow key={label} className={label === "Full Cost" ? "font-semibold" : ""}>
+                  <TableCell>{label}/M</TableCell>
+                  <TableCell className="text-right">{formatCurrencyPerM(vals.pre)}</TableCell>
+                  <TableCell className="text-right">{formatCurrencyPerM(vals.post)}</TableCell>
+                  <TableCell className="text-right">{varianceCell(vals.pre, vals.post)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Section 3: Top Cost Drivers */}
+        {costDrivers.length > 0 && (
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Top Cost Drivers</h4>
+            <TooltipProvider delayDuration={100}>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Rule</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="text-right">Pre-Cost/M</TableHead>
+                    <TableHead className="text-right">Post-Cost/M</TableHead>
+                    <TableHead className="text-right">Impact/M</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {costDrivers.map((d) => {
+                    const impact = d.preCostPerM - d.postCostPerM
+                    const impactColor = impact > 0.01 ? "text-emerald-600 dark:text-emerald-400" : impact < -0.01 ? "text-red-600 dark:text-red-400" : ""
+                    const hasCalcLines = d.preCalcLines.length > 0 || d.postCalcLines.length > 0
+                    return (
+                      <TableRow key={d.costRuleID}>
+                        <TableCell>{d.costRuleID}</TableCell>
+                        <TableCell>
+                          <span className="inline-flex items-center gap-1">
+                            <span>{d.description}{d.costRuleID === 156 && data.hasDoubleCounting ? " ⚠️" : ""}</span>
+                            {hasCalcLines && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex items-center text-muted-foreground cursor-help">
+                                    <Info className="h-3.5 w-3.5" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-[360px] space-y-2 text-xs bg-background-secondary text-foreground border border-border">
+                                  {renderCalcLines("Pre-Cost", d.preCalcLines)}
+                                  {renderCalcLines("Post-Cost", d.postCalcLines)}
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">{d.preCostPerM > 0 ? formatCurrencyPerM(d.preCostPerM) : "—"}</TableCell>
+                        <TableCell className="text-right">{d.postCostPerM > 0 ? formatCurrencyPerM(d.postCostPerM) : "—"}</TableCell>
+                        <TableCell className={`text-right ${impactColor}`}>{impact >= 0 ? "+" : ""}{formatCurrencyPerM(impact)}</TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </TooltipProvider>
+            {data.hasDoubleCounting && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5">⚠️ Double-counting detected: both Rule 122 (Consumed Board) and Rule 156 (Purchased FG) present on post-cost estimate.</p>
+            )}
+          </div>
+        )}
+
+        {/* Section 4: Board Analysis */}
+        {data.boardAnalysis && (data.boardAnalysis.preCost.totalCostPerM > 0 || data.boardAnalysis.postCost.totalCostPerM > 0) && (() => {
+          const ba = data.boardAnalysis
+          const bPreLines = (ba.boardLines ?? []).filter((l: { type: string }) => l.type === "pre")
+          const bPostLines = (ba.boardLines ?? []).filter((l: { type: string }) => l.type === "post")
+          return (
+            <div>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Board Analysis{ba.boardGrade ? ` — ${ba.boardGrade}` : ""}</h4>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Rule</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="text-right">Calc Qty</TableHead>
+                    <TableHead className="text-right">Unit Cost</TableHead>
+                    <TableHead className="text-right">Usage/Piece</TableHead>
+                    <TableHead className="text-right">Cost/M</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bPreLines.map((l: { ruleId: number; description: string; calcQty: number; costRate: number; variableAmount: number; totalCostPerM: number }, i: number) => (
+                    <TableRow key={`pre-${i}`}>
+                      <TableCell className="text-muted-foreground">Pre-Cost</TableCell>
+                      <TableCell>{l.ruleId}</TableCell>
+                      <TableCell>{l.description}</TableCell>
+                      <TableCell className="text-right">{formatNumber(l.calcQty, 0)}</TableCell>
+                      <TableCell className="text-right">${l.costRate.toFixed(4)}</TableCell>
+                      <TableCell className="text-right">{formatNumber(l.variableAmount, 4)}</TableCell>
+                      <TableCell className="text-right">{formatCurrencyPerM(l.totalCostPerM)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {bPreLines.length > 1 && (
+                    <TableRow className="font-medium">
+                      <TableCell colSpan={6} className="text-right text-muted-foreground">Pre-Cost Total</TableCell>
+                      <TableCell className="text-right">{formatCurrencyPerM(ba.preCost.totalCostPerM)}</TableCell>
+                    </TableRow>
+                  )}
+                  {bPostLines.map((l: { ruleId: number; description: string; calcQty: number; costRate: number; variableAmount: number; totalCostPerM: number }, i: number) => (
+                    <TableRow key={`post-${i}`}>
+                      <TableCell className="text-muted-foreground">Post-Cost</TableCell>
+                      <TableCell>{l.ruleId}</TableCell>
+                      <TableCell>{l.description}</TableCell>
+                      <TableCell className="text-right">{formatNumber(l.calcQty, 0)}</TableCell>
+                      <TableCell className="text-right">${l.costRate.toFixed(4)}</TableCell>
+                      <TableCell className="text-right">{formatNumber(l.variableAmount, 4)}</TableCell>
+                      <TableCell className="text-right">{formatCurrencyPerM(l.totalCostPerM)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {bPostLines.length > 1 && (
+                    <TableRow className="font-medium">
+                      <TableCell colSpan={6} className="text-right text-muted-foreground">Post-Cost Total</TableCell>
+                      <TableCell className="text-right">{formatCurrencyPerM(ba.postCost.totalCostPerM)}</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell colSpan={6}>Board Variance</TableCell>
+                    <TableCell className="text-right">{varianceCell(ba.preCost.totalCostPerM, ba.postCost.totalCostPerM)}</TableCell>
+                  </TableRow>
+                </TableFooter>
+              </Table>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Board cost only — excludes pallets, strapping, and other material.
+                {ba.stdCostPerMSF > 0 && <> Std board price: ${ba.stdCostPerMSF.toFixed(2)}/MSF</>}
+              </p>
+              {/* Board variance decomposition — normalize to $/MSF using known board area */}
+              {ba.preCost.totalCostPerM > 0 && ba.postCost.totalCostPerM > 0 && ba.boardAreaPerM > 0 && (() => {
+                const msfPerM = ba.boardAreaPerM / 1000 // design MSF per 1000 pieces
+                const prePricePerMSF = msfPerM > 0 ? ba.preCost.totalCostPerM / msfPerM : 0
+                const postPricePerMSF = msfPerM > 0 ? ba.postCost.totalCostPerM / msfPerM : 0
+                const priceDiff = postPricePerMSF - prePricePerMSF
+                const pricePct = prePricePerMSF > 0 ? (priceDiff / prePricePerMSF) * 100 : 0
+                const diffColor = priceDiff > 0.01 ? "text-red-600 dark:text-red-400" : priceDiff < -0.01 ? "text-emerald-600 dark:text-emerald-400" : ""
+                return (
+                  <div className="mt-2 p-2.5 rounded-md bg-background text-xs space-y-1.5 border border-border">
+                    <p className="font-semibold text-muted-foreground uppercase tracking-wide" style={{ fontSize: "10px" }}>Effective Board Rate</p>
+                    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+                      <span className="text-muted-foreground">Pre-cost:</span>
+                      <span>${prePricePerMSF.toFixed(2)}/MSF</span>
+                      <span className="text-muted-foreground">Post-cost:</span>
+                      <span className={diffColor}>${postPricePerMSF.toFixed(2)}/MSF ({pricePct >= 0 ? "+" : ""}{pricePct.toFixed(1)}%)</span>
+                      {ba.stdCostPerMSF > 0 && <>
+                        <span className="text-muted-foreground">Std board price:</span>
+                        <span>${ba.stdCostPerMSF.toFixed(2)}/MSF</span>
+                      </>}
+                    </div>
+                    <p className="text-muted-foreground mt-1">
+                      Based on design area of {formatNumber(ba.boardAreaPerM, 0)} sqft/M ({formatNumber(ba.boardAreaPerM / 1000, 2)} MSF/M).
+                      {Math.abs(pricePct) > 20 && " Post-cost effective rate significantly differs from pre-cost — check waste/spoilage on this run."}
+                    </p>
+                  </div>
+                )
+              })()}
+            </div>
+          )
+        })()}
+
+        {/* Section 4b: Jet Standard Board Cost */}
+        {data.jetBoardCost && (() => {
+          const jb = data.jetBoardCost
+          const deltaColor = jb.deltaPct !== null
+            ? jb.deltaPct > 5 ? "text-red-600 dark:text-red-400"
+            : jb.deltaPct < -5 ? "text-emerald-600 dark:text-emerald-400" : ""
+            : ""
+          return (
+            <div>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Jet Board Cost
+                <span className="ml-2 text-[10px] font-normal bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">
+                  Independent Calculation
+                </span>
+              </h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                <div className="p-2.5 rounded-md bg-background border border-border">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Jet Board Cost/M</p>
+                  <p className="text-lg font-bold">{formatCurrencyPerM(jb.boardCostPerM)}</p>
+                </div>
+                <div className="p-2.5 rounded-md bg-background border border-border">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Kiwi Post-Cost/M</p>
+                  <p className="text-lg font-bold">{formatCurrencyPerM(jb.kiwiPostCostPerM)}</p>
+                </div>
+                <div className="p-2.5 rounded-md bg-background border border-border">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Delta</p>
+                  <p className={`text-lg font-bold ${deltaColor}`}>
+                    {jb.deltaPct !== null ? `${jb.deltaPct > 0 ? "+" : ""}${jb.deltaPct.toFixed(1)}%` : "—"}
+                  </p>
+                </div>
+                <div className="p-2.5 rounded-md bg-background border border-border">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Shrinkage</p>
+                  <p className="text-lg font-bold">{jb.shrinkagePct.toFixed(1)}%</p>
+                </div>
+              </div>
+              <div className="p-2.5 rounded-md bg-background border border-border text-xs space-y-1.5">
+                <p className="font-semibold text-muted-foreground uppercase tracking-wide" style={{ fontSize: "10px" }}>Calculation Breakdown</p>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5">
+                  <span className="text-muted-foreground">Supplier:</span>
+                  <span>{jb.supplierName} @ {jb.pricingBasis === '1000' ? `$${jb.rawSupplierCost.toFixed(2)}/1000 sheets` : jb.pricingBasis === 'standard' ? `$${jb.rawSupplierCost.toFixed(2)}/MSF (std)` : `$${jb.rawSupplierCost.toFixed(2)}/MSF`}</span>
+                  <span className="text-muted-foreground">Gross sheet area:</span>
+                  <span>{jb.grossSheetAreaSqFt.toFixed(2)} sq ft ({jb.nup}-up, blank = {jb.blankAreaSqFt.toFixed(2)} sq ft)</span>
+                  <span className="text-muted-foreground">Sheets fed:</span>
+                  <span>{jb.totalSheetsFed.toLocaleString()} sheets</span>
+                  <span className="text-muted-foreground">MSF consumed:</span>
+                  <span>{jb.totalMSFConsumed.toFixed(1)} MSF</span>
+                  <span className="text-muted-foreground">Total board cost:</span>
+                  <span className="font-medium">${jb.totalBoardCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Section 5: Supplier Pricing */}
+        {data.purchaseCosts && data.purchaseCosts.length > 0 && (
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Supplier Pricing</h4>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="text-right">Min Qty</TableHead>
+                  <TableHead className="text-right">Cost/UOM</TableHead>
+                  <TableHead>UOM</TableHead>
+                  <TableHead>Active Since</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.purchaseCosts.map((pc, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="font-medium">{pc.supplier}</TableCell>
+                    <TableCell>{pc.description}</TableCell>
+                    <TableCell className="text-right">{pc.minQty.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">${pc.costPerUom.toFixed(2)}</TableCell>
+                    <TableCell className="text-muted-foreground">{pc.uom === "msf" ? "/MSF" : pc.uom === "1000" ? "/M" : `/${pc.uom}`}</TableCell>
+                    <TableCell className="text-muted-foreground">{pc.activeDate}{pc.validToDate ? ` — ${pc.validToDate}` : ""}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        {/* Section 6: Calloff Board Cost Analysis */}
+        {data.calloffAnalysis && data.calloffAnalysis.mfgJobs.length > 0 && (() => {
+          const ca = data.calloffAnalysis
+          const hasInflation = ca.costRatio !== null && ca.costRatio > 1.15
+          return (
+            <div>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Calloff Board Cost Analysis
+                <span className="ml-2 text-[10px] font-normal bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
+                  Stock Line #{ca.stocklineId}
+                </span>
+              </h4>
+
+              {hasInflation && (
+                <div className="mb-3 px-3 py-2 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm">
+                  <span className="font-semibold text-amber-700 dark:text-amber-300">
+                    {"\u26A0\uFE0F"} Post-cost board rate is {ca.costRatio!.toFixed(1)}x the manufacturing average
+                  </span>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                    Calloff: {formatCurrencyPerM(ca.calloffBoardCostPerM)}/M vs Mfg Avg: {formatCurrencyPerM(ca.mfgAvgBoardCostPerM)}/M — This is likely a Kiwiplan post-costing allocation issue for calloff orders
+                  </p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1.5 text-sm mb-3">
+                <div><span className="text-muted-foreground">Calloff Board/M</span> <span className="font-medium ml-1">{formatCurrencyPerM(ca.calloffBoardCostPerM)}</span></div>
+                <div><span className="text-muted-foreground">Mfg Avg Board/M</span> <span className="font-medium ml-1">{formatCurrencyPerM(ca.mfgAvgBoardCostPerM)}</span></div>
+                <div>
+                  <span className="text-muted-foreground">Cost Ratio</span>
+                  <span className={`font-medium ml-1 ${hasInflation ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                    {ca.costRatio !== null ? `${ca.costRatio.toFixed(2)}x` : "—"}
+                  </span>
+                </div>
+                <div><span className="text-muted-foreground">Mfg Jobs Found</span> <span className="font-medium ml-1">{ca.mfgJobs.length}</span></div>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Mfg Job</TableHead>
+                    <TableHead className="text-right">
+                      <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Board Cost/M <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[240px] text-xs">Kiwiplan Rule 122 post-cost board allocation per 1,000 pieces for this manufacturing run</TooltipContent></Tooltip></TooltipProvider>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Cost Rate <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[240px] text-xs">Unit cost per sheet from the board supplier pricing used by Kiwiplan post-costing ($/sheet)</TooltipContent></Tooltip></TooltipProvider>
+                    </TableHead>
+                    <TableHead className="text-right">N-Up</TableHead>
+                    <TableHead className="text-right">
+                      <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Sheets Issued <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[240px] text-xs">Physical sheets released from Board Supply to the production floor, normalized by N-Up</TooltipContent></Tooltip></TooltipProvider>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Sheets to Cut <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[240px] text-xs">Physical sheets fed into the first converting machine (die cutter). May exceed Sheets Issued on multi-pass jobs where sheets go through the machine twice.</TooltipContent></Tooltip></TooltipProvider>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Waste <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[240px] text-xs">Sheet waste % = (Sheets Issued - Sheets to Cut) / Sheets Issued. Negative values indicate a multi-pass job where the same sheets go through the die cutter more than once.</TooltipContent></Tooltip></TooltipProvider>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Final Out <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[240px] text-xs">Finished pieces off the last production step, divided by number-out to normalize back to sheet equivalents</TooltipContent></Tooltip></TooltipProvider>
+                    </TableHead>
+                    <TableHead className="text-right">Sheets/Hr</TableHead>
+                    <TableHead>Machine</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {ca.mfgJobs.map((mj) => {
+                    const isExpanded = expandedMfgJobs.has(mj.jobNumber)
+                    return (
+                      <React.Fragment key={mj.jobNumber}>
+                        <TableRow className="cursor-pointer hover:bg-muted/50">
+                          <TableCell className="font-medium">
+                            <span className="inline-flex items-center gap-1">
+                              <ChevronRight
+                                className={`h-3 w-3 text-muted-foreground transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                                onClick={(e) => { e.stopPropagation(); setExpandedMfgJobs(prev => { const next = new Set(prev); next.has(mj.jobNumber) ? next.delete(mj.jobNumber) : next.add(mj.jobNumber); return next }) }}
+                              />
+                              <span className="text-indigo-400 hover:underline" onClick={() => onMfgJobClick?.(mj.jobNumber)}>{mj.jobNumber}</span>
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right">{formatCurrencyPerM(mj.boardCostPerM)}</TableCell>
+                          <TableCell className="text-right">
+                            {mj.boardLines.length > 0 ? `$${mj.boardLines[0].costRate.toFixed(4)}` : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">{mj.numberUp ?? "—"}</TableCell>
+                          <TableCell className="text-right">
+                            {mj.sheetsIssued !== null ? mj.sheetsIssued.toLocaleString() : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {mj.sheetsToDieCut !== null ? mj.sheetsToDieCut.toLocaleString() : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {mj.sheetWastePct !== null ? (
+                              <span className={mj.sheetWastePct > 5 ? "text-red-600 dark:text-red-400" : mj.sheetWastePct > 2 ? "text-amber-600 dark:text-amber-400" : ""}>
+                                {mj.sheetWastePct.toFixed(1)}%
+                              </span>
+                            ) : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {mj.blanksOut !== null ? mj.blanksOut.toLocaleString() : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">{mj.orderSheetsPerHr !== null && mj.orderSheetsPerHr !== undefined ? mj.orderSheetsPerHr.toLocaleString() : "—"}</TableCell>
+                          <TableCell className="text-muted-foreground text-xs">{mj.dieCutMachine ?? "—"}</TableCell>
+                        </TableRow>
+                        {isExpanded && mj.steps.length > 0 && (
+                          <TableRow className="bg-muted/30">
+                            <TableCell colSpan={10} className="p-0">
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="text-muted-foreground border-b border-border/50">
+                                    <th className="text-left py-1 px-3 w-12">Step</th>
+                                    <th className="text-left py-1 px-2">Machine</th>
+                                    <th className="text-right py-1 px-2">N-Up In</th>
+                                    <th className="text-right py-1 px-2">N-Up Out</th>
+                                    <th className="text-right py-1 px-2">Qty Fed</th>
+                                    <th className="text-right py-1 px-2">Qty Produced</th>
+                                    <th className="text-right py-1 px-2">Sheets Fed</th>
+                                    <th className="text-right py-1 px-2">Sheets Produced</th>
+                                    <th className="text-right py-1 px-2">Sheets/Hr</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {mj.steps.map((s) => (
+                                    <tr key={`${s.step}-${s.series}`} className="border-b border-border/30">
+                                      <td className="py-1 px-3 text-muted-foreground">{s.step}.{s.series}</td>
+                                      <td className="py-1 px-2">{s.machineNumber} {s.machine}</td>
+                                      <td className="text-right py-1 px-2">{s.nupIn}</td>
+                                      <td className="text-right py-1 px-2">{s.nupOut}</td>
+                                      <td className="text-right py-1 px-2">{s.qtyFedIn.toLocaleString()}</td>
+                                      <td className="text-right py-1 px-2">{s.qtyProduced.toLocaleString()}</td>
+                                      <td className="text-right py-1 px-2 font-medium">{s.sheetsFed.toLocaleString()}</td>
+                                      <td className="text-right py-1 px-2 font-medium">{s.sheetsProduced.toLocaleString()}</td>
+                                      <td className="text-right py-1 px-2">{s.sheetsPerHr !== null && s.sheetsPerHr !== undefined ? s.sheetsPerHr.toLocaleString() : "—"}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )
+        })()}
+
+        {/* Section 7: Production Steps (for non-calloff jobs, or always if steps exist and no calloff) */}
+        {data.productionSteps && data.productionSteps.length > 0 && !data.calloffAnalysis && (
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Production Steps</h4>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-muted-foreground border-b border-border">
+                  <th className="text-left py-1.5 px-3 w-12">Step</th>
+                  <th className="text-left py-1.5 px-2">Machine</th>
+                  <th className="text-right py-1.5 px-2">N-Up In</th>
+                  <th className="text-right py-1.5 px-2">N-Up Out</th>
+                  <th className="text-right py-1.5 px-2">Qty Fed</th>
+                  <th className="text-right py-1.5 px-2">Qty Produced</th>
+                  <th className="text-right py-1.5 px-2">Sheets Fed</th>
+                  <th className="text-right py-1.5 px-2">Sheets Produced</th>
+                  <th className="text-right py-1.5 px-2">Sheets/Hr</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.productionSteps.map((s) => (
+                  <tr key={`${s.step}-${s.series}`} className="border-b border-border/50">
+                    <td className="py-1.5 px-3 text-muted-foreground">{s.step}.{s.series}</td>
+                    <td className="py-1.5 px-2">{s.machineNumber} {s.machine}</td>
+                    <td className="text-right py-1.5 px-2">{s.nupIn}</td>
+                    <td className="text-right py-1.5 px-2">{s.nupOut}</td>
+                    <td className="text-right py-1.5 px-2">{s.qtyFedIn.toLocaleString()}</td>
+                    <td className="text-right py-1.5 px-2">{s.qtyProduced.toLocaleString()}</td>
+                    <td className="text-right py-1.5 px-2 font-medium">{s.sheetsFed.toLocaleString()}</td>
+                    <td className="text-right py-1.5 px-2 font-medium">{s.sheetsProduced.toLocaleString()}</td>
+                    <td className="text-right py-1.5 px-2">{s.sheetsPerHr !== null && s.sheetsPerHr !== undefined ? s.sheetsPerHr.toLocaleString() : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Section 8: Profitability */}
+        <div>
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Profitability</h4>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-1.5 text-sm">
+            <div><span className="text-muted-foreground">Inv Price/M</span> <span className="font-medium ml-1">{formatCurrencyPerM(p.avgPricePerM)}</span></div>
+            <div><span className="text-muted-foreground">Post-Cost/M</span> <span className="font-medium ml-1">{formatCurrencyPerM(p.postCostPerM)}</span></div>
+            <div><span className="text-muted-foreground">Margin</span> <span className={`font-medium ml-1 ${marginColor}`}>{p.margin.toFixed(1)}%{p.margin < 0 ? " (LOSS)" : ""}</span></div>
+            <div><span className="text-muted-foreground">Invoice Qty</span> <span className="font-medium ml-1">{p.totalInvoiceQty.toLocaleString()}</span></div>
+            <div><span className="text-muted-foreground">Invoice Value</span> <span className="font-medium ml-1">{formatCurrencyPerM(p.totalInvoiceValue)}</span></div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Spec Analysis Panel — 12-month history for a spec
+// ---------------------------------------------------------------------------
+
+function SpecAnalysisPanel({ data, isLoading, onJobClick }: { data?: SpecAnalysisData; isLoading: boolean; onJobClick?: (job: string) => void }) {
+  if (isLoading) return <Card className="bg-background-secondary"><CardContent className="p-6 text-center text-muted-foreground">Loading spec analysis...</CardContent></Card>
+  if (!data || data.totalQty === 0) return null
+
+  const cc = data.costComparison
+  const margin = cc.avgPricePerM > 0 ? ((cc.avgPricePerM - cc.actFullCostPerM) / cc.avgPricePerM) * 100 : 0
+  const marginColor = margin < 0 ? "text-red-600 dark:text-red-400" : margin < 15 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+  const formatCompactRevenue = (value: number) => value >= 1_000_000 ? `$${(value / 1_000_000).toFixed(1)}M` : `$${(value / 1_000).toFixed(1)}k`
+
+  return (
+    <Card className="bg-background-secondary">
+      <CardContent className="p-4 space-y-4">
+        <h3 className="text-base font-semibold">Spec Analysis — {data.spec} <span className="text-sm font-normal text-muted-foreground">(Last 12 months)</span></h3>
+
+        {/* KPI row */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-1.5 text-sm">
+          <div><span className="text-muted-foreground">Total Qty</span> <span className="font-medium ml-1">{data.totalQty.toLocaleString()}</span></div>
+          <div><span className="text-muted-foreground">Jobs</span> <span className="font-medium ml-1">{data.totalJobs}</span></div>
+          <div><span className="text-muted-foreground">Revenue</span> <span className="font-medium ml-1">{formatCompactRevenue(data.totalRevenue)}</span></div>
+          <div><span className="text-muted-foreground">Avg Price/M</span> <span className="font-medium ml-1">{formatCurrencyPerM(cc.avgPricePerM)}</span></div>
+          <div><span className="text-muted-foreground">Avg Margin</span> <span className={`font-medium ml-1 ${marginColor}`}>{margin.toFixed(1)}%</span></div>
+        </div>
+
+        {/* Cost comparison table */}
+        <div>
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Weighted Avg Cost (Per M)</h4>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[140px]"></TableHead>
+                <TableHead className="text-right">Pre-Cost</TableHead>
+                <TableHead className="text-right">Post-Cost</TableHead>
+                <TableHead className="text-right">Variance</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {([
+                ["Material/M", cc.estMaterialPerM, cc.actMaterialPerM],
+                ["Labour/M", cc.estLaborPerM, cc.actLaborPerM],
+                ["Freight/M", cc.estFreightPerM, cc.actFreightPerM],
+              ] as const).map(([label, est, act]) => (
+                <TableRow key={label}>
+                  <TableCell>{label}</TableCell>
+                  <TableCell className="text-right">{formatCurrencyPerM(est)}</TableCell>
+                  <TableCell className="text-right">{formatCurrencyPerM(act)}</TableCell>
+                  <TableCell className="text-right">{varianceCell(est, act)}</TableCell>
+                </TableRow>
+              ))}
+              <TableRow className="font-semibold">
+                <TableCell>Full Cost/M</TableCell>
+                <TableCell className="text-right">{formatCurrencyPerM(cc.estFullCostPerM)}</TableCell>
+                <TableCell className="text-right">{formatCurrencyPerM(cc.actFullCostPerM)}</TableCell>
+                <TableCell className="text-right">{varianceCell(cc.estFullCostPerM, cc.actFullCostPerM)}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Monthly trend chart */}
+        {data.months.length > 1 && (
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Monthly Cost Trend</h4>
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={data.months}>
+                  <CartesianGrid strokeDasharray="3 3" className="opacity-20" />
+                  <XAxis dataKey="period" className="text-xs" tickLine={false} axisLine={false} />
+                  <YAxis className="text-xs" tickFormatter={(v) => `$${v}`} axisLine={false} tickLine={false} />
+                  <YAxis yAxisId="right" orientation="right" className="text-xs" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} axisLine={false} tickLine={false} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} className="text-xs" />
+                  <RechartsTooltip
+                    contentStyle={{ backgroundColor: "var(--color-bg-secondary)", border: "1px solid var(--color-border)", borderRadius: 6 }}
+                    labelStyle={{ color: "var(--color-text)" }}
+                    itemStyle={{ color: "var(--color-text)" }}
+                    formatter={((value: number, name: string) => name === "Qty" ? [value.toLocaleString(), name] : [`$${value.toFixed(2)}`, name]) as any}
+                  />
+                  <Bar dataKey="quantity" fill="#6366f130" yAxisId="right" name="Qty" isAnimationActive={false} />
+                  <Line type="monotone" dataKey="estFullCostPerM" stroke="#6366f1" strokeWidth={2} dot={false} name="Est Cost/M" isAnimationActive={false} />
+                  <Line type="monotone" dataKey="actFullCostPerM" stroke="#f43f5e" strokeWidth={2} dot={false} name="Act Cost/M" isAnimationActive={false} />
+                  <Line type="monotone" dataKey="avgPricePerM" stroke="#22c55e" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Price/M" isAnimationActive={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
+        {/* Job history table */}
+        {data.jobs.length > 0 && (
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Job History ({data.jobs.length} jobs)</h4>
+            <div className="max-h-64 overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Job #</TableHead>
+                    <TableHead>Last Invoice</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Est Cost/M</TableHead>
+                    <TableHead className="text-right">Act Cost/M</TableHead>
+                    <TableHead className="text-right">Variance/M</TableHead>
+                    <TableHead className="text-right">Revenue</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.jobs.map((j) => {
+                    const v = j.estFullCostPerM - j.actFullCostPerM
+                    const vColor = v > 0.01 ? "text-emerald-600 dark:text-emerald-400" : v < -0.01 ? "text-red-600 dark:text-red-400" : ""
+                    return (
+                      <TableRow
+                        key={j.jobNumber}
+                        className={onJobClick ? "cursor-pointer hover:bg-muted/50" : ""}
+                        onClick={() => onJobClick?.(j.jobNumber)}
+                      >
+                        <TableCell className="font-medium">{j.jobNumber}</TableCell>
+                        <TableCell>{j.lastInvoiceDate}</TableCell>
+                        <TableCell className="text-right">{j.quantity.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">{formatCurrencyPerM(j.estFullCostPerM)}</TableCell>
+                        <TableCell className="text-right">{formatCurrencyPerM(j.actFullCostPerM)}</TableCell>
+                        <TableCell className={`text-right ${vColor}`}>{v >= 0 ? "+" : ""}{formatCurrencyPerM(v)}</TableCell>
+                        <TableCell className="text-right">${j.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
 }
 
 function KpiCard({ title, value, tooltip, color = "default" }: KpiCardProps) {
@@ -382,11 +1092,13 @@ export default function CostVarianceDashboard() {
   const [salesRepFilter, setSalesRepFilter] = usePersistedState<string>(cfg.storagePrefix, "salesRepFilter", "all")
   const [specFilter, setSpecFilter] = usePersistedState<string>(cfg.storagePrefix, "specFilter", "all")
   const [jobFilter, setJobFilter] = usePersistedState<string>(cfg.storagePrefix, "jobFilter", "all")
+  const [parentCalloffJob, setParentCalloffJob] = useState<string | null>(null)
   const [tableSort, setTableSort] = usePersistedState<{ key: string; dir: "asc" | "desc" }>(cfg.storagePrefix, "tableSort", { key: cfg.defaultSortKey, dir: "desc" })
   const [groupByDims, setGroupByDims] = usePersistedState<string[]>(cfg.storagePrefix, "groupByDims", cfg.defaultGroupByDims)
   const [customStart, setCustomStart] = usePersistedState<string>(cfg.storagePrefix, "customStart", "")
   const [customEnd, setCustomEnd] = usePersistedState<string>(cfg.storagePrefix, "customEnd", "")
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null)
+  const [selectedDetailKey, setSelectedDetailKey] = useState<string | null>(null)
   const customRange: DateRange | null = customStart && customEnd ? { startDate: customStart, endDate: customEnd } : null
 
   // Scroll pagination state for detail table
@@ -437,7 +1149,7 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
 
   const prodCalendarRange = useMemo(() => dataSource === "production" ? getMonthDateRange(calendarMonth) : { startDate: "", endDate: "" }, [dataSource, calendarMonth])
 
-  const activeSort = detailTab === "costs" ? tableSort : hoursSort
+  const activeSort = detailTab === "costs" || detailTab === "board" ? tableSort : hoursSort
   const prodSummaryQuery = useCostVarianceSummary(prodTimeRange.startDate, prodTimeRange.endDate, granularity, prodActiveLine, prodActiveCustomer, prodActiveSpec, prodActiveJob)
   const prodDetailsQuery = useCostVarianceDetails(prodDetailRange.start, prodDetailRange.end, detailPage, DETAIL_PAGE_SIZE, activeSort.key, activeSort.dir, prodActiveLine, prodActiveCustomer, prodActiveSpec, prodActiveJob)
   const prodFilterOptionsQuery = useCostVarianceFilterOptions(prodTimeRange.startDate, prodTimeRange.endDate, prodActiveLine, prodActiveCustomer, prodActiveSpec, prodActiveJob)
@@ -453,6 +1165,7 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
   const invActiveCustomer = dataSource === "invoice" && customerFilter !== "all" ? customerFilter : undefined
   const invActiveSalesRep = dataSource === "invoice" && salesRepFilter !== "all" ? salesRepFilter : undefined
   const invActiveSpec = dataSource === "invoice" && specFilter !== "all" ? specFilter : undefined
+  const invActiveJob = dataSource === "invoice" && jobFilter !== "all" ? jobFilter : undefined
 
   const invDetailRange = useMemo(() => {
     if (dataSource !== "invoice") return { start: "", end: "" }
@@ -466,10 +1179,13 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
 
   const invCalendarRange = useMemo(() => dataSource === "invoice" ? getMonthDateRange(calendarMonth) : { startDate: "", endDate: "" }, [dataSource, calendarMonth])
 
-  const invSummaryQuery = useInvoiceCostVarianceSummary(invTimeRange.startDate, invTimeRange.endDate, granularity, invActiveCustomer, invActiveSalesRep, invActiveSpec)
-  const invDetailsQuery = useInvoiceCostVarianceDetails(invDetailRange.start, invDetailRange.end, detailPage, DETAIL_PAGE_SIZE, activeSort.key, activeSort.dir, invActiveCustomer, invActiveSalesRep, invActiveSpec)
-  const invFilterOptionsQuery = useInvoiceCostVarianceFilterOptions(invTimeRange.startDate, invTimeRange.endDate, invActiveCustomer, invActiveSalesRep, invActiveSpec)
-  const invCalendarQuery = useInvoiceCostVarianceSummary(invCalendarRange.startDate, invCalendarRange.endDate, "daily", invActiveCustomer, invActiveSalesRep, invActiveSpec)
+  const invSummaryQuery = useInvoiceCostVarianceSummary(invTimeRange.startDate, invTimeRange.endDate, granularity, invActiveCustomer, invActiveSalesRep, invActiveSpec, invActiveJob)
+  const invDetailsQuery = useInvoiceCostVarianceDetails(invDetailRange.start, invDetailRange.end, detailPage, DETAIL_PAGE_SIZE, activeSort.key, activeSort.dir, invActiveCustomer, invActiveSalesRep, invActiveSpec, invActiveJob)
+  const invFilterOptionsQuery = useInvoiceCostVarianceFilterOptions(invTimeRange.startDate, invTimeRange.endDate, invActiveCustomer, invActiveSalesRep, invActiveSpec, invActiveJob)
+  const invCalendarQuery = useInvoiceCostVarianceSummary(invCalendarRange.startDate, invCalendarRange.endDate, "daily", invActiveCustomer, invActiveSalesRep, invActiveSpec, invActiveJob)
+  const invJobDetailQuery = useInvoiceJobDetail(invActiveJob)
+  const invSpecForAnalysis = invJobDetailQuery.data?.data?.specNumber || invActiveSpec
+  const specAnalysisQuery = useSpecAnalysis(dataSource === "invoice" ? invSpecForAnalysis : undefined)
 
   // ---- Select active data based on dataSource ----
   const summaryQuery = dataSource === "production" ? prodSummaryQuery : invSummaryQuery
@@ -627,6 +1343,18 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
         stdRunRate: toNumber(r.stdRunRate),
         setupMins: toNumber(r.setupMins),
         numberOut: toNumber(r.numberOut) || 1,
+        sheetsFed: Math.round((toNumber(r.adjQty)) / (toNumber(r.numberOut) || 1)),
+        jetBoardCostPerM: r.jetBoardCostPerM != null ? toNumber(r.jetBoardCostPerM) : null as number | null,
+        jetBoardAreaSqFt: r.jetBoardAreaSqFt != null ? toNumber(r.jetBoardAreaSqFt) : null as number | null,
+        jetBoardNup: r.jetBoardNup != null ? toNumber(r.jetBoardNup) : null as number | null,
+        jetCostPerMSF: r.jetCostPerMSF != null ? toNumber(r.jetCostPerMSF) : null as number | null,
+        jetCostSource: r.jetCostSource != null ? String(r.jetCostSource) : null as string | null,
+        step1Machine: r.step1Machine != null ? String(r.step1Machine) : null as string | null,
+        estBoardCost: r.estBoardCost != null ? toNumber(r.estBoardCost) : null as number | null,
+        actBoardCost: r.actBoardCost != null ? toNumber(r.actBoardCost) : null as number | null,
+        jetBoardCost: (() => { const jp = r.jetBoardCostPerM != null ? toNumber(r.jetBoardCostPerM) : 0; return jp > 0 ? toNumber(r.quantity) * jp / 1000 : 0 })(),
+        jetVsEst: (() => { const jp = r.jetBoardCostPerM != null ? toNumber(r.jetBoardCostPerM) : 0; const q = toNumber(r.quantity); const eb = r.estBoardCost != null ? toNumber(r.estBoardCost) : estMat; return jp > 0 ? (q * jp / 1000) - eb : 0 })(),
+        jetVsAct: (() => { const jp = r.jetBoardCostPerM != null ? toNumber(r.jetBoardCostPerM) : 0; const q = toNumber(r.quantity); const ab = r.actBoardCost != null ? toNumber(r.actBoardCost) : actMat; return jp > 0 ? (q * jp / 1000) - ab : 0 })(),
       }
     })
   }, [allDetailData, cfg.dateField])
@@ -640,6 +1368,7 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
     if (activeDims.length === allDims.length) return detailRows
 
     const grouped = new Map<string, typeof detailRows[number]>()
+    const groupCounts = new Map<string, { count: number; numberOutSum: number }>()
     for (const row of detailRows) {
       const keyParts = activeDims.map((d) => {
         if (d === dateFieldDim) return row.date
@@ -660,7 +1389,11 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
           specNumber: activeDims.includes("specNumber") ? row.specNumber : "",
           lineNumber: activeDims.includes("lineNumber") ? row.lineNumber : "",
         })
+        groupCounts.set(key, { count: 1, numberOutSum: row.numberOut })
       } else {
+        const gc = groupCounts.get(key)!
+        gc.count += 1
+        gc.numberOutSum += row.numberOut
         existing.estMaterialCost += row.estMaterialCost
         existing.estLaborCost += row.estLaborCost
         existing.estFreightCost += row.estFreightCost
@@ -678,8 +1411,17 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
         existing.hoursVariance += row.hoursVariance
         existing.vsUptime += row.vsUptime
         existing.adjQty += row.adjQty
+        existing.sheetsFed += row.sheetsFed
         existing.quantity += row.quantity
+        existing.jetBoardCost += row.jetBoardCost
+        existing.jetVsEst += row.jetVsEst
+        existing.jetVsAct += row.jetVsAct
       }
+    }
+    // Compute average numberOut for grouped rows
+    for (const [key, row] of grouped) {
+      const gc = groupCounts.get(key)!
+      row.numberOut = Math.round((gc.numberOutSum / gc.count) * 10) / 10
     }
     return [...grouped.values()]
   }, [detailRows, groupByDims, cfg.groupByOptions, dateFieldDim])
@@ -743,7 +1485,8 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
         estFull: 0, actFull: 0, variance: 0,
         orderHours: 0, uptimeHours: 0, estHours: 0,
         hoursVariance: 0, vsUptime: 0,
-        adjQty: 0, quantity: 0,
+        adjQty: 0, quantity: 0, sheetsFed: 0,
+        jetBoardCost: 0,
       }
     }
     const t = serverTotals as unknown as Record<string, unknown>
@@ -766,6 +1509,10 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
       vsUptime: uptimeHours - estHours,
       adjQty: toNumber(t.adjQty),
       quantity: toNumber(t.quantity),
+      sheetsFed: toNumber(t.sheetsFed),
+      jetBoardCost: toNumber(t.jetBoardCost),
+      estBoardCost: toNumber(t.estBoardCost),
+      actBoardCost: toNumber(t.actBoardCost),
     }
   }, [serverTotals])
 
@@ -855,6 +1602,63 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
     return dim as keyof typeof detailRows[number]
   }
 
+  // Build a unique key for a detail row based on active group-by dims
+  const getDetailRowKey = useCallback((row: typeof detailRows[number]) => {
+    return groupByDims.map((d) => String((row as unknown as Record<string, unknown>)[dimToProp(d)] ?? "")).join("|")
+  }, [groupByDims, dimToProp])
+
+  // Click a detail row â†’ apply its dims as dashboard filters (toggle on/off)
+  const handleDetailRowClick = useCallback((row: typeof detailRows[number]) => {
+    const key = getDetailRowKey(row)
+    const isDeselecting = selectedDetailKey === key
+
+    if (isDeselecting) {
+      setSelectedDetailKey(null)
+      setCustomerFilter("all")
+      setSpecFilter("all")
+      setJobFilter("all")
+      if (cfg.hasLineFilter) setLineFilter("all")
+      setSalesRepFilter("all")
+      return
+    }
+
+    setSelectedDetailKey(key)
+    const r = row as unknown as Record<string, unknown>
+
+    const validVal = (v: unknown) => v && String(v) !== "Unknown" && String(v).trim() !== ""
+
+    if (groupByDims.includes("customerName") && validVal(r.customerName)) {
+      setCustomerFilter(String(r.customerName))
+    } else {
+      setCustomerFilter("all")
+    }
+    if (groupByDims.includes("specNumber") && validVal(r.specNumber)) {
+      setSpecFilter(String(r.specNumber))
+    } else {
+      setSpecFilter("all")
+    }
+    if (groupByDims.includes("jobNumber") && validVal(r.jobNumber)) {
+      setJobFilter(String(r.jobNumber))
+    } else {
+      setJobFilter("all")
+    }
+    if (cfg.hasLineFilter && groupByDims.includes("lineNumber") && validVal(r.lineNumber)) {
+      setLineFilter(String(r.lineNumber))
+    } else if (cfg.hasLineFilter) {
+      setLineFilter("all")
+    }
+    if (groupByDims.includes("salesRep") && validVal(r.salesRep)) {
+      setSalesRepFilter(String(r.salesRep))
+    } else {
+      setSalesRepFilter("all")
+    }
+  }, [groupByDims, selectedDetailKey, getDetailRowKey, setCustomerFilter, setSpecFilter, setJobFilter, setLineFilter, setSalesRepFilter, cfg.hasLineFilter])
+
+  // Clear detail row selection when group-by dims change
+  useEffect(() => {
+    setSelectedDetailKey(null)
+  }, [groupByDims])
+
   const perM = useCallback((cost: number, qty: number) => {
     if (!costPer1000 || qty === 0) return cost
     return cost / qty * 1000
@@ -909,7 +1713,7 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
           >
             <CalendarIcon className="h-3.5 w-3.5" />
             {timeWindow === "custom" && customRange
-              ? `${customRange.startDate} – ${customRange.endDate}`
+              ? `${customRange.startDate} — ${customRange.endDate}`
               : "Pick"}
           </Button>
         </DateRangePicker>
@@ -979,20 +1783,18 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
                   popoverWidth="w-[248px]"
                 />
               </div>
-              {dataSource === "production" && (
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">Job</label>
-                  <SearchableSelect
-                    value={jobFilter}
-                    onValueChange={setJobFilter}
-                    options={(filterOptions as unknown as Record<string, unknown>)?.jobs as string[] ?? []}
-                    placeholder="All Jobs"
-                    searchPlaceholder="Search jobs..."
-                    width="w-full"
-                    popoverWidth="w-[248px]"
-                  />
-                </div>
-              )}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Job</label>
+                <SearchableSelect
+                  value={jobFilter}
+                  onValueChange={setJobFilter}
+                  options={(filterOptions as unknown as Record<string, unknown>)?.jobs as string[] ?? []}
+                  placeholder="All Jobs"
+                  searchPlaceholder="Search jobs..."
+                  width="w-full"
+                  popoverWidth="w-[248px]"
+                />
+              </div>
               <Button variant="outline" size="sm" className="w-full text-xs" onClick={resetFilters}>
                 <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
                 Reset Filters
@@ -1233,7 +2035,7 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
             <div className="flex items-center gap-3">
               <CardTitle className="text-base">Detail</CardTitle>
               <div className="flex items-center gap-0.5">
-                {(["costs", "hours"] as DetailTab[]).map((tab) => (
+                {(["costs", "board", "hours"] as DetailTab[]).map((tab) => (
                   <Button
                     key={tab}
                     variant={detailTab === tab ? "default" : "outline"}
@@ -1245,7 +2047,7 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
                   </Button>
                 ))}
               </div>
-              {detailTab === "costs" && (
+              {(detailTab === "costs" || detailTab === "board") && (
                 <Button
                   variant={costPer1000 ? "default" : "outline"}
                   size="sm"
@@ -1294,9 +2096,16 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
                   <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort(dataSource === "production" ? "adjQty" : "quantity")}>
                     Qty{sortIndicator(dataSource === "production" ? "adjQty" : "quantity")}
                   </TableHead>
-                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("numberOut")}>
-                    # Out{sortIndicator("numberOut")}
-                  </TableHead>
+                  {dataSource === "production" && (
+                    <>
+                      <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("numberOut")}>
+                        # Out{sortIndicator("numberOut")}
+                      </TableHead>
+                      <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("sheetsFed")}>
+                        Sheets Fed{sortIndicator("sheetsFed")}
+                      </TableHead>
+                    </>
+                  )}
                   <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("estMaterialCost")}>
                     Est Mat{sortIndicator("estMaterialCost")}
                   </TableHead>
@@ -1333,7 +2142,11 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
                   const lVar = perM(row.laborVariance, q)
                   const fVar = perM(row.variance, q)
                   return (
-                  <TableRow key={`${row.date}-${row.jobNumber}-${row.lineNumber}-${row.invoiceNumber}-${idx}`}>
+                  <TableRow
+                    key={`${row.date}-${row.jobNumber}-${row.lineNumber}-${row.invoiceNumber}-${idx}`}
+                    className={`cursor-pointer hover:bg-[var(--color-bg-hover)] ${selectedDetailKey === getDetailRowKey(row) ? "bg-indigo-500/15 hover:bg-indigo-500/20" : ""}`}
+                    onClick={() => handleDetailRowClick(row)}
+                  >
                     {cfg.groupByOptions.map(([dim]) =>
                       groupByDims.includes(dim) ? (
                         <TableCell key={dim} className={dim === dateFieldDim ? "font-medium" : dim === "customerName" ? "max-w-[180px] truncate" : ""}>
@@ -1342,7 +2155,12 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
                       ) : null
                     )}
                     <TableCell className="text-right">{formatNumber(q, 0)}</TableCell>
-                    <TableCell className="text-right">{row.numberOut}</TableCell>
+                    {dataSource === "production" && (
+                      <>
+                        <TableCell className="text-right">{row.numberOut}</TableCell>
+                        <TableCell className="text-right">{formatNumber(row.sheetsFed, 0)}</TableCell>
+                      </>
+                    )}
                     <TableCell className="text-right">{formatCurrencyDetail(perM(row.estMaterialCost, q))}</TableCell>
                     <TableCell className="text-right">{formatCurrencyDetail(perM(row.actMaterialCost, q))}</TableCell>
                     <TableCell className={`text-right ${mVar > 0 ? "text-emerald-600 dark:text-emerald-400" : mVar < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
@@ -1377,9 +2195,16 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
                 return (
                 <TableFooter>
                   <TableRow className="font-semibold border-t">
-                    <TableCell colSpan={groupByDims.length || 1}>{costPer1000 ? "Avg /M" : "Total"}</TableCell>
+                    {cfg.groupByOptions.map(([dim], i) =>
+                      groupByDims.includes(dim) ? <TableCell key={dim}>{i === 0 ? (costPer1000 ? "Avg /M" : "Total") : ""}</TableCell> : null
+                    )}
                     <TableCell className="text-right">{formatNumber(tq, 0)}</TableCell>
-                    <TableCell />
+                    {dataSource === "production" && (
+                      <>
+                        <TableCell />
+                        <TableCell className="text-right">{formatNumber(detailTotals.sheetsFed, 0)}</TableCell>
+                      </>
+                    )}
                     <TableCell className="text-right">{formatCurrencyDetail(perM(detailTotals.estMaterialCost, tq))}</TableCell>
                     <TableCell className="text-right">{formatCurrencyDetail(perM(detailTotals.actMaterialCost, tq))}</TableCell>
                     <TableCell className={`text-right ${tmVar > 0 ? "text-emerald-600 dark:text-emerald-400" : tmVar < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
@@ -1394,6 +2219,140 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
                     <TableCell className="text-right">{formatCurrencyDetail(perM(detailTotals.actFull, tq))}</TableCell>
                     <TableCell className={`text-right ${tfVar > 0 ? "text-emerald-600 dark:text-emerald-400" : tfVar < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
                       {formatCurrencyDetail(tfVar)}
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
+                )
+              })()}
+            </Table>
+          </div>
+          ) : detailTab === "board" ? (
+          /* Board cost analysis table */
+          <div ref={detailScrollRef} className="relative overflow-x-auto max-h-[400px] overflow-y-auto [&>div]:!overflow-visible [&_td]:py-1.5 [&_th]:py-1.5 [&_tfoot_td]:sticky [&_tfoot_td]:bottom-[-1px] [&_tfoot_td]:z-20 [&_tfoot_td]:bg-[var(--color-bg-secondary)]">
+            <Table>
+              <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-[var(--color-bg-secondary)]">
+                <TableRow>
+                  {cfg.groupByOptions.map(([dim, label]) =>
+                    groupByDims.includes(dim) ? (
+                      <TableHead key={dim} className="cursor-pointer hover:text-foreground" onClick={() => handleSort(dim)}>
+                        {label}{sortIndicator(dim)}
+                      </TableHead>
+                    ) : null
+                  )}
+                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("quantity")}>
+                    Qty{sortIndicator("quantity")}
+                  </TableHead>
+                  <TableHead>
+                    <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Step 1 <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[260px] text-xs">First production step machine. "Board Supply" (1100) = standard board from inventory with supplier pricing. "Customer Supplied" (1500) = customer provides board. "Purchased Goods" (1200) = bought finished product.</TooltipContent></Tooltip></TooltipProvider>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Area <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[240px] text-xs">Gross sheet area in sq ft from the default route (ebxRoute.boardarea). This is the full corrugator sheet including trim waste.</TooltipContent></Tooltip></TooltipProvider>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">N-Up <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[240px] text-xs">Number of blanks per sheet from the route layout (lengthwise × widthwise). Used to convert sheet area to per-piece area.</TooltipContent></Tooltip></TooltipProvider>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">$/MSF <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[260px] text-xs">Board cost per 1,000 sq ft. For "supplier" source this is the actual pricing basis. For "supplier/M" this is back-derived from the per-M price. Bold = actual pricing basis.</TooltipContent></Tooltip></TooltipProvider>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">$/M <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[260px] text-xs">Board cost per 1,000 pieces. For "supplier/M" source this is the actual supplier quote. For "supplier" this is calculated from $/MSF × area ÷ N-up. Bold = actual pricing basis.</TooltipContent></Tooltip></TooltipProvider>
+                  </TableHead>
+                  <TableHead className="text-center">
+                    <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Source <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[280px] text-xs">Where the board cost comes from. "supplier" = actual $/MSF pricing (bold on $/MSF). "supplier/M" = per-1000 piece pricing (bold on $/M). "standard" = fallback to standard board grade price × sheet area.</TooltipContent></Tooltip></TooltipProvider>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("jetBoardCost")}>
+                    <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Jet Board{sortIndicator("jetBoardCost")} <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[260px] text-xs">Our independent board cost calculation: (sheet area ÷ N-up) × $/MSF × qty ÷ 1000. Transparent and auditable — no Kiwiplan black box.</TooltipContent></Tooltip></TooltipProvider>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("estBoardCost")}>
+                    <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Est Board{sortIndicator("estBoardCost")} <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[240px] text-xs">Kiwiplan pre-cost board estimate only. Sum of board-related cost rules (purchased sheets, consumed board, flute upcharges, waste) — excludes pallets, strapping, ink, etc.</TooltipContent></Tooltip></TooltipProvider>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("actBoardCost")}>
+                    <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Act Board{sortIndicator("actBoardCost")} <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[240px] text-xs">Kiwiplan post-cost actual board only. Sum of board-related cost rules (Rule 122 Consumed Board, waste) — excludes pallets, strapping, ink, etc.</TooltipContent></Tooltip></TooltipProvider>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("jetVsEst")}>
+                    <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Jet vs Est{sortIndicator("jetVsEst")} <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[240px] text-xs">Jet Board minus Est Board. Red = Jet cost higher than Kiwi board estimate. Green = Jet cost lower.</TooltipContent></Tooltip></TooltipProvider>
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleSort("jetVsAct")}>
+                    <TooltipProvider><Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1 cursor-help">Jet vs Act{sortIndicator("jetVsAct")} <Info className="h-3 w-3 text-muted-foreground" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-[240px] text-xs">Jet Board minus Act Board. Green = Kiwi post-cost board is higher (likely inflated by Rule 122). Red = Kiwi post-cost board is lower.</TooltipContent></Tooltip></TooltipProvider>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedDetailRows.map((row, idx) => {
+                  const q = row.quantity
+                  const jetPerM = toNumber(row.jetBoardCostPerM)
+                  const hasJet = jetPerM > 0
+                  const jetTotal = hasJet ? q * jetPerM / 1000 : 0
+                  const jetVsEst = hasJet ? jetTotal - (row.estBoardCost ?? row.estMaterialCost) : 0
+                  const jetVsAct = hasJet ? jetTotal - (row.actBoardCost ?? row.actMaterialCost) : 0
+                  return (
+                  <TableRow
+                    key={`board-${row.date}-${row.jobNumber}-${row.invoiceNumber}-${idx}`}
+                    className={`cursor-pointer hover:bg-[var(--color-bg-hover)] ${selectedDetailKey === getDetailRowKey(row) ? "bg-indigo-500/15 hover:bg-indigo-500/20" : ""}`}
+                    onClick={() => handleDetailRowClick(row)}
+                  >
+                    {cfg.groupByOptions.map(([dim]) =>
+                      groupByDims.includes(dim) ? (
+                        <TableCell key={dim} className={dim === dateFieldDim ? "font-medium" : dim === "customerName" ? "max-w-[180px] truncate" : ""}>
+                          {String(row[dimToProp(dim)] ?? "")}
+                        </TableCell>
+                      ) : null
+                    )}
+                    <TableCell className="text-right">{formatNumber(q, 0)}</TableCell>
+                    <TableCell><span className={`text-[10px] px-1.5 py-0.5 rounded ${row.step1Machine === "Board Supply" ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300" : row.step1Machine === "Customer Supplied" ? "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300" : row.step1Machine === "Purchased Goods" ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300" : "text-muted-foreground"}`}>{row.step1Machine ?? "—"}</span></TableCell>
+                    <TableCell className="text-right text-muted-foreground">{row.jetBoardAreaSqFt !== null ? row.jetBoardAreaSqFt.toFixed(1) : "—"}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">{row.jetBoardNup !== null ? row.jetBoardNup : "—"}</TableCell>
+                    <TableCell className={`text-right ${row.jetCostSource === "supplier" ? "font-semibold" : "text-muted-foreground"}`}>{row.jetCostPerMSF !== null ? `$${row.jetCostPerMSF.toFixed(2)}` : "—"}</TableCell>
+                    <TableCell className={`text-right ${row.jetCostSource === "supplier/M" ? "font-semibold" : "text-muted-foreground"}`}>{jetPerM > 0 ? `$${jetPerM.toFixed(2)}` : "—"}</TableCell>
+                    <TableCell className="text-center"><span className={`text-[10px] px-1.5 py-0.5 rounded ${row.jetCostSource === "supplier" ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300" : row.jetCostSource === "supplier/M" ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300" : row.jetCostSource === "standard" ? "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300" : ""}`}>{row.jetCostSource ?? "—"}</span></TableCell>
+                    <TableCell className="text-right font-medium">{hasJet ? formatCurrencyDetail(costPer1000 ? jetPerM : jetTotal) : "—"}</TableCell>
+                    <TableCell className="text-right">{row.estBoardCost !== null ? formatCurrencyDetail(costPer1000 ? (q > 0 ? row.estBoardCost / q * 1000 : 0) : row.estBoardCost) : "—"}</TableCell>
+                    <TableCell className="text-right">{row.actBoardCost !== null ? formatCurrencyDetail(costPer1000 ? (q > 0 ? row.actBoardCost / q * 1000 : 0) : row.actBoardCost) : "—"}</TableCell>
+                    <TableCell className={`text-right ${jetVsEst < -1 ? "text-emerald-600 dark:text-emerald-400" : jetVsEst > 1 ? "text-red-600 dark:text-red-400" : ""}`}>
+                      {hasJet ? formatCurrencyDetail(costPer1000 ? (q > 0 ? jetVsEst / q * 1000 : 0) : jetVsEst) : "—"}
+                    </TableCell>
+                    <TableCell className={`text-right font-medium ${jetVsAct < -1 ? "text-emerald-600 dark:text-emerald-400" : jetVsAct > 1 ? "text-red-600 dark:text-red-400" : ""}`}>
+                      {hasJet ? formatCurrencyDetail(costPer1000 ? (q > 0 ? jetVsAct / q * 1000 : 0) : jetVsAct) : "—"}
+                    </TableCell>
+                  </TableRow>
+                  )
+                })}
+                {sortedDetailRows.length === 0 && !isLoading && !detailsQuery.isFetching && (
+                  <TableRow>
+                    <TableCell colSpan={99} className="text-center text-muted-foreground py-8">
+                      No data for this selection
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+              {sortedDetailRows.length > 0 && (() => {
+                const tq = detailTotals.quantity
+                const jetTotalAll = detailTotals.jetBoardCost
+                const estBoardTotal = detailTotals.estBoardCost ?? 0
+                const actBoardTotal = detailTotals.actBoardCost ?? 0
+                const jetVsEstTotal = jetTotalAll - estBoardTotal
+                const jetVsActTotal = jetTotalAll - actBoardTotal
+                return (
+                <TableFooter>
+                  <TableRow className="font-semibold border-t">
+                    {cfg.groupByOptions.map(([dim], i) =>
+                      groupByDims.includes(dim) ? <TableCell key={dim}>{i === 0 ? (costPer1000 ? "Avg /M" : "Total") : ""}</TableCell> : null
+                    )}
+                    <TableCell className="text-right">{formatNumber(tq, 0)}</TableCell>
+                    <TableCell />
+                    <TableCell />
+                    <TableCell />
+                    <TableCell />
+                    <TableCell />
+                    <TableCell />
+                    <TableCell className="text-right">{formatCurrencyDetail(costPer1000 ? (tq > 0 ? jetTotalAll / tq * 1000 : 0) : jetTotalAll)}</TableCell>
+                    <TableCell className="text-right">{formatCurrencyDetail(costPer1000 ? (tq > 0 ? estBoardTotal / tq * 1000 : 0) : estBoardTotal)}</TableCell>
+                    <TableCell className="text-right">{formatCurrencyDetail(costPer1000 ? (tq > 0 ? actBoardTotal / tq * 1000 : 0) : actBoardTotal)}</TableCell>
+                    <TableCell className={`text-right ${jetVsEstTotal < -1 ? "text-emerald-600 dark:text-emerald-400" : jetVsEstTotal > 1 ? "text-red-600 dark:text-red-400" : ""}`}>
+                      {formatCurrencyDetail(costPer1000 ? (tq > 0 ? jetVsEstTotal / tq * 1000 : 0) : jetVsEstTotal)}
+                    </TableCell>
+                    <TableCell className={`text-right ${jetVsActTotal < -1 ? "text-emerald-600 dark:text-emerald-400" : jetVsActTotal > 1 ? "text-red-600 dark:text-red-400" : ""}`}>
+                      {formatCurrencyDetail(costPer1000 ? (tq > 0 ? jetVsActTotal / tq * 1000 : 0) : jetVsActTotal)}
                     </TableCell>
                   </TableRow>
                 </TableFooter>
@@ -1417,6 +2376,9 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
                   <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleHoursSort("adjQty")}>
                     Adj Qty{hoursSortIndicator("adjQty")}
                   </TableHead>
+                  <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleHoursSort("sheetsFed")}>
+                    Sheets Fed{hoursSortIndicator("sheetsFed")}
+                  </TableHead>
                   <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleHoursSort("stdRunRate")}>
                     Run Rate{hoursSortIndicator("stdRunRate")}
                   </TableHead>
@@ -1427,7 +2389,7 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
                     Est Hours{hoursSortIndicator("estHours")}
                   </TableHead>
                   <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleHoursSort("orderHours")}>
-                    Order Hours{hoursSortIndicator("orderHours")}
+                    Act Hours{hoursSortIndicator("orderHours")}
                   </TableHead>
                   <TableHead className="cursor-pointer hover:text-foreground text-right" onClick={() => handleHoursSort("uptimeHours")}>
                     Uptime{hoursSortIndicator("uptimeHours")}
@@ -1451,6 +2413,7 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
                       ) : null
                     )}
                     <TableCell className="text-right">{formatNumber(row.adjQty, 0)}</TableCell>
+                    <TableCell className="text-right">{formatNumber(row.sheetsFed, 0)}</TableCell>
                     <TableCell className="text-right">{formatNumber(row.stdRunRate, 0)}</TableCell>
                     <TableCell className="text-right">{formatNumber(row.setupMins, 1)}</TableCell>
                     <TableCell className="text-right">{formatNumber(row.estHours, 1)}</TableCell>
@@ -1475,8 +2438,11 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
               {sortedHoursRows.length > 0 && (
                 <TableFooter>
                   <TableRow className="font-semibold border-t">
-                    <TableCell colSpan={groupByDims.length || 1}>Total</TableCell>
+                    {cfg.groupByOptions.map(([dim], i) =>
+                      groupByDims.includes(dim) ? <TableCell key={dim}>{i === 0 ? "Total" : ""}</TableCell> : null
+                    )}
                     <TableCell className="text-right">{formatNumber(detailTotals.adjQty, 0)}</TableCell>
+                    <TableCell />
                     <TableCell className="text-right"></TableCell>
                     <TableCell className="text-right"></TableCell>
                     <TableCell className="text-right">{formatNumber(detailTotals.estHours, 1)}</TableCell>
@@ -1547,7 +2513,9 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
               {sortedHoursRows.length > 0 && (
                 <TableFooter>
                   <TableRow className="font-semibold border-t">
-                    <TableCell colSpan={groupByDims.length || 1}>Total</TableCell>
+                    {cfg.groupByOptions.map(([dim], i) =>
+                      groupByDims.includes(dim) ? <TableCell key={dim}>{i === 0 ? "Total" : ""}</TableCell> : null
+                    )}
                     <TableCell className="text-right">{formatNumber(detailTotals.quantity, 0)}</TableCell>
                     <TableCell className="text-right"></TableCell>
                     <TableCell className="text-right"></TableCell>
@@ -1570,6 +2538,26 @@ const [detailTab, setDetailTab] = usePersistedState<DetailTab>(cfg.storagePrefix
           )}
         </CardContent>
       </Card>
+
+      {/* Job Detail Panel — invoice tab only, when a single job is selected */}
+      {dataSource === "invoice" && invActiveJob && (
+        <JobDetailPanel
+          data={invJobDetailQuery.data?.data}
+          isLoading={invJobDetailQuery.isLoading}
+          onMfgJobClick={(job) => { setParentCalloffJob(jobFilter); setJobFilter(job) }}
+          parentCalloffJob={parentCalloffJob}
+          onBackToCalloff={() => { setJobFilter(parentCalloffJob!); setParentCalloffJob(null) }}
+        />
+      )}
+
+      {/* Spec Analysis Panel — invoice tab, when a spec is known (from job detail or filter) */}
+      {dataSource === "invoice" && invSpecForAnalysis && (
+        <SpecAnalysisPanel
+          data={specAnalysisQuery.data?.data}
+          isLoading={specAnalysisQuery.isLoading}
+          onJobClick={(job) => setJobFilter(job)}
+        />
+      )}
     </div>
   )
 }

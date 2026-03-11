@@ -18,6 +18,7 @@ import { mrpDashboardRoutes } from './routes/mrp-dashboard'
 import { plantTvDashboardRoutes } from './routes/plant-tv-dashboard'
 import { adminRoutes } from './routes/admin'
 import { chatRoutes } from './routes/chat'
+import { costAnalysisRoutes } from './routes/cost-analysis'
 import { authMiddleware } from './middleware/auth'
 import { tenantMiddleware } from './middleware/tenant'
 import { moduleContextMiddleware } from './middleware/module-context'
@@ -119,6 +120,7 @@ export function createApp() {
   erpApp.route('/plant-tv', plantTvDashboardRoutes)
   erpApp.route('/admin', adminRoutes)
   erpApp.route('/chat', chatRoutes)
+  erpApp.route('/cost-analysis', costAnalysisRoutes)
   erpApp.route('/', kiwiplanRoutes)
   app.route('/erp', erpApp)
 
