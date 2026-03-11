@@ -236,8 +236,8 @@ interface MachineStats {
   currentShift: { value: number; shift: string; orderHours: number; sheetsFed: number } | null
   todayShifts: ShiftValue[]
   yesterday: { value: number; shifts: ShiftValue[] } | null
-  lastWeek: number | null
-  mtd: number | null
+  lastWeek: { value: number; shifts: ShiftValue[] } | null
+  mtd: { value: number; shifts: ShiftValue[] } | null
 }
 
 function aggregateStats(rows: TvDataRow[]): { machines: MachineStats[]; plant: MachineStats } {
@@ -268,10 +268,27 @@ function aggregateStats(rows: TvDataRow[]): { machines: MachineStats[]; plant: M
     }
   }
 
+  function shiftAggregates(rows: TvDataRow[]): ShiftValue[] {
+    const map = new Map<string, { sheets: number; hours: number }>()
+    for (const r of rows) {
+      const cur = map.get(r.shiftName) ?? { sheets: 0, hours: 0 }
+      cur.sheets += r.totalSheetsFed
+      cur.hours += r.totalOrderHours
+      map.set(r.shiftName, cur)
+    }
+    return Array.from(map.entries()).map(([shift, { sheets, hours }]) => ({
+      shift,
+      value: hours > 0 ? sheets / hours : 0,
+    }))
+  }
+
   function calcForMachine(machineRows: TvDataRow[]): Omit<MachineStats, "lineNumber" | "lineName"> {
-    // Current shift: latest entry for today
+    // Current shift: prefer Second over First over Other (most recent active shift)
     const todayRows = machineRows.filter((r) => r.feedbackDate === today)
-    const latestToday = todayRows.length > 0 ? todayRows[todayRows.length - 1] : null
+    const shiftPriority: Record<string, number> = { Other: 0, First: 1, Second: 2 }
+    const latestToday = todayRows.length > 0
+      ? todayRows.reduce((best, r) => (shiftPriority[r.shiftName] ?? 0) > (shiftPriority[best.shiftName] ?? 0) ? r : best)
+      : null
     const currentShift = latestToday
       ? { value: latestToday.sheetsPerOrderHour, shift: latestToday.shiftName, orderHours: latestToday.totalOrderHours, sheetsFed: latestToday.totalSheetsFed }
       : null
@@ -293,20 +310,26 @@ function aggregateStats(rows: TvDataRow[]): { machines: MachineStats[]; plant: M
 
     // Last week
     const lastWeekRows = machineRows.filter((r) => r.feedbackDate >= lastWeekStart && r.feedbackDate < thisWeekStart)
-    let lastWeek: number | null = null
+    let lastWeek: MachineStats["lastWeek"] = null
     if (lastWeekRows.length > 0) {
       const totalSheets = lastWeekRows.reduce((s, r) => s + r.totalSheetsFed, 0)
       const totalHours = lastWeekRows.reduce((s, r) => s + r.totalOrderHours, 0)
-      lastWeek = totalHours > 0 ? totalSheets / totalHours : 0
+      lastWeek = {
+        value: totalHours > 0 ? totalSheets / totalHours : 0,
+        shifts: shiftAggregates(lastWeekRows),
+      }
     }
 
     // MTD
     const mtdRows = machineRows.filter((r) => r.feedbackDate >= monthStart)
-    let mtd: number | null = null
+    let mtd: MachineStats["mtd"] = null
     if (mtdRows.length > 0) {
       const totalSheets = mtdRows.reduce((s, r) => s + r.totalSheetsFed, 0)
       const totalHours = mtdRows.reduce((s, r) => s + r.totalOrderHours, 0)
-      mtd = totalHours > 0 ? totalSheets / totalHours : 0
+      mtd = {
+        value: totalHours > 0 ? totalSheets / totalHours : 0,
+        shifts: shiftAggregates(mtdRows),
+      }
     }
 
     return { currentShift, todayShifts, yesterday: yesterdayData, lastWeek, mtd }
@@ -339,12 +362,12 @@ function aggregateStats(rows: TvDataRow[]): { machines: MachineStats[]; plant: M
 
   const plantLastWeekValues = machines.filter((m) => m.lastWeek !== null)
   const plantLastWeek = plantLastWeekValues.length > 0
-    ? plantLastWeekValues.reduce((s, m) => s + m.lastWeek!, 0)
+    ? { value: plantLastWeekValues.reduce((s, m) => s + m.lastWeek!.value, 0), shifts: [] as ShiftValue[] }
     : null
 
   const plantMtdValues = machines.filter((m) => m.mtd !== null)
   const plantMtd = plantMtdValues.length > 0
-    ? plantMtdValues.reduce((s, m) => s + m.mtd!, 0)
+    ? { value: plantMtdValues.reduce((s, m) => s + m.mtd!.value, 0), shifts: [] as ShiftValue[] }
     : null
 
   // Plant today shifts: sum each shift across machines
@@ -418,63 +441,7 @@ function StatCard({
   )
 }
 
-// ── Shift Scoreboard ─────────────────────────────────────────────────
 
-function ShiftScoreboard({
-  shifts,
-  goal100,
-  goal85,
-}: {
-  shifts: ShiftValue[]
-  goal100: number
-  goal85: number
-}) {
-  if (shifts.length < 2) return null
-
-  const maxVal = Math.max(...shifts.map((s) => s.value), goal100)
-  const leader = shifts.reduce((a, b) => (a.value >= b.value ? a : b))
-
-  return (
-    <div className="px-3 shrink-0 space-y-1">
-      <div className="text-[10px] font-medium text-white/30 uppercase tracking-wider text-center">Today by Shift</div>
-      {shifts.map((s) => {
-        const pct = maxVal > 0 ? (s.value / maxVal) * 100 : 0
-        const goalPct = maxVal > 0 ? (goal100 / maxVal) * 100 : 0
-        const color = getStatusColor(s.value, goal100, goal85)
-        const isLeader = s.shift === leader.shift && shifts.filter((x) => x.value === leader.value).length === 1
-
-        return (
-          <div key={s.shift} className="flex items-center gap-2">
-            <span className="text-[10px] font-medium text-white/50 w-12 text-right shrink-0 truncate">
-              {s.shift}
-            </span>
-            <div className="flex-1 h-3.5 rounded-sm bg-white/5 relative overflow-hidden">
-              <div
-                className="h-full rounded-sm transition-all"
-                style={{ width: `${pct}%`, backgroundColor: color, boxShadow: `0 0 6px ${color}30` }}
-              />
-              {/* Goal marker */}
-              <div
-                className="absolute top-0 bottom-0 w-px bg-white/30"
-                style={{ left: `${goalPct}%` }}
-              />
-            </div>
-            <span
-              className="text-[11px] font-mono font-bold tabular-nums w-12 text-right shrink-0"
-              style={{ color }}
-            >
-              {formatNumber(s.value)}
-            </span>
-            {isLeader && (
-              <span className="text-[10px] shrink-0" title="Shift leader">👑</span>
-            )}
-            {!isLeader && <span className="w-[18px] shrink-0" />}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
 // ── Machine Card ──────────────────────────────────────────────────────
 
@@ -528,7 +495,11 @@ function MachineCard({
             {stats.currentShift ? formatNumber(currentValue) : "—"}
           </div>
           <div className="text-[11px] text-white/40 mt-0.5">
-            {stats.currentShift ? `${stats.currentShift.shift} shift` : "Current Shift"} · Goal: {formatNumber(goal.pct100)}
+            {stats.currentShift
+              ? stats.todayShifts.length >= 2
+                ? `Today`
+                : `${stats.currentShift.shift} shift`
+              : "Current Shift"} · Goal: {formatNumber(goal.pct100)}
           </div>
           {stats.currentShift && (
             <div className="flex gap-3 mt-1 text-[10px] font-mono text-white/35 tabular-nums">
@@ -539,9 +510,15 @@ function MachineCard({
         </div>
       </div>
 
-      {/* Shift Scoreboard */}
+      {/* Per-shift values */}
       {stats.todayShifts.length >= 2 && (
-        <ShiftScoreboard shifts={stats.todayShifts} goal100={goal.pct100} goal85={goal.pct85} />
+        <div className="flex justify-center gap-4 text-[10px] font-mono tabular-nums shrink-0">
+          {stats.todayShifts.map((s) => (
+            <span key={s.shift} style={{ color: getStatusColor(s.value, goal.pct100, goal.pct85) }}>
+              {s.shift}: {formatNumber(s.value)}
+            </span>
+          ))}
+        </div>
       )}
 
       {/* Goal Reference */}
@@ -564,15 +541,17 @@ function MachineCard({
           />
           <StatCard
             label="Last Week"
-            value={stats.lastWeek}
+            value={stats.lastWeek?.value ?? null}
             goal100={goal.pct100}
             goal85={goal.pct85}
+            shifts={stats.lastWeek?.shifts}
           />
           <StatCard
             label="MTD"
-            value={stats.mtd}
+            value={stats.mtd?.value ?? null}
             goal100={goal.pct100}
             goal85={goal.pct85}
+            shifts={stats.mtd?.shifts}
           />
         </div>
       )}

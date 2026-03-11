@@ -4,7 +4,8 @@
 
 - **Frontend**: React 18, TypeScript, TailwindCSS, shadcn/ui, Recharts, React Query, React Hook Form
 - **Backend**: Hono on Cloudflare Workers, Drizzle ORM, D1 (SQLite)
-- **Deploy**: `npm run deploy:web` (Cloudflare Pages via wrangler)
+- **Deploy**: `npm run deploy:web` (Cloudflare Pages via wrangler), `cd apps/api && npx wrangler deploy` (API Worker)
+- **Always deploy** after making changes — don't wait for the user to ask
 
 ## Key Directories
 

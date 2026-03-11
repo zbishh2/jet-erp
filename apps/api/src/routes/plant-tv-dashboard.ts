@@ -31,21 +31,16 @@ const QUERIES = {
    *   Order Duration = DATEDIFF(SECOND, feedback_start, feedback_finish)
    */
   /**
-   * Shift derived from feedback_start hour against dwshiftcalendar:
-   *   First  = 06:00–16:00
-   *   Second = 16:00–22:00
-   *   Other  = outside shift hours (GAP / closed)
+   * Shift derived by joining dwshiftcalendar on costcenter + date,
+   * matching feedback_start into the calendar shift window.
+   * Shift boundaries vary per machine — never hardcode them.
    */
   tvData: `
     SELECT
       CONVERT(VARCHAR(10), pf.feedback_report_date, 23) as feedbackDate,
       cc.costcenter_number as lineNumber,
       cc.costcenter_name as lineName,
-      CASE
-        WHEN DATEPART(HOUR, jss.feedback_start) >= 6 AND DATEPART(HOUR, jss.feedback_start) < 16 THEN 'First'
-        WHEN DATEPART(HOUR, jss.feedback_start) >= 16 AND DATEPART(HOUR, jss.feedback_start) < 22 THEN 'Second'
-        ELSE 'Other'
-      END as shiftName,
+      COALESCE(sc.shift_name, 'Other') as shiftName,
       SUM(CAST(pf.quantity_fed_in AS FLOAT)) as totalSheetsFed,
       SUM(CAST(DATEDIFF(SECOND, jss.feedback_start, jss.feedback_finish) AS FLOAT)) / 3600.0 as totalOrderHours,
       CASE
@@ -58,16 +53,18 @@ const QUERIES = {
       ON pf.feedback_job_series_step_id = jss.job_series_step_id
     INNER JOIN dwcostcenters cc
       ON pf.feedback_costcenter_id = cc.costcenter_id
+    LEFT JOIN dwshiftcalendar sc
+      ON sc.calendar_costcenter_id = cc.costcenter_id
+      AND sc.report_date = pf.feedback_report_date
+      AND jss.feedback_start >= sc.shift_start
+      AND jss.feedback_start < sc.shift_finish
+      AND sc.shift_name != 'GAP'
     WHERE pf.feedback_report_date >= @startDate
       AND pf.feedback_report_date < @endDate
       AND pf.actual_run_duration_minutes != 0
       AND cc.costcenter_number IN (131, 132, 133, 142, 144, 146, 154)
     GROUP BY pf.feedback_report_date, cc.costcenter_number, cc.costcenter_name,
-      CASE
-        WHEN DATEPART(HOUR, jss.feedback_start) >= 6 AND DATEPART(HOUR, jss.feedback_start) < 16 THEN 'First'
-        WHEN DATEPART(HOUR, jss.feedback_start) >= 16 AND DATEPART(HOUR, jss.feedback_start) < 22 THEN 'Second'
-        ELSE 'Other'
-      END
+      COALESCE(sc.shift_name, 'Other')
     ORDER BY pf.feedback_report_date DESC, cc.costcenter_number, shiftName
   `,
 
@@ -118,6 +115,10 @@ plantTvDashboardRoutes.get('/data', async (c) => {
 
 // ── POST /query — KDW query endpoint for diagnostics ──────────────────
 plantTvDashboardRoutes.post('/query', async (c) => {
+  if (c.env.ALLOW_RAW_SQL_EXPLORER !== 'true') {
+    return c.json({ error: 'SQL explorer is disabled' }, 403)
+  }
+
   const auth = c.get('auth') as any
   if (!auth?.roles?.includes('ADMIN')) {
     return c.json({ error: 'ADMIN role required' }, 403)
@@ -129,6 +130,15 @@ plantTvDashboardRoutes.post('/query', async (c) => {
   if (!body.sql?.trim().toUpperCase().startsWith('SELECT')) {
     return c.json({ error: 'Only SELECT queries allowed' }, 400)
   }
+
+  await logAudit(c, {
+    action: 'plant_tv.query',
+    resource: 'plant-tv',
+    metadata: {
+      database: body.database ?? 'kdw',
+      sqlPreview: body.sql.trim().slice(0, 500),
+    },
+  })
 
   try {
     const result = await client.rawQuery(body.sql, {}, body.database ?? 'kdw')

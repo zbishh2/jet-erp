@@ -34,6 +34,7 @@ export function useTvData(startDate: string, endDate: string, enabled = true) {
     enabled: enabled && !!startDate && !!endDate,
     staleTime: 1000 * 60 * 5,
     refetchInterval: 1000 * 60 * 5, // Auto-refresh every 5 minutes
+    refetchIntervalInBackground: true, // Keep refreshing even when tab is unfocused (TV displays)
   })
 }
 
